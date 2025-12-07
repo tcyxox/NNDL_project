@@ -1,2 +1,6 @@
 .idea
+.ipynb_checkpoints/
+
 /dataset
+*.jpg
+
