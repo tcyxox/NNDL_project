@@ -72,7 +72,7 @@ Problems and proposed solutions addressed in this method include:
 \paragraph{Training and Inference:}
 \begin{itemize}
     \item Select a \textbf{probability-based threshold method} (e.g., Maximum Softmax Probability (MSP)~\cite{hendrycks2018baselinedetectingmisclassifiedoutofdistribution}) for novel superclass and subclass classification.
-    \item Select a \textbf{soft constraint method} used in training (e.g., Channel-Wise Attention), select a \textbf{hard constraint method} used in inference (Masking strategy).
+    \item Select a \textbf{soft constraint method} used in training (e.g., Channel-Wise Attention ~\cite{hu2019squeezeandexcitationnetworks}), select a \textbf{hard constraint method} used in inference (Masking strategy).
     \item Predict the superclass then the subclass based on the probability-based threshold method. Apply the constraint method to the subclass classifier to avoid inconsistent labeling.
 \end{itemize}
 
