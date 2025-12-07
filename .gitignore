@@ -1,0 +1,10 @@
+.idea
+/dataset
+
+# LaTeX
+*.aux
+*.bbl
+*.blg
+*.log
+*.out
+*.synctex.gz

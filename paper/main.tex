@@ -1,0 +1,121 @@
+\documentclass{article}
+
+% Language setting
+% Replace `english' with e.g. `spanish' to change the document language
+\usepackage[english]{babel}
+
+\usepackage[final]{neurips2023}
+\makeatletter
+\renewcommand{\@noticestring}{}
+\makeatother
+
+% Useful packages
+\usepackage{amsmath}
+\usepackage{graphicx}
+\usepackage[colorlinks=true, allcolors=blue]{hyperref}
+
+\title{Transfer Learning Project}
+\author{%
+  Chenyu Tian \\
+  Columbia University\\
+  \texttt{ct3308@columbia.edu} \\
+  \And
+  Yilu Yang \\
+  Columbia University\\
+  \texttt{yy3626@columbia.edu}
+}
+
+\begin{document}
+\maketitle
+
+\section{Introduction}
+This project aims to solve a hierarchical classification problem by predicting both a superclass and its corresponding subclass for a given image. The problem has two primary complexities that test model robustness and generalization:
+
+\textbf{Open Set Recognition (OSR):} The test set contains novel superclasses and subclasses not seen during training. The model must identify and reject these ``unknown'' samples as ``novel''.
+
+\textbf{Distribution Shift:} The test set's class frequencies may differ from the training set. The model must generalize to this new statistical distribution of known classes.
+
+
+\section{Related Work}
+OSR contrasts with traditional closed-set recognition, which assumes all testing classes are known during training. The methods for solving OSR problems primarily fall into the following two groups~\cite{sun2023survey}.
+
+\textbf{Discriminative Models:} Discriminative models aim to learn decision rules directly. This is often approached either by learning highly compact and discriminative representations for known classes (through score-based, distance-based or reconstruction-based methods) or by explicitly introducing "unknown" information into the training process. This unknown information can be synthesized from known classes.
+
+\textbf{Generative Models:} The generative models is another approach which can be further divided into Instance and Non-Instance Generation-based methods~\cite{geng2020recent}. The former method focuses on generating useful new samples, while the second one focuses on learning the underlying distributions of the known-class data, often using Autoencoders (AEs) or Generative Adversarial Networks (GANs). The principle is that unknown samples will not fit the learned distributions, allowing for their detection based on deviation or high reconstruction error.
+
+
+\section{Method / Algorithm}
+
+\subsection{Methods}
+
+Since it is a hierarchical OSR problem, we propose different hierarchical models.
+
+\subsubsection{Cascading Probability-Based Threshold Classifier with Conditional Constraints}
+
+Problems and proposed solutions addressed in this method include:
+\begin{enumerate}
+    \item \textit{Do we use different models for superclass classification and subclass classification?}
+    \\
+    \textbf{Answer:} No, we use the same base model (e.g., ResNet) as a feature extractor and train two different heads for superclass classification and subclass classification.
+
+    \item \textit{How do we determine whether the label is novel or known?}
+    \\
+    \textbf{Answer:} We apply a simple probability-based threshold block with the softmax.
+
+    \item \textit{How do we let the superclass classification impact the subclass classification?}
+    \\
+    \textbf{Answer:} We apply a soft constraint during training and a hard constraint during inference.
+\end{enumerate}
+
+\paragraph{Model Structure:} Use a pre-trained feature extractor followed by a superclass classification head and a subclass classification head. Train the network jointly using a combined cross-entropy loss from both heads.
+
+\paragraph{Training and Inference:}
+\begin{itemize}
+    \item Select a \textbf{probability-based threshold method} (e.g., Maximum Softmax Probability (MSP)~\cite{hendrycks2018baselinedetectingmisclassifiedoutofdistribution}) for novel superclass and subclass classification.
+    \item Select a \textbf{soft constraint method} used in training (e.g., Channel-Wise Attention), select a \textbf{hard constraint method} used in inference (Masking strategy).
+    \item Predict the superclass then the subclass based on the probability-based threshold method. Apply the constraint method to the subclass classifier to avoid inconsistent labeling.
+\end{itemize}
+
+\subsubsection{OpenMax Hierarchical Classifier}
+As OpenMax~\cite{7780542} is a classic discriminative method in OSR, we plan to investigate its adaptation to our hierarchical problem.
+\begin{itemize}
+    \item \textbf{Stage 1 - OpenMax for Superclass:} Use OpenMax at the superclass level, it will either classify a sample as known superclass or novel superclass.
+    \item \textbf{Stage 2 - OpenMax for Subclass:} If the sample is identified as novel at the previous level, it will also be classified as novel subclass. Otherwise, we train a separate OpenMax classifier on its corresponding set of known subclasses.
+\end{itemize}
+
+\subsubsection{Hierarchical Class Anchor Clustering(CAC)}
+\begin{itemize}
+    \item \textbf{Stage 1 - Hierarchical Anchor Design:} Design structured anchors~\cite{miller2021class} by first defining a unique base vector for each superclass. Subclass anchors will then be created by adding small offset vectors to their corresponding superclass base vector.
+    \item \textbf{Stage 2 - Training:} Train the network using CAC loss function with hierarchical anchors forcing the network to learn a semantically meaningful logit space where the cluster layout directly mirrors problem's hierarchy.
+    \item \textbf{Stage 3 - Inference:} Use the distance-based rejection process to classify known subclasses, while distinguishing rejected samples as either ``Unknown Superclass'' or ``Unknown Subclass''.
+\end{itemize}
+
+% ================================= Deprecated =================================
+% \subsubsection{Probability Density Estimation + Hierarchical Classifier}
+
+% \begin{itemize}
+%     \item \textbf{Stage 1 - Probability Density-based Model for novel superclass:} Use a probability density estimation model which directly learns the probability distribution of the known dataset and addresses the OSR problem for the superclass. Data from a novel superclass should deviate from this distribution, receiving a probability score lower than a threshold, thus labeled as ``novel''.
+
+%     \item \textbf{Stage 2 - Hierarchical Classifier for Known Superclasses:} Samples that are not identified as ``novel'' by the density model are then passed to a hierarchical classifier described in the first method, but without applying the threshold to the superclass predictor.
+% \end{itemize}
+% ================================= Deprecated =================================
+
+\subsection{Strategy for Distribution Shift}
+
+\begin{itemize}
+    \item \textbf{Data Augmentation:} Adopt the suggestion from the brief to use data augmentation (e.g. brightness, contrast, minor geometric transforms) to improve generalization.
+    \item \textbf{Local Validation Set:} Build a local validation set for hyperparameters tuning.
+\end{itemize}
+
+\subsection{Evaluation}
+
+\begin{itemize}
+    \item \textbf{Primary Metric:} Our top priority is to significantly improve upon the CLIP baseline's performance on ``Unseen Accuracy''.
+    \item \textbf{Secondary Metrics:} We will monitor all official metrics, including ``Overall Accuracy", ``Seen Accuracy'', and ``Categorical Cross-entropy'' for both class levels.
+    \item \textbf{Threshold Tuning:} To determine the gatekeeper's probability threshold and the expert's confidence threshold, we will simulate an open-set scenario (e.g., by holding out subclasses during training) and tune on our local validation set to maximize ``Unseen Accuracy''.
+\end{itemize}
+
+\bibliographystyle{alpha}
+\bibliography{reference}
+
+\end{document}
