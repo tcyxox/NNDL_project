@@ -52,27 +52,34 @@ Since it is a hierarchical OSR problem, we propose different hierarchical models
 
 \subsubsection{Cascading Probability-Based Threshold Classifier with Conditional Constraints}
 
-Problems and proposed solutions addressed in this method include:
+Problems and proposed solutions that are included in this method:
 \begin{enumerate}
     \item \textit{Do we use different models for superclass classification and subclass classification?}
     \\
     \textbf{Answer:} No, we use the same base model (e.g., ResNet) as a feature extractor and train two different heads for superclass classification and subclass classification.
 
-    \item \textit{How do we determine whether the label is novel or known?}
+    \item \textit{How to determine whether the label is novel or known?}
     \\
-    \textbf{Answer:} We apply a simple probability-based threshold block with the softmax.
+    \textbf{Answer:} By comparing different probability-based threshold methods.
+    \\
+    \textbf{Soft Constraint Methods:}
+    \begin{enumerate}
+        \item Maximum Softmax Probability (MSP)~\cite{hendrycks2018baselinedetectingmisclassifiedoutofdistribution}
+        \item Out-of-Distribution Detector (ODIN)~\cite{liang2020enhancingreliabilityoutofdistributionimage}
+        \item Energy-based Out-of-distribution Detection~\cite{liu2021energybasedoutofdistributiondetection}
+    \end{enumerate}
 
-    \item \textit{How do we let the superclass classification impact the subclass classification?}
+    \item \textit{How to let the superclass classification impact the subclass classification?}
     \\
-    \textbf{Answer:} We apply a soft constraint during training and a hard constraint during inference.
+    \textbf{Answer:} By applying a soft constraint (Channel-Wise Attention ~\cite{hu2019squeezeandexcitationnetworks}) during training and a hard constraint (Masking) during inference.
 \end{enumerate}
 
 \paragraph{Model Structure:} Use a pre-trained feature extractor followed by a superclass classification head and a subclass classification head. Train the network jointly using a combined cross-entropy loss from both heads.
 
 \paragraph{Training and Inference:}
 \begin{itemize}
-    \item Select a \textbf{probability-based threshold method} (e.g., Maximum Softmax Probability (MSP)~\cite{hendrycks2018baselinedetectingmisclassifiedoutofdistribution}) for novel superclass and subclass classification.
-    \item Select a \textbf{soft constraint method} used in training (e.g., Channel-Wise Attention ~\cite{hu2019squeezeandexcitationnetworks}), select a \textbf{hard constraint method} used in inference (Masking strategy).
+    \item Select a \textbf{probability-based threshold method} for novel superclass and subclass classification.
+    \item Select a \textbf{soft constraint method} used in training, use \textbf{Masking} as a \textbf{hard constraint method} used in inference.
     \item Predict the superclass then the subclass based on the probability-based threshold method. Apply the constraint method to the subclass classifier to avoid inconsistent labeling.
 \end{itemize}
 
@@ -83,7 +90,7 @@ As OpenMax~\cite{7780542} is a classic discriminative method in OSR, we plan to 
     \item \textbf{Stage 2 - OpenMax for Subclass:} If the sample is identified as novel at the previous level, it will also be classified as novel subclass. Otherwise, we train a separate OpenMax classifier on its corresponding set of known subclasses.
 \end{itemize}
 
-\subsubsection{Hierarchical Class Anchor Clustering(CAC)}
+\subsubsection{Hierarchical Class Anchor Clustering (CAC)}
 \begin{itemize}
     \item \textbf{Stage 1 - Hierarchical Anchor Design:} Design structured anchors~\cite{miller2021class} by first defining a unique base vector for each superclass. Subclass anchors will then be created by adding small offset vectors to their corresponding superclass base vector.
     \item \textbf{Stage 2 - Training:} Train the network using CAC loss function with hierarchical anchors forcing the network to learn a semantically meaningful logit space where the cluster layout directly mirrors problem's hierarchy.
