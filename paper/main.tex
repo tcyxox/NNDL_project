@@ -46,7 +46,21 @@ OSR contrasts with traditional closed-set recognition, which assumes all testing
 
 \section{Method / Algorithm}
 
-\subsection{Methods}
+\subsection{Dataset Preparation}
+
+\paragraph{Training Data with Novel Label}
+\begin{itemize}
+    \item \textbf{Mixup Data Augmentation:} Generate synthetic novel samples by creating linear interpolations between pairs of training images belonging to different known classes.
+    \item \textbf{Simulated Open-Set Split:} Simulate an open-set scenario by holding out specific subclasses to serve as novel samples in the validation set.
+\end{itemize}
+
+\paragraph{Distribution Shift}
+\begin{itemize}
+    \item \textbf{Data Augmentation:} Adopt the suggestion from the brief to use data augmentation (e.g., brightness, contrast, minor geometric transforms) to improve generalization.
+    \item \textbf{Validation Set:} Build a validation set for hyperparameter tuning.
+\end{itemize}
+
+\subsection{Models}
 
 Since it is a hierarchical OSR problem, we propose different hierarchical models.
 
@@ -83,6 +97,10 @@ Problems and proposed solutions that are included in this method:
     \item Predict the superclass then the subclass based on the probability-based threshold method. Apply the constraint method to the subclass classifier to avoid inconsistent labeling.
 \end{itemize}
 
+\begin{center}
+\includegraphics[width=\linewidth]{graph/CascadingProbabilityBasedThresholdClassifierWithConditionalConstraints.png}
+\end{center}
+
 \subsubsection{OpenMax Hierarchical Classifier}
 As OpenMax~\cite{7780542} is a classic discriminative method in OSR, we plan to investigate its adaptation to our hierarchical problem.
 \begin{itemize}
@@ -106,13 +124,6 @@ As OpenMax~\cite{7780542} is a classic discriminative method in OSR, we plan to 
 %     \item \textbf{Stage 2 - Hierarchical Classifier for Known Superclasses:} Samples that are not identified as ``novel'' by the density model are then passed to a hierarchical classifier described in the first method, but without applying the threshold to the superclass predictor.
 % \end{itemize}
 % ================================= Deprecated =================================
-
-\subsection{Strategy for Distribution Shift}
-
-\begin{itemize}
-    \item \textbf{Data Augmentation:} Adopt the suggestion from the brief to use data augmentation (e.g. brightness, contrast, minor geometric transforms) to improve generalization.
-    \item \textbf{Local Validation Set:} Build a local validation set for hyperparameters tuning.
-\end{itemize}
 
 \subsection{Evaluation}
 
