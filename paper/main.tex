@@ -60,62 +60,53 @@ OSR contrasts with traditional closed-set recognition, which assumes all testing
     \item \textbf{Validation Set:} Build a validation set for hyperparameter tuning.
 \end{itemize}
 
-\subsection{Models}
+\subsection{Framework}
 
 Since it is a hierarchical OSR problem, we propose different hierarchical models.
 
-\subsubsection{Cascading Probability-Based Threshold Classifier with Conditional Constraints}
-
-Problems and proposed solutions that are included in this method:
 \begin{enumerate}
     \item \textit{Do we use different models for superclass classification and subclass classification?}
     \\
     \textbf{Answer:} No, we use the same base model (e.g., ResNet) as a feature extractor and train two different heads for superclass classification and subclass classification.
-
-    \item \textit{How to determine whether the label is novel or known?}
-    \\
-    \textbf{Answer:} By comparing different threshold methods.
-    \\
-    \textbf{Threshold Methods:}
-    \begin{enumerate}
-        \item Maximum Softmax Probability (MSP)~\cite{hendrycks2018baselinedetectingmisclassifiedoutofdistribution}: Logit $\to$ Softmax $\to$ Threshold Gate
-        \item Out-of-Distribution Detector (ODIN)~\cite{liang2020enhancingreliabilityoutofdistributionimage}: Logit $\to$ Temperature Scaling $\to$ Softmax $\to$ Threshold Gate
-        \item Energy-based Out-of-distribution Detection~\cite{liu2021energybasedoutofdistributiondetection}: Logit $\to$ Energy $\to$ Threshold Gate
-        \item Class-wise Sigmoid with Binary Cross-Entropy (BCE) Loss: Logit $\to$ Sigmoid $\to$ Threshold Gate
-        \item Auxiliary Confidence Gating~\cite{devries2018learningconfidenceoutofdistributiondetection}: Penultimate Features $\to$ Confidence Branch $\to$ Sigmoid $\to$ Threshold Gate
-    \end{enumerate}
-    MSP is the baseline model.
-    \\
-    One problem with MSP and ODIN is that they both rely on the Softmax function. The softmax function forces the output probabilities to sum to 1 and loses the magnitude information of the logit, which leads to the \textbf{overconfidence} problem. So threshold methods based on the logit are more robust.
-    \\
-    One problem with most of the threshold methods is that they are not trainable, while Auxiliary Confidence Gating makes it trainable by introducing the second confidence branch besides the main classification branch.
 
     \item \textit{How to let the superclass classification impact the subclass classification?}
     \\
     \textbf{Answer:} By applying a soft constraint (Channel-Wise Attention ~\cite{hu2019squeezeandexcitationnetworks}) during training and a hard constraint (Masking) during inference.
 \end{enumerate}
 
-\paragraph{Model Structure:} Use a pre-trained feature extractor followed by a superclass classification head and a subclass classification head. Train the network jointly using a combined cross-entropy loss from both heads.
+\paragraph{Model Structure:} Use a pre-trained feature extractor followed by a superclass classification head and a subclass classification head. Train the network jointly using a combined loss from both heads.
 
-\paragraph{Training and Inference:}
+\subsection{Models}
+
+\subsubsection{Post-hoc Score-based Methods}
+
+\textbf{Threshold Methods:}
 \begin{itemize}
-    \item Select a \textbf{threshold method} for novel superclass and subclass classification.
-    \item Select a \textbf{soft constraint method} used in training, use \textbf{Masking} as a \textbf{hard constraint method} used in inference.
-    \item Predict the superclass then the subclass based on the threshold method. Apply the constraint method to the subclass classifier to avoid inconsistent labeling.
+    \item Maximum Softmax Probability (MSP)~\cite{hendrycks2018baselinedetectingmisclassifiedoutofdistribution}: Logit $\to$ Softmax $\to$ Threshold Gate
+    \item Out-of-Distribution Detector (ODIN)~\cite{liang2020enhancingreliabilityoutofdistributionimage}: Logit $\to$ Temperature Scaling $\to$ Softmax $\to$ Threshold Gate
+    \item Energy-based Out-of-distribution Detection~\cite{liu2021energybasedoutofdistributiondetection}: Logit $\to$ Energy $\to$ Threshold Gate
+    \item Class-wise Sigmoid with Binary Cross-Entropy (BCE) Loss: Logit $\to$ Sigmoid $\to$ Threshold Gate
+    \item Auxiliary Confidence Gating~\cite{devries2018learningconfidenceoutofdistributiondetection}: Penultimate Features $\to$ Confidence Branch $\to$ Sigmoid $\to$ Threshold Gate
 \end{itemize}
+MSP is the baseline model.
+\\
+One problem with MSP and ODIN is that they both rely on the Softmax function. The softmax function forces the output probabilities to sum to 1 and loses the magnitude information of the logit, which leads to the \textbf{overconfidence} problem. So threshold methods based on the logit are more robust.
+\\
+One problem with most of the threshold methods is that they are not trainable, while Auxiliary Confidence Gating makes it trainable by introducing the second confidence branch besides the main classification branch.
 
 \begin{center}
-\includegraphics[width=\linewidth]{graph/CascadingProbabilityBasedThresholdClassifierWithConditionalConstraints.png}
+\includegraphics[width=\linewidth]{graph/PostHocScoreBasedMethods.png}
 \end{center}
 
 \subsubsection{OpenMax Hierarchical Classifier}
-As OpenMax~\cite{7780542} is a classic discriminative method in OSR, we plan to investigate its adaptation to our hierarchical problem.
+OpenMax~\cite{7780542} is a classic discriminative method in OSR, which is based on \textbf{Feature Distribution} (Weibull Distribution).
 \begin{itemize}
     \item \textbf{Stage 1 - OpenMax for Superclass:} Use OpenMax at the superclass level, it will either classify a sample as known superclass or novel superclass.
     \item \textbf{Stage 2 - OpenMax for Subclass:} If the sample is identified as novel at the previous level, it will also be classified as novel subclass. Otherwise, we train a separate OpenMax classifier on its corresponding set of known subclasses.
 \end{itemize}
 
 \subsubsection{Hierarchical Class Anchor Clustering (CAC)}
+CAC is a Discriminative method that is based on \textbf{Metric Learning}.
 \begin{itemize}
     \item \textbf{Stage 1 - Hierarchical Anchor Design:} Design structured anchors~\cite{miller2021class} by first defining a unique base vector for each superclass. Subclass anchors will then be created by adding small offset vectors to their corresponding superclass base vector.
     \item \textbf{Stage 2 - Training:} Train the network using CAC loss function with hierarchical anchors forcing the network to learn a semantically meaningful logit space where the cluster layout directly mirrors problem's hierarchy.
