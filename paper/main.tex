@@ -74,14 +74,21 @@ Problems and proposed solutions that are included in this method:
 
     \item \textit{How to determine whether the label is novel or known?}
     \\
-    \textbf{Answer:} By comparing different probability-based threshold methods.
+    \textbf{Answer:} By comparing different threshold methods.
     \\
-    \textbf{Soft Constraint Methods:}
+    \textbf{Threshold Methods:}
     \begin{enumerate}
-        \item Maximum Softmax Probability (MSP)~\cite{hendrycks2018baselinedetectingmisclassifiedoutofdistribution}
-        \item Out-of-Distribution Detector (ODIN)~\cite{liang2020enhancingreliabilityoutofdistributionimage}
-        \item Energy-based Out-of-distribution Detection~\cite{liu2021energybasedoutofdistributiondetection}
+        \item Maximum Softmax Probability (MSP)~\cite{hendrycks2018baselinedetectingmisclassifiedoutofdistribution}: Logit $\to$ Softmax $\to$ Threshold Gate
+        \item Out-of-Distribution Detector (ODIN)~\cite{liang2020enhancingreliabilityoutofdistributionimage}: Logit $\to$ Temperature Scaling $\to$ Softmax $\to$ Threshold Gate
+        \item Energy-based Out-of-distribution Detection~\cite{liu2021energybasedoutofdistributiondetection}: Logit $\to$ Energy $\to$ Threshold Gate
+        \item Class-wise Sigmoid with Binary Cross-Entropy (BCE) Loss: Logit $\to$ Sigmoid $\to$ Threshold Gate
+        \item Auxiliary Confidence Gating~\cite{devries2018learningconfidenceoutofdistributiondetection}: Penultimate Features $\to$ Confidence Branch $\to$ Sigmoid $\to$ Threshold Gate
     \end{enumerate}
+    MSP is the baseline model.
+    \\
+    One problem with MSP and ODIN is that they both rely on the Softmax function. The softmax function forces the output probabilities to sum to 1 and loses the magnitude information of the logit, which leads to the \textbf{overconfidence} problem. So threshold methods based on the logit are more robust.
+    \\
+    One problem with most of the threshold methods is that they are not trainable, while Auxiliary Confidence Gating makes it trainable by introducing the second confidence branch besides the main classification branch.
 
     \item \textit{How to let the superclass classification impact the subclass classification?}
     \\
@@ -92,9 +99,9 @@ Problems and proposed solutions that are included in this method:
 
 \paragraph{Training and Inference:}
 \begin{itemize}
-    \item Select a \textbf{probability-based threshold method} for novel superclass and subclass classification.
+    \item Select a \textbf{threshold method} for novel superclass and subclass classification.
     \item Select a \textbf{soft constraint method} used in training, use \textbf{Masking} as a \textbf{hard constraint method} used in inference.
-    \item Predict the superclass then the subclass based on the probability-based threshold method. Apply the constraint method to the subclass classifier to avoid inconsistent labeling.
+    \item Predict the superclass then the subclass based on the threshold method. Apply the constraint method to the subclass classifier to avoid inconsistent labeling.
 \end{itemize}
 
 \begin{center}
