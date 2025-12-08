@@ -78,25 +78,28 @@ Since it is a hierarchical OSR problem, we propose different hierarchical models
 
 \subsection{Models}
 
-\subsubsection{Post-hoc Score-based Methods}
+We categorize the approaches we explored into post-hoc methods applied to standard trained models, and methods that require modifying the training process or architecture.
 
+\subsubsection{Post-hoc Score-based Methods}
+These methods define a scoring function based on the outputs (logits or softmax probabilities) of a pre-trained closed-set classifier. A threshold is applied to this score to reject novel samples.
 \textbf{Threshold Methods:}
 \begin{itemize}
-    \item Maximum Softmax Probability (MSP)~\cite{hendrycks2018baselinedetectingmisclassifiedoutofdistribution}: Logit $\to$ Softmax $\to$ Threshold Gate
-    \item Out-of-Distribution Detector (ODIN)~\cite{liang2020enhancingreliabilityoutofdistributionimage}: Logit $\to$ Temperature Scaling $\to$ Softmax $\to$ Threshold Gate
-    \item Energy-based Out-of-distribution Detection~\cite{liu2021energybasedoutofdistributiondetection}: Logit $\to$ Energy $\to$ Threshold Gate
-    \item Class-wise Sigmoid with Binary Cross-Entropy (BCE) Loss: Logit $\to$ Sigmoid $\to$ Threshold Gate
-    \item Auxiliary Confidence Gating~\cite{devries2018learningconfidenceoutofdistributiondetection}: Penultimate Features $\to$ Confidence Branch $\to$ Sigmoid $\to$ Threshold Gate
+    \item Maximum Softmax Probability (MSP)~\cite{hendrycks2018baselinedetectingmisclassifiedoutofdistribution}: The baseline approach. It uses the maximum value of the softmax distribution as the confidence score. Logit $\to$ Softmax $\to$ Threshold Gate.
+    \item Out-of-Distribution Detector (ODIN)~\cite{liang2020enhancingreliabilityoutofdistributionimage}: Improves MSP by applying temperature scaling to the logits before softmax and adding small perturbations to the input image. Logit $\to$ Temperature Scaling $\to$ Softmax $\to$ Threshold Gate.
+    \item Energy-based Out-of-distribution Detection~\cite{liu2021energybasedoutofdistributiondetection}: Instead of softmax, this method uses the free energy derived from the logits as the scoring function. Lower energy indicates known data, while higher energy indicates novel data. Logit $\to$ Energy $\to$ Threshold Gate.
 \end{itemize}
-MSP is the baseline model.
-\\
-One problem with MSP and ODIN is that they both rely on the Softmax function. The softmax function forces the output probabilities to sum to 1 and loses the magnitude information of the logit, which leads to the \textbf{overconfidence} problem. So threshold methods based on the logit are more robust.
-\\
-One problem with most of the threshold methods is that they are not trainable, while Auxiliary Confidence Gating makes it trainable by introducing the second confidence branch besides the main classification branch.
+A known issue with MSP and ODIN is their reliance on the Softmax function. Softmax forces output probabilities to sum to 1, losing the magnitude information of the underlying logits, which often leads to \textbf{overconfidence} on unseen data. Energy-based methods mitigate this by utilizing the raw logit magnitudes.
 
 \begin{center}
 \includegraphics[width=\linewidth]{graph/PostHocScoreBasedMethods.png}
 \end{center}
+
+\subsubsection{Trainable Confidence Estimation Methods}
+Unlike post-hoc methods, these approaches modify the loss function or model architecture during training to explicitly learn representations better suited for distinguishing known from unknown.
+\begin{itemize}
+    \item \textbf{Class-wise Sigmoid with Binary Cross-Entropy (BCE) Loss:} Replace the standard Softmax + Cross-Entropy loss with independent sigmoid activation functions for each class, trained with BCE loss. This treats the multi-class problem as multiple binary classification problems. During inference, if the maximum sigmoid probability across all classes is below a threshold, the sample is rejected as novel.
+    \item \textbf{Auxiliary Confidence Gating~\cite{devries2018learningconfidenceoutofdistributiondetection}:} Add a parallel confidence branch alongside the main classification branch. The network is trained to output both a class prediction and a scalar confidence score via a sigmoid output. The model learns to output low confidence for samples that are difficult to classify or likely out-of-distribution.
+\end{itemize}
 
 \subsubsection{OpenMax Hierarchical Classifier}
 OpenMax~\cite{7780542} is a classic discriminative method in OSR, which is based on \textbf{Feature Distribution} (Weibull Distribution).
