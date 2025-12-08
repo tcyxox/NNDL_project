@@ -1,0 +1,140 @@
+\documentclass{article}
+
+% Language setting
+% Replace `english' with e.g. `spanish' to change the document language
+\usepackage[english]{babel}
+
+\usepackage[final]{neurips2023}
+\makeatletter
+\renewcommand{\@noticestring}{}
+\makeatother
+
+% Useful packages
+\usepackage{amsmath}
+\usepackage{graphicx}
+\usepackage[colorlinks=true, allcolors=blue]{hyperref}
+
+\title{Transfer Learning Project}
+\author{%
+  Chenyu Tian \\
+  Columbia University\\
+  \texttt{ct3308@columbia.edu} \\
+  \And
+  Yilu Yang \\
+  Columbia University\\
+  \texttt{yy3626@columbia.edu}
+}
+
+\begin{document}
+\maketitle
+
+\section{Introduction}
+This project aims to solve a hierarchical classification problem by predicting both a superclass and its corresponding subclass for a given image. The problem has two primary complexities that test model robustness and generalization:
+
+\textbf{Open Set Recognition (OSR):} The test set contains novel superclasses and subclasses not seen during training. The model must identify and reject these ``unknown'' samples as ``novel''.
+
+\textbf{Distribution Shift:} The test set's class frequencies may differ from the training set. The model must generalize to this new statistical distribution of known classes.
+
+
+\section{Related Work}
+OSR contrasts with traditional closed-set recognition, which assumes all testing classes are known during training. The methods for solving OSR problems primarily fall into the following two groups~\cite{sun2023survey}.
+
+\textbf{Discriminative Models:} Discriminative models aim to learn decision rules directly. This is often approached either by learning highly compact and discriminative representations for known classes (through score-based, distance-based or reconstruction-based methods) or by explicitly introducing "unknown" information into the training process. This unknown information can be synthesized from known classes.
+
+\textbf{Generative Models:} The generative models is another approach which can be further divided into Instance and Non-Instance Generation-based methods~\cite{geng2020recent}. The former method focuses on generating useful new samples, while the second one focuses on learning the underlying distributions of the known-class data, often using Autoencoders (AEs) or Generative Adversarial Networks (GANs). The principle is that unknown samples will not fit the learned distributions, allowing for their detection based on deviation or high reconstruction error.
+
+
+\section{Method / Algorithm}
+
+\subsection{Dataset Preparation}
+
+\paragraph{Training Data with Novel Label}
+\begin{itemize}
+    \item \textbf{Mixup Data Augmentation:} Generate synthetic novel samples by creating linear interpolations between pairs of training images belonging to different known classes.
+    \item \textbf{Simulated Open-Set Split:} Simulate an open-set scenario by holding out specific subclasses to serve as novel samples in the validation set.
+\end{itemize}
+
+\paragraph{Distribution Shift}
+\begin{itemize}
+    \item \textbf{Data Augmentation:} Adopt the suggestion from the brief to use data augmentation (e.g., brightness, contrast, minor geometric transforms) to improve generalization.
+    \item \textbf{Validation Set:} Build a validation set for hyperparameter tuning.
+\end{itemize}
+
+\subsection{Framework}
+
+Since it is a hierarchical OSR problem, we propose different hierarchical models.
+
+\begin{enumerate}
+    \item \textit{Do we use different models for superclass classification and subclass classification?}
+    \\
+    \textbf{Answer:} No, we use the same base model (e.g., ResNet) as a feature extractor and train two different heads for superclass classification and subclass classification.
+
+    \item \textit{How to let the superclass classification impact the subclass classification?}
+    \\
+    \textbf{Answer:} By applying a soft constraint (Channel-Wise Attention ~\cite{hu2019squeezeandexcitationnetworks}) during training and a hard constraint (Masking) during inference.
+\end{enumerate}
+
+\paragraph{Model Structure:} Use a pre-trained feature extractor followed by a superclass classification head and a subclass classification head. Train the network jointly using a combined loss from both heads.
+
+\subsection{Models}
+
+We categorize the approaches we explored into post-hoc methods applied to standard trained models, and methods that require modifying the training process or architecture.
+
+\subsubsection{Post-hoc Score-based Methods}
+These methods define a scoring function based on the outputs (logits or softmax probabilities) of a pre-trained closed-set classifier. A threshold is applied to this score to reject novel samples.
+\textbf{Threshold Methods:}
+\begin{itemize}
+    \item Maximum Softmax Probability (MSP)~\cite{hendrycks2018baselinedetectingmisclassifiedoutofdistribution}: The baseline approach. It uses the maximum value of the softmax distribution as the confidence score. Logit $\to$ Softmax $\to$ Threshold Gate.
+    \item Out-of-Distribution Detector (ODIN)~\cite{liang2020enhancingreliabilityoutofdistributionimage}: Improves MSP by applying temperature scaling to the logits before softmax and adding small perturbations to the input image. Logit $\to$ Temperature Scaling $\to$ Softmax $\to$ Threshold Gate.
+    \item Energy-based Out-of-distribution Detection~\cite{liu2021energybasedoutofdistributiondetection}: Instead of softmax, this method uses the free energy derived from the logits as the scoring function. Lower energy indicates known data, while higher energy indicates novel data. Logit $\to$ Energy $\to$ Threshold Gate.
+\end{itemize}
+A known issue with MSP and ODIN is their reliance on the Softmax function. Softmax forces output probabilities to sum to 1, losing the magnitude information of the underlying logits, which often leads to \textbf{overconfidence} on unseen data. Energy-based methods mitigate this by utilizing the raw logit magnitudes.
+
+\begin{center}
+\includegraphics[width=\linewidth]{graph/PostHocScoreBasedMethods.png}
+\end{center}
+
+\subsubsection{Trainable Confidence Estimation Methods}
+Unlike post-hoc methods, these approaches modify the loss function or model architecture during training to explicitly learn representations better suited for distinguishing known from unknown.
+\begin{itemize}
+    \item \textbf{Class-wise Sigmoid with Binary Cross-Entropy (BCE) Loss:} Replace the standard Softmax + Cross-Entropy loss with independent sigmoid activation functions for each class, trained with BCE loss. This treats the multi-class problem as multiple binary classification problems. During inference, if the maximum sigmoid probability across all classes is below a threshold, the sample is rejected as novel.
+    \item \textbf{Auxiliary Confidence Gating~\cite{devries2018learningconfidenceoutofdistributiondetection}:} Add a parallel confidence branch alongside the main classification branch. The network is trained to output both a class prediction and a scalar confidence score via a sigmoid output. The model learns to output low confidence for samples that are difficult to classify or likely out-of-distribution.
+\end{itemize}
+
+\subsubsection{OpenMax Hierarchical Classifier}
+OpenMax~\cite{7780542} is a classic discriminative method in OSR, which is based on \textbf{Feature Distribution} (Weibull Distribution).
+\begin{itemize}
+    \item \textbf{Stage 1 - OpenMax for Superclass:} Use OpenMax at the superclass level, it will either classify a sample as known superclass or novel superclass.
+    \item \textbf{Stage 2 - OpenMax for Subclass:} If the sample is identified as novel at the previous level, it will also be classified as novel subclass. Otherwise, we train a separate OpenMax classifier on its corresponding set of known subclasses.
+\end{itemize}
+
+\subsubsection{Hierarchical Class Anchor Clustering (CAC)}
+CAC is a Discriminative method that is based on \textbf{Metric Learning}.
+\begin{itemize}
+    \item \textbf{Stage 1 - Hierarchical Anchor Design:} Design structured anchors~\cite{miller2021class} by first defining a unique base vector for each superclass. Subclass anchors will then be created by adding small offset vectors to their corresponding superclass base vector.
+    \item \textbf{Stage 2 - Training:} Train the network using CAC loss function with hierarchical anchors forcing the network to learn a semantically meaningful logit space where the cluster layout directly mirrors problem's hierarchy.
+    \item \textbf{Stage 3 - Inference:} Use the distance-based rejection process to classify known subclasses, while distinguishing rejected samples as either ``Unknown Superclass'' or ``Unknown Subclass''.
+\end{itemize}
+
+% ================================= Deprecated =================================
+% \subsubsection{Probability Density Estimation + Hierarchical Classifier}
+
+% \begin{itemize}
+%     \item \textbf{Stage 1 - Probability Density-based Model for novel superclass:} Use a probability density estimation model which directly learns the probability distribution of the known dataset and addresses the OSR problem for the superclass. Data from a novel superclass should deviate from this distribution, receiving a probability score lower than a threshold, thus labeled as ``novel''.
+
+%     \item \textbf{Stage 2 - Hierarchical Classifier for Known Superclasses:} Samples that are not identified as ``novel'' by the density model are then passed to a hierarchical classifier described in the first method, but without applying the threshold to the superclass predictor.
+% \end{itemize}
+% ================================= Deprecated =================================
+
+\subsection{Evaluation}
+
+\begin{itemize}
+    \item \textbf{Primary Metric:} Our top priority is to significantly improve upon the CLIP baseline's performance on ``Unseen Accuracy''.
+    \item \textbf{Secondary Metrics:} We will monitor all official metrics, including ``Overall Accuracy", ``Seen Accuracy'', and ``Categorical Cross-entropy'' for both class levels.
+    \item \textbf{Threshold Tuning:} To determine the gatekeeper's probability threshold and the expert's confidence threshold, we will simulate an open-set scenario (e.g., by holding out subclasses during training) and tune on our local validation set to maximize ``Unseen Accuracy''.
+\end{itemize}
+
+\bibliographystyle{alpha}
+\bibliography{reference}
+
+\end{document}
