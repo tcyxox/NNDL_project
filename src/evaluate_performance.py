@@ -1,5 +1,6 @@
 import torch
 import os
+import json
 import numpy as np
 from sklearn.metrics import accuracy_score
 
@@ -9,7 +10,7 @@ from utils import load_mapping_and_model, calculate_threshold, predict_with_osr
 CONFIG = {
     "model_dir": MODELS_DIR,
     "val_data_dir": SPLIT_DIR,
-    "test_data_dir": SPLIT_DIR,  # 本地测试集
+    "test_data_dir": SPLIT_DIR,
     "novel_super_idx": NOVEL_SUPER_INDEX,
     "novel_sub_idx": NOVEL_SUB_INDEX,
     "target_recall": TARGET_RECALL
@@ -44,6 +45,11 @@ if __name__ == "__main__":
     print("--- Step 1: 加载模型和映射 ---")
     super_model, super_map = load_mapping_and_model("superclass", CONFIG["model_dir"], device)
     sub_model, sub_map = load_mapping_and_model("subclass", CONFIG["model_dir"], device)
+    
+    # 加载超类到子类的映射表（用于 hierarchical masking）
+    with open(os.path.join(CONFIG["model_dir"], "super_to_sub_mapping.json"), 'r') as f:
+        super_to_sub = {int(k): v for k, v in json.load(f).items()}
+    print(f"  > Hierarchical masking 已启用")
 
     # --- Step 2: 用 Val 集计算阈值 ---
     print("\n--- Step 2: 用 Val 集计算阈值 ---")
@@ -56,8 +62,8 @@ if __name__ == "__main__":
     print(f"  > Superclass 阈值: {thresh_super:.4f}")
     print(f"  > Subclass 阈值:   {thresh_sub:.4f}")
 
-    # --- Step 3: 在 local test set 上推理 ---
-    print("\n--- Step 3: 在 local test set 上推理 ---")
+    # --- Step 3: 在 Test 集上推理 ---
+    print("\n--- Step 3: 在 Test 集上推理 ---")
     test_feat = torch.load(os.path.join(CONFIG["test_data_dir"], "test_features.pt")).to(device)
     test_super_lbl = torch.load(os.path.join(CONFIG["test_data_dir"], "test_super_labels.pt"))
     test_sub_lbl = torch.load(os.path.join(CONFIG["test_data_dir"], "test_sub_labels.pt"))
@@ -66,7 +72,8 @@ if __name__ == "__main__":
         test_feat, super_model, sub_model,
         super_map, sub_map,
         thresh_super, thresh_sub,
-        CONFIG["novel_super_idx"], CONFIG["novel_sub_idx"], device
+        CONFIG["novel_super_idx"], CONFIG["novel_sub_idx"], device,
+        super_to_sub=super_to_sub
     )
 
     # --- Step 4: 评估结果 ---
