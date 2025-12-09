@@ -81,3 +81,64 @@ def calculate_threshold(model, val_features, val_labels, label_map, target_recal
     # 找到一个阈值 T，使得 target_recall% 的样本分数 > T
     threshold = torch.quantile(max_probs, 1 - target_recall).item()
     return threshold
+
+
+def predict_with_osr(features, super_model, sub_model,
+                     super_map, sub_map,
+                     thresh_super, thresh_sub,
+                     novel_super_idx, novel_sub_idx, device):
+    """
+    对特征进行 OSR 推理
+
+    Args:
+        features: 输入特征 [N, 512]
+        super_model: 超类分类模型
+        sub_model: 子类分类模型
+        super_map: 超类 local_to_global 映射
+        sub_map: 子类 local_to_global 映射
+        thresh_super: 超类阈值
+        thresh_sub: 子类阈值
+        novel_super_idx: 未知超类的 ID (3)
+        novel_sub_idx: 未知子类的 ID (87)
+        device: 'cuda' or 'cpu'
+
+    Returns:
+        super_preds: 超类预测列表
+        sub_preds: 子类预测列表
+    """
+    super_preds = []
+    sub_preds = []
+
+    with torch.no_grad():
+        for i in range(len(features)):
+            feature = features[i].unsqueeze(0)
+
+            # === 超类预测 ===
+            super_logits = super_model(feature)
+            super_probs = F.softmax(super_logits, dim=1)
+            max_super_prob, super_idx = torch.max(super_probs, dim=1)
+
+            if max_super_prob.item() < thresh_super:
+                final_super = novel_super_idx
+            else:
+                final_super = super_map[super_idx.item()]
+
+            # === 子类预测 ===
+            sub_logits = sub_model(feature)
+            sub_probs = F.softmax(sub_logits, dim=1)
+            max_sub_prob, sub_idx = torch.max(sub_probs, dim=1)
+
+            if max_sub_prob.item() < thresh_sub:
+                final_sub = novel_sub_idx
+            else:
+                final_sub = sub_map[sub_idx.item()]
+
+            # === Hard Constraint: 超类 novel → 子类也 novel ===
+            if final_super == novel_super_idx:
+                final_sub = novel_sub_idx
+
+            super_preds.append(final_super)
+            sub_preds.append(final_sub)
+
+    return super_preds, sub_preds
+
