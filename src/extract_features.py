@@ -9,7 +9,6 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
 CONFIG = {
     "train_csv_path": os.path.join(SCRIPT_DIR, "../data/raw/train_data.csv"),
-    "test_csv_path": os.path.join(SCRIPT_DIR, "../data/raw/example_test_predictions.csv"),
     "train_img_dir": os.path.join(SCRIPT_DIR, "../data/raw/train_images"),
     "test_img_dir": os.path.join(SCRIPT_DIR, "../data/raw/test_images"),
     "output_dir": os.path.join(SCRIPT_DIR, "../data/processed/features"),
@@ -33,12 +32,8 @@ processor = CLIPProcessor.from_pretrained(CONFIG["model_id"])
 def extract_features(image_paths, img_dir):
     images = []
     for img_path in image_paths:
-        try:
-            full_path = os.path.join(img_dir, img_path)
-            images.append(Image.open(full_path))
-        except FileNotFoundError:
-            print(f"警告: 找不到图片 {full_path}")
-            images.append(Image.new('RGB', (224, 224), color='black'))  # 添加一个空图像占位
+        full_path = os.path.join(img_dir, img_path)
+        images.append(Image.open(full_path))
     # 预处理
     inputs = processor(images=images, return_tensors="pt", padding=True).to(device)
     # 提取图像特征
@@ -68,10 +63,9 @@ if __name__ == "__main__":
     torch.save(train_sub_labels, os.path.join(CONFIG["output_dir"], "train_sub_labels.pt"))
     print(f"训练特征已保存: {train_features.shape}")
 
-    # --- 处理测试数据 ---
+    # =============================== 处理测试数据 ===============================
     print("正在处理测试集...")
-    test_df = pd.read_csv(CONFIG["test_csv_path"])
-    test_images = test_df["image"].tolist()
+    test_images = sorted([f for f in os.listdir(CONFIG["test_img_dir"]) if f.endswith('.jpg')])
 
     test_features_list = []
     for i in tqdm(range(0, len(test_images), CONFIG["batch_size"]), desc="提取测试特征"):
