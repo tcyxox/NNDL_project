@@ -8,14 +8,16 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
 CONFIG = {
     "feature_dir": os.path.join(SCRIPT_DIR, "../data/processed/features"),
-    "output_dir": os.path.join(SCRIPT_DIR, "../data/processed/split"),  # 新的数据存放位置
-    "novel_ratio": 0.2,  # 20% 的子类将被作为“域外/未知”类保留
-    "val_ratio": 0.1,   # 从已知类中划出 10% 做验证
-    "test_ratio": 0.1,  # 从已知类中划出 10% 做测试
+    "output_dir": os.path.join(SCRIPT_DIR, "../data/processed/split"),
+
+    # 划分比例
+    "novel_ratio": 0.2,        # 20% 子类作为未知类
+    "train_ratio": 0.8,        # 已知类中 80% 用于训练
+    "val_test_ratio": 0.5,     # Val 占 (Val+Test) 的比例
 
     # 标签设定
-    "novel_sub_index": 87,   # 未知子类的 ID
     "novel_super_index": 3,  # 未知超类的 ID
+    "novel_sub_index": 87,   # 未知子类的 ID
     "seed": 42  # 固定随机种子，保证每次划分一致
 }
 
@@ -67,12 +69,13 @@ if __name__ == "__main__":
     known_indices = known_indices[known_perm]
 
     n_known = len(known_indices)
-    n_val_known = int(n_known * CONFIG["val_ratio"])
-    n_test_known = int(n_known * CONFIG["test_ratio"])
-    n_train_known = n_known - n_val_known - n_test_known
+    n_train_known = int(n_known * CONFIG["train_ratio"])
+    n_val_test_known = n_known - n_train_known
+    n_val_known = int(n_val_test_known * CONFIG["val_test_ratio"])
+    n_test_known = n_val_test_known - n_val_known
 
     idx_train = known_indices[:n_train_known]
-    idx_val_known = known_indices[n_train_known: n_train_known + n_val_known]
+    idx_val_known = known_indices[n_train_known:n_train_known + n_val_known]
     idx_test_known = known_indices[n_train_known + n_val_known:]
 
     # 4.2 处理未知类 (Novel): 只分为 Val / Test (训练集不能看！)
@@ -81,7 +84,8 @@ if __name__ == "__main__":
     novel_indices = novel_indices[novel_perm]
 
     n_novel = len(novel_indices)
-    n_val_novel = int(n_novel * CONFIG["val_ratio"] / (CONFIG["val_ratio"] + CONFIG["test_ratio"]))
+    n_val_novel = int(n_novel * CONFIG["val_test_ratio"])
+    n_test_novel = n_novel - n_val_novel
 
     idx_val_novel = novel_indices[:n_val_novel]
     idx_test_novel = novel_indices[n_val_novel:]
