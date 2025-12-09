@@ -64,15 +64,10 @@ OSR contrasts with traditional closed-set recognition, which assumes all testing
 
 Since it is a hierarchical OSR problem, we propose different hierarchical models.
 
-\begin{enumerate}
-    \item \textit{Do we use different models for superclass classification and subclass classification?}
-    \\
-    \textbf{Answer:} No, we use the same base model (e.g., ResNet) as a feature extractor and train two different heads for superclass classification and subclass classification.
-
-    \item \textit{How to let the superclass classification impact the subclass classification?}
-    \\
-    \textbf{Answer:} By applying a soft constraint (Channel-Wise Attention ~\cite{hu2019squeezeandexcitationnetworks}) during training and a hard constraint (Masking) during inference.
-\end{enumerate}
+\begin{itemize}
+    \item \textbf{Feature Extraction:} We use the same base model (e.g., CLIP) as a feature extractor and train two different heads for superclass classification and subclass classification.
+    \item \textbf{Hierarchical Constraints:} To ensure the superclass classification impacts the subclass classification, we apply a soft constraint (Channel-Wise Attention~\cite{hu2019squeezeandexcitationnetworks}) during training and a hard constraint (Masking) during inference.
+\end{itemize}
 
 \paragraph{Model Structure:} Use a pre-trained feature extractor followed by a superclass classification head and a subclass classification head. Train the network jointly using a combined loss from both heads.
 

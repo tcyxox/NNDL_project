@@ -1,5 +1,11 @@
+*.pyc
+
 .idea
-/dataset
+.ipynb_checkpoints
+
+data
+outputs
+*.jpg
 
 # LaTeX
 *.aux
