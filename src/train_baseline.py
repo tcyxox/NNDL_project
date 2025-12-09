@@ -4,6 +4,8 @@ import torch.optim as optim
 from torch.utils.data import TensorDataset, DataLoader
 import os
 import json
+import random
+import numpy as np
 
 from config import *
 from utils import LinearClassifier
@@ -19,6 +21,19 @@ CONFIG = {
 
 os.makedirs(CONFIG["output_dir"], exist_ok=True)
 device = "cuda" if torch.cuda.is_available() else "cpu"
+
+# =============================== 设置随机种子（确保可复现）===============================
+def set_seed(seed):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
+
+set_seed(SEED)
 
 
 # =============================== 加载划分后的训练数据 ===============================
