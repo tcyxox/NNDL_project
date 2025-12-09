@@ -44,7 +44,7 @@ SEED = 42               # 随机种子
 
 对任意super-sub pair使用hierarchical masking。其它同v1.0。
 
-  [Superclass] 评估报告:
+[Superclass] 评估报告:
   > 总体准确率 (Overall): 95.31%
   > 已知类准确率 (Seen):    95.31%  (目标: 保持高)
   > 未知类准确率 (Unseen):  0.00%  (目标: >0, 越高越好)
