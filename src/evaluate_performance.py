@@ -3,20 +3,19 @@ import torch.nn.functional as F
 import os
 import json
 import numpy as np
-from sklearn.metrics import accuracy_score, classification_report
+from sklearn.metrics import accuracy_score
 from tqdm import tqdm
 import torch.nn as nn
 
-# ================= 配置 =================
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+from config import *
 
 CONFIG = {
-    "model_dir": os.path.join(SCRIPT_DIR, "../outputs/models"),
-    "val_data_dir": os.path.join(SCRIPT_DIR, "../data/processed/split"),
-    "feature_dim": 512,
-    "novel_super_idx": 3,
-    "novel_sub_idx": 87,
-    "target_recall": 0.95  # 用于自动计算阈值
+    "model_dir": MODELS_DIR,
+    "val_data_dir": SPLIT_DIR,
+    "feature_dim": FEATURE_DIM,
+    "novel_super_idx": NOVEL_SUPER_INDEX,
+    "novel_sub_idx": NOVEL_SUB_INDEX,
+    "target_recall": TARGET_RECALL
 }
 
 device = "cuda" if torch.cuda.is_available() else "cpu"

@@ -3,18 +3,17 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import TensorDataset, DataLoader
 import os
-import json  # 用于保存标签映射字典
+import json
 
-# =============================== 配置 ===============================
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+from config import *
 
 CONFIG = {
-    "feature_dir": os.path.join(SCRIPT_DIR, "../data/processed/split"),
-    "output_dir": os.path.join(SCRIPT_DIR, "../outputs/models"),
-    "feature_dim": 512,
-    "learning_rate": 1e-3,
-    "batch_size": 128,
-    "epochs": 50  # OSR 任务通常不需要训练太久，容易过拟合
+    "feature_dir": SPLIT_DIR,
+    "output_dir": MODELS_DIR,
+    "feature_dim": FEATURE_DIM,
+    "learning_rate": LEARNING_RATE,
+    "batch_size": BATCH_SIZE,
+    "epochs": EPOCHS
 }
 
 os.makedirs(CONFIG["output_dir"], exist_ok=True)

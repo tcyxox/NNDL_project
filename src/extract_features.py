@@ -5,15 +5,15 @@ from PIL import Image
 import os
 from tqdm import tqdm
 
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+from config import *
 
 CONFIG = {
-    "train_csv_path": os.path.join(SCRIPT_DIR, "../data/raw/train_data.csv"),
-    "train_img_dir": os.path.join(SCRIPT_DIR, "../data/raw/train_images"),
-    "test_img_dir": os.path.join(SCRIPT_DIR, "../data/raw/test_images"),
-    "output_dir": os.path.join(SCRIPT_DIR, "../data/processed/features"),
-    "model_id": "openai/clip-vit-base-patch32",
-    "batch_size": 64
+    "train_csv_path": os.path.join(DATA_RAW_DIR, "train_data.csv"),
+    "train_img_dir": os.path.join(DATA_RAW_DIR, "train_images"),
+    "test_img_dir": os.path.join(DATA_RAW_DIR, "test_images"),
+    "output_dir": FEATURES_DIR,
+    "model_id": CLIP_MODEL_ID,
+    "batch_size": BATCH_SIZE
 }
 
 # 确保输出目录存在

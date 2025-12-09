@@ -1,24 +1,18 @@
 import torch
 import os
 import numpy as np
-from collections import Counter
 
-# ================= 配置 =================
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+from config import *
 
 CONFIG = {
-    "feature_dir": os.path.join(SCRIPT_DIR, "../data/processed/features"),
-    "output_dir": os.path.join(SCRIPT_DIR, "../data/processed/split"),
-
-    # 划分比例
-    "novel_ratio": 0.2,        # 20% 子类作为未知类
-    "train_ratio": 0.8,        # 已知类中 80% 用于训练
-    "val_test_ratio": 0.5,     # Val 占 (Val+Test) 的比例
-
-    # 标签设定
-    "novel_super_index": 3,  # 未知超类的 ID
-    "novel_sub_index": 87,   # 未知子类的 ID
-    "seed": 42  # 固定随机种子，保证每次划分一致
+    "feature_dir": FEATURES_DIR,
+    "output_dir": SPLIT_DIR,
+    "novel_ratio": NOVEL_RATIO,
+    "train_ratio": TRAIN_RATIO,
+    "val_test_ratio": VAL_TEST_RATIO,
+    "novel_super_index": NOVEL_SUPER_INDEX,
+    "novel_sub_index": NOVEL_SUB_INDEX,
+    "seed": SEED
 }
 
 os.makedirs(CONFIG["output_dir"], exist_ok=True)
@@ -64,7 +58,6 @@ if __name__ == "__main__":
 
     # 4. 切分数据集
     # 4.1 处理已知类 (Known): 分为 Train / Val / Test
-    # 打乱已知类样本
     known_perm = torch.randperm(len(known_indices))
     known_indices = known_indices[known_perm]
 
@@ -79,7 +72,6 @@ if __name__ == "__main__":
     idx_test_known = known_indices[n_train_known + n_val_known:]
 
     # 4.2 处理未知类 (Novel): 只分为 Val / Test (训练集不能看！)
-    # 打乱未知类样本
     novel_perm = torch.randperm(len(novel_indices))
     novel_indices = novel_indices[novel_perm]
 

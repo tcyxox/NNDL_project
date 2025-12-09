@@ -6,29 +6,18 @@ import json
 from tqdm import tqdm
 import torch.nn as nn
 
-# ================= 配置 =================
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+from config import *
 
 CONFIG = {
-    # 1. 训练好的模型和映射表所在位置 (来自 train_baseline.py)
-    "model_dir": os.path.join(SCRIPT_DIR, "../outputs/models"),
-
-    # 2. 验证集位置 (用于自动计算最佳阈值, 来自 split_dataset.py)
-    "val_data_dir": os.path.join(SCRIPT_DIR, "../data/processed/split"),
-
-    # 3. 最终测试集特征位置 (来自 extract_features.py, 这是我们要预测的目标)
-    "test_feature_path": os.path.join(SCRIPT_DIR, "../data/processed/features/test_features.pt"),
-    "test_image_names": os.path.join(SCRIPT_DIR, "../data/processed/features/test_image_names.pt"),
-
-    "feature_dim": 512,
-    "output_csv": os.path.join(SCRIPT_DIR, "../outputs/submission_osr.csv"),
-
-    # 结果中的 Novel ID
-    "novel_super_idx": 3,
-    "novel_sub_idx": 87,
-
-    # 阈值设定策略: 在验证集上保留多少比例的已知样本 (Recall)
-    "target_recall": 0.95
+    "model_dir": MODELS_DIR,
+    "val_data_dir": SPLIT_DIR,
+    "test_feature_path": os.path.join(FEATURES_DIR, "test_features.pt"),
+    "test_image_names": os.path.join(FEATURES_DIR, "test_image_names.pt"),
+    "feature_dim": FEATURE_DIM,
+    "output_csv": os.path.join(OUTPUTS_DIR, "submission_osr.csv"),
+    "novel_super_idx": NOVEL_SUPER_INDEX,
+    "novel_sub_idx": NOVEL_SUB_INDEX,
+    "target_recall": TARGET_RECALL
 }
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
