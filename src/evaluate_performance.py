@@ -1,63 +1,22 @@
 import torch
 import torch.nn.functional as F
 import os
-import json
 import numpy as np
 from sklearn.metrics import accuracy_score
 from tqdm import tqdm
-import torch.nn as nn
 
 from config import *
+from utils import LinearClassifier, load_mapping_and_model, calculate_threshold
 
 CONFIG = {
     "model_dir": MODELS_DIR,
     "val_data_dir": SPLIT_DIR,
-    "feature_dim": FEATURE_DIM,
     "novel_super_idx": NOVEL_SUPER_INDEX,
     "novel_sub_idx": NOVEL_SUB_INDEX,
     "target_recall": TARGET_RECALL
 }
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
-
-
-# ================= 模型定义 =================
-class LinearClassifier(nn.Module):
-    def __init__(self, in_features, out_features):
-        super(LinearClassifier, self).__init__()
-        self.layer = nn.Linear(in_features, out_features)
-
-    def forward(self, x):
-        return self.layer(x)
-
-
-# ================= 辅助函数 =================
-def load_mapping_and_model(prefix):
-    json_path = os.path.join(CONFIG["model_dir"], f"{prefix}_mapping.json")
-    with open(json_path, 'r') as f:
-        local_to_global = {int(k): v for k, v in json.load(f).items()}
-
-    num_classes = len(local_to_global)
-    model = LinearClassifier(CONFIG["feature_dim"], num_classes)
-    model.load_state_dict(torch.load(os.path.join(CONFIG["model_dir"], f"{prefix}_model.pth")))
-    model.to(device)
-    model.eval()
-    return model, local_to_global
-
-
-def calculate_threshold(model, val_features, val_labels, label_map, target_recall=0.95):
-    """自动计算阈值 (仅基于已知类样本)"""
-    model.eval()
-    known_mask = torch.tensor([l.item() in label_map.values() for l in val_labels])
-    X_known = val_features[known_mask].to(device)
-
-    with torch.no_grad():
-        logits = model(X_known)
-        probs = F.softmax(logits, dim=1)
-        max_probs, _ = torch.max(probs, dim=1)
-
-    threshold = torch.quantile(max_probs, 1 - target_recall).item()
-    return threshold
 
 
 def calculate_metrics(y_true, y_pred, novel_label, name="Task"):
@@ -93,16 +52,16 @@ def calculate_metrics(y_true, y_pred, novel_label, name="Task"):
 # ================= 主程序 =================
 if __name__ == "__main__":
     print("--- 1. 加载资源 ---")
-    super_model, super_map = load_mapping_and_model("superclass")
-    sub_model, sub_map = load_mapping_and_model("subclass")
+    super_model, super_map = load_mapping_and_model("superclass", CONFIG["model_dir"], device)
+    sub_model, sub_map = load_mapping_and_model("subclass", CONFIG["model_dir"], device)
 
     val_feat = torch.load(os.path.join(CONFIG["val_data_dir"], "val_features.pt")).to(device)
     val_super_lbl = torch.load(os.path.join(CONFIG["val_data_dir"], "val_super_labels.pt"))
     val_sub_lbl = torch.load(os.path.join(CONFIG["val_data_dir"], "val_sub_labels.pt"))
 
     print("--- 2. 计算阈值 ---")
-    t_super = calculate_threshold(super_model, val_feat, val_super_lbl, super_map, CONFIG["target_recall"])
-    t_sub = calculate_threshold(sub_model, val_feat, val_sub_lbl, sub_map, CONFIG["target_recall"])
+    t_super = calculate_threshold(super_model, val_feat, val_super_lbl, super_map, CONFIG["target_recall"], device)
+    t_sub = calculate_threshold(sub_model, val_feat, val_sub_lbl, sub_map, CONFIG["target_recall"], device)
     print(f"  Super Threshold: {t_super:.4f}")
     print(f"  Sub Threshold:   {t_sub:.4f}")
 

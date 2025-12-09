@@ -6,6 +6,7 @@ import os
 import json
 
 from config import *
+from utils import LinearClassifier
 
 CONFIG = {
     "feature_dir": SPLIT_DIR,
@@ -18,16 +19,6 @@ CONFIG = {
 
 os.makedirs(CONFIG["output_dir"], exist_ok=True)
 device = "cuda" if torch.cuda.is_available() else "cpu"
-
-
-# =============================== 定义线性分类器模型 ===============================
-class LinearClassifier(nn.Module):
-    def __init__(self, in_features, out_features):
-        super(LinearClassifier, self).__init__()
-        self.layer = nn.Linear(in_features, out_features)
-
-    def forward(self, x):
-        return self.layer(x)
 
 
 # =============================== 加载划分后的训练数据 ===============================
