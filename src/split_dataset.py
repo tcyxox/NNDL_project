@@ -3,6 +3,7 @@ import os
 import numpy as np
 
 from config import *
+from utils import set_seed
 
 CONFIG = {
     "feature_dir": FEATURES_DIR,
@@ -12,7 +13,6 @@ CONFIG = {
     "val_test_ratio": VAL_TEST_RATIO,
     "novel_super_index": NOVEL_SUPER_INDEX,
     "novel_sub_index": NOVEL_SUB_INDEX,
-    "seed": SEED
 }
 
 os.makedirs(CONFIG["output_dir"], exist_ok=True)
@@ -27,6 +27,8 @@ def save_split(name, features, super_labels, sub_labels):
 
 
 if __name__ == "__main__":
+    set_seed()
+    
     # 1. 加载全量训练数据
     print("正在加载全量特征...")
     features = torch.load(os.path.join(CONFIG["feature_dir"], "train_features.pt"))
@@ -37,8 +39,6 @@ if __name__ == "__main__":
     all_subclasses = torch.unique(sub_labels).numpy()
 
     # 2. 划分 "已知类" (Domain In) 和 "未知类" (Domain Out)
-    np.random.seed(CONFIG["seed"])
-    torch.manual_seed(CONFIG["seed"])
     np.random.shuffle(all_subclasses)
 
     num_novel = int(len(all_subclasses) * CONFIG["novel_ratio"])
