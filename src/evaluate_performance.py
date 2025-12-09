@@ -9,6 +9,7 @@ from utils import load_mapping_and_model, calculate_threshold, predict_with_osr
 CONFIG = {
     "model_dir": MODELS_DIR,
     "val_data_dir": SPLIT_DIR,
+    "test_data_dir": SPLIT_DIR,  # 本地测试集
     "novel_super_idx": NOVEL_SUPER_INDEX,
     "novel_sub_idx": NOVEL_SUB_INDEX,
     "target_recall": TARGET_RECALL
@@ -44,8 +45,8 @@ if __name__ == "__main__":
     super_model, super_map = load_mapping_and_model("superclass", CONFIG["model_dir"], device)
     sub_model, sub_map = load_mapping_and_model("subclass", CONFIG["model_dir"], device)
 
-    # --- Step 2: 计算阈值 ---
-    print("\n--- Step 2: 计算阈值 ---")
+    # --- Step 2: 用 Val 集计算阈值 ---
+    print("\n--- Step 2: 用 Val 集计算阈值 ---")
     val_feat = torch.load(os.path.join(CONFIG["val_data_dir"], "val_features.pt")).to(device)
     val_super_lbl = torch.load(os.path.join(CONFIG["val_data_dir"], "val_super_labels.pt"))
     val_sub_lbl = torch.load(os.path.join(CONFIG["val_data_dir"], "val_sub_labels.pt"))
@@ -55,10 +56,14 @@ if __name__ == "__main__":
     print(f"  > Superclass 阈值: {thresh_super:.4f}")
     print(f"  > Subclass 阈值:   {thresh_sub:.4f}")
 
-    # --- Step 3: 验证集推理 ---
-    print("\n--- Step 3: 验证集推理 ---")
+    # --- Step 3: 在 local test set 上推理 ---
+    print("\n--- Step 3: 在 local test set 上推理 ---")
+    test_feat = torch.load(os.path.join(CONFIG["test_data_dir"], "test_features.pt")).to(device)
+    test_super_lbl = torch.load(os.path.join(CONFIG["test_data_dir"], "test_super_labels.pt"))
+    test_sub_lbl = torch.load(os.path.join(CONFIG["test_data_dir"], "test_sub_labels.pt"))
+
     super_preds, sub_preds = predict_with_osr(
-        val_feat, super_model, sub_model,
+        test_feat, super_model, sub_model,
         super_map, sub_map,
         thresh_super, thresh_sub,
         CONFIG["novel_super_idx"], CONFIG["novel_sub_idx"], device
@@ -66,5 +71,5 @@ if __name__ == "__main__":
 
     # --- Step 4: 评估结果 ---
     print("\n--- Step 4: 评估结果 ---")
-    calculate_metrics(val_super_lbl.numpy(), super_preds, CONFIG["novel_super_idx"], "Superclass")
-    calculate_metrics(val_sub_lbl.numpy(), sub_preds, CONFIG["novel_sub_idx"], "Subclass")
+    calculate_metrics(test_super_lbl.numpy(), super_preds, CONFIG["novel_super_idx"], "Superclass")
+    calculate_metrics(test_sub_lbl.numpy(), sub_preds, CONFIG["novel_sub_idx"], "Subclass")
