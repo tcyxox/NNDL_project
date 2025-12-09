@@ -38,7 +38,7 @@ SEED = 42               # 随机种子
   > 已知类准确率 (Seen):    86.47%  (目标: 保持高)
   > 未知类准确率 (Unseen):  44.82%  (目标: >0, 越高越好)
 
-### v1.1
+## v1.1
 
 对任意super-sub pair使用hierarchical masking。其它同v1.0。
 
