@@ -1,7 +1,7 @@
 .idea
 .ipynb_checkpoints
 
-/dataset
+data
 *.jpg
 
 # LaTeX
