@@ -1,6 +1,7 @@
 import torch
 import pandas as pd
 import os
+import json
 
 from config import *
 from utils import load_mapping_and_model, calculate_threshold, predict_with_osr
@@ -24,6 +25,11 @@ if __name__ == "__main__":
     print("--- Step 1: 加载模型和映射 ---")
     super_model, super_map = load_mapping_and_model("superclass", CONFIG["model_dir"], device)
     sub_model, sub_map = load_mapping_and_model("subclass", CONFIG["model_dir"], device)
+    
+    # 加载超类到子类的映射表（用于 hierarchical masking）
+    with open(os.path.join(CONFIG["model_dir"], "super_to_sub_mapping.json"), 'r') as f:
+        super_to_sub = {int(k): v for k, v in json.load(f).items()}
+    print(f"  > Hierarchical masking 已启用")
 
     # --- Step 2: 计算阈值 ---
     print("\n--- Step 2: 计算阈值 ---")
@@ -45,7 +51,8 @@ if __name__ == "__main__":
         test_features, super_model, sub_model,
         super_map, sub_map,
         thresh_super, thresh_sub,
-        CONFIG["novel_super_idx"], CONFIG["novel_sub_idx"], device
+        CONFIG["novel_super_idx"], CONFIG["novel_sub_idx"], device,
+        super_to_sub=super_to_sub
     )
 
     # --- Step 4: 保存提交文件 ---

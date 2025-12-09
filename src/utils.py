@@ -86,9 +86,10 @@ def calculate_threshold(model, val_features, val_labels, label_map, target_recal
 def predict_with_osr(features, super_model, sub_model,
                      super_map, sub_map,
                      thresh_super, thresh_sub,
-                     novel_super_idx, novel_sub_idx, device):
+                     novel_super_idx, novel_sub_idx, device,
+                     super_to_sub=None):
     """
-    对特征进行 OSR 推理
+    对特征进行 OSR 推理（支持 Hierarchical Masking）
 
     Args:
         features: 输入特征 [N, 512]
@@ -101,6 +102,7 @@ def predict_with_osr(features, super_model, sub_model,
         novel_super_idx: 未知超类的 ID (3)
         novel_sub_idx: 未知子类的 ID (87)
         device: 'cuda' or 'cpu'
+        super_to_sub: 超类到子类的映射 {super_id: [sub_ids]}（可选，用于 masking）
 
     Returns:
         super_preds: 超类预测列表
@@ -108,6 +110,13 @@ def predict_with_osr(features, super_model, sub_model,
     """
     super_preds = []
     sub_preds = []
+    
+    # 是否启用 hierarchical masking
+    use_masking = (super_to_sub is not None)
+    num_sub_classes = sub_model.layer.out_features
+    
+    # 如果启用 masking，从 sub_map 反转计算 global_to_local
+    sub_global_to_local = {v: int(k) for k, v in sub_map.items()} if use_masking else None
 
     with torch.no_grad():
         for i in range(len(features)):
@@ -123,8 +132,19 @@ def predict_with_osr(features, super_model, sub_model,
             else:
                 final_super = super_map[super_idx.item()]
 
-            # === 子类预测 ===
+            # === 子类预测（带 Hierarchical Masking）===
             sub_logits = sub_model(feature)
+            
+            # 如果超类不是 novel 且启用了 masking，则 mask 掉不属于该超类的子类
+            if use_masking and final_super != novel_super_idx and final_super in super_to_sub:
+                valid_subs = super_to_sub[final_super]
+                mask = torch.full((1, num_sub_classes), float('-inf'), device=device)
+                for sub_id in valid_subs:
+                    if sub_id in sub_global_to_local:
+                        local_id = sub_global_to_local[sub_id]
+                        mask[0, local_id] = 0
+                sub_logits = sub_logits + mask
+            
             sub_probs = F.softmax(sub_logits, dim=1)
             max_sub_prob, sub_idx = torch.max(sub_probs, dim=1)
 

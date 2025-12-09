@@ -113,5 +113,20 @@ sub_model = train_model(train_features, train_sub_labels, sub_map, num_sub, "Sub
 torch.save(sub_model.state_dict(), os.path.join(CONFIG["output_dir"], "subclass_model.pth"))
 print("子类模型已保存。")
 
+# 3. 生成超类到子类的映射表（用于推理时的 hierarchical masking）
+print("\n生成超类到子类映射表...")
+super_to_sub = {}
+unique_super = torch.unique(train_super_labels).tolist()
+for super_idx in unique_super:
+    mask = (train_super_labels == super_idx)
+    sub_indices = torch.unique(train_sub_labels[mask]).tolist()
+    super_to_sub[super_idx] = sub_indices
+    print(f"  > Superclass {super_idx}: {len(sub_indices)} subclasses")
+
+mapping_path = os.path.join(CONFIG["output_dir"], "super_to_sub_mapping.json")
+with open(mapping_path, 'w') as f:
+    json.dump(super_to_sub, f)
+print(f"  > 映射表已保存至: {mapping_path}")
+
 print("\n--- 所有模型训练完毕 ---")
 print(f"请检查 {CONFIG['output_dir']} 目录下的模型文件 (.pth) 和 映射文件 (.json)。")
