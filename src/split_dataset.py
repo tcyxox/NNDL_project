@@ -38,6 +38,7 @@ if __name__ == "__main__":
 
     # 2. 划分 "已知类" (Domain In) 和 "未知类" (Domain Out)
     np.random.seed(CONFIG["seed"])
+    torch.manual_seed(CONFIG["seed"])
     np.random.shuffle(all_subclasses)
 
     num_novel = int(len(all_subclasses) * CONFIG["novel_ratio"])
