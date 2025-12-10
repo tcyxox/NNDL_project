@@ -29,6 +29,8 @@ CONFIG = {
     "seed": config.training.seed
 }
 
+os.makedirs(config.paths.split_images, exist_ok=True)
+
 
 def load_mappings(super_path, sub_path):
     """读取映射文件，返回已知类别的索引列表"""
