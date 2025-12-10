@@ -5,15 +5,15 @@ from PIL import Image
 import os
 from tqdm import tqdm
 
-from core.config import PATHS, MODEL, TRAINING
+from core.config import config
 
 CONFIG = {
-    "train_csv_path": os.path.join(PATHS["data_raw"], "train_data.csv"),
-    "train_img_dir": os.path.join(PATHS["data_raw"], "train_images"),
-    "test_img_dir": os.path.join(PATHS["data_raw"], "test_images"),
-    "output_dir": PATHS["features"],
-    "model_id": MODEL["clip_model_id"],
-    "batch_size": TRAINING["batch_size"]
+    "train_csv_path": os.path.join(config.paths.data_raw, "train_data.csv"),
+    "train_img_dir": os.path.join(config.paths.data_raw, "train_images"),
+    "test_img_dir": os.path.join(config.paths.data_raw, "test_images"),
+    "output_dir": config.paths.features,
+    "model_id": config.model.clip_model_id,
+    "batch_size": config.training.batch_size
 }
 
 # 确保输出目录存在

@@ -2,17 +2,17 @@ import torch
 import os
 import numpy as np
 
-from core.config import PATHS, OSR, SPLIT, TRAINING
+from core.config import config
 from core.train import set_seed
 
 CONFIG = {
-    "feature_dir": PATHS["features"],
-    "output_dir": PATHS["split"],
-    "novel_ratio": SPLIT["novel_ratio"],
-    "train_ratio": SPLIT["train_ratio"],
-    "val_test_ratio": SPLIT["val_test_ratio"],
-    "novel_super_index": OSR["novel_super_index"],
-    "novel_sub_index": OSR["novel_sub_index"],
+    "feature_dir": config.paths.features,
+    "output_dir": config.paths.split,
+    "novel_ratio": config.split.novel_ratio,
+    "train_ratio": config.split.train_ratio,
+    "val_test_ratio": config.split.val_test_ratio,
+    "novel_super_index": config.osr.novel_super_index,
+    "novel_sub_index": config.osr.novel_sub_index,
 }
 
 os.makedirs(CONFIG["output_dir"], exist_ok=True)
@@ -27,7 +27,7 @@ def save_split(name, features, super_labels, sub_labels):
 
 
 if __name__ == "__main__":
-    set_seed(TRAINING["seed"])
+    set_seed(config.training.seed)
     
     # 1. 加载全量训练数据
     print("正在加载全量特征...")

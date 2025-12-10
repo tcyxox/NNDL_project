@@ -4,17 +4,17 @@ import json
 import numpy as np
 from sklearn.metrics import accuracy_score
 
-from core.config import PATHS, OSR, MODEL
+from core.config import config
 from core.inference import load_mapping_and_model, predict_with_osr
 
 CONFIG = {
-    "hyperparams_file": os.path.join(PATHS["dev"], "hyperparameters.json"),
-    "model_dir": PATHS["dev"],
-    "test_data_dir": PATHS["split"],
-    "novel_super_idx": OSR["novel_super_index"],
-    "novel_sub_idx": OSR["novel_sub_index"],
-    "enable_hierarchical_masking": OSR["enable_hierarchical_masking"],
-    "feature_dim": MODEL["feature_dim"]
+    "hyperparams_file": os.path.join(config.paths.dev, "hyperparameters.json"),
+    "model_dir": config.paths.dev,
+    "test_data_dir": config.paths.split,
+    "novel_super_idx": config.osr.novel_super_index,
+    "novel_sub_idx": config.osr.novel_sub_index,
+    "enable_hierarchical_masking": config.osr.enable_hierarchical_masking,
+    "feature_dim": config.model.feature_dim
 }
 
 device = "cuda" if torch.cuda.is_available() else "cpu"

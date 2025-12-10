@@ -1,45 +1,60 @@
 import os
+from dataclasses import dataclass, field
 
 # ================= 路径配置 =================
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 SRC_DIR = os.path.dirname(SCRIPT_DIR)
 PROJECT_ROOT = os.path.dirname(SRC_DIR)
 
-PATHS = {
-    "data_raw": os.path.join(PROJECT_ROOT, "data/raw"),
-    "data_processed": os.path.join(PROJECT_ROOT, "data/processed"),
-    "features": os.path.join(PROJECT_ROOT, "data/processed/features"),
-    "split": os.path.join(PROJECT_ROOT, "data/processed/split"),
-    "outputs": os.path.join(PROJECT_ROOT, "outputs"),
-    "dev": os.path.join(PROJECT_ROOT, "outputs/dev"),
-    "submit": os.path.join(PROJECT_ROOT, "outputs/submit")
-}
 
-# ================= 模型配置 =================
-MODEL = {
-    "clip_model_id": "openai/clip-vit-base-patch32",
-    "feature_dim": 512
-}
+@dataclass
+class PathsConfig:
+    data_raw: str = os.path.join(PROJECT_ROOT, "data/raw")
+    data_processed: str = os.path.join(PROJECT_ROOT, "data/processed")
+    features: str = os.path.join(PROJECT_ROOT, "data/processed/features")
+    split: str = os.path.join(PROJECT_ROOT, "data/processed/split")
+    outputs: str = os.path.join(PROJECT_ROOT, "outputs")
+    dev: str = os.path.join(PROJECT_ROOT, "outputs/dev")
+    submit: str = os.path.join(PROJECT_ROOT, "outputs/submit")
 
-# ================= OSR 配置 =================
-OSR = {
-    "novel_super_index": 3,
-    "novel_sub_index": 87,
-    "enable_hierarchical_masking": True
-}
 
-# ================= 训练配置 =================
-TRAINING = {
-    "batch_size": 64,
-    "learning_rate": 1e-3,
-    "epochs": 50,
-    "target_recall": 0.95,
-    "seed": 42
-}
+@dataclass
+class ModelConfig:
+    clip_model_id: str = "openai/clip-vit-base-patch32"
+    feature_dim: int = 512
 
-# ================= 数据划分配置 =================
-SPLIT = {
-    "novel_ratio": 0.2,
-    "train_ratio": 0.8,
-    "val_test_ratio": 0.5
-}
+
+@dataclass
+class OSRConfig:
+    novel_super_index: int = 3
+    novel_sub_index: int = 87
+    enable_hierarchical_masking: bool = True
+
+
+@dataclass
+class TrainingConfig:
+    batch_size: int = 64
+    learning_rate: float = 1e-3
+    epochs: int = 50
+    target_recall: float = 0.95
+    seed: int = 42
+
+
+@dataclass
+class SplitConfig:
+    novel_ratio: float = 0.2
+    train_ratio: float = 0.8
+    val_test_ratio: float = 0.5
+
+
+@dataclass
+class Config:
+    paths: PathsConfig = field(default_factory=PathsConfig)
+    model: ModelConfig = field(default_factory=ModelConfig)
+    osr: OSRConfig = field(default_factory=OSRConfig)
+    training: TrainingConfig = field(default_factory=TrainingConfig)
+    split: SplitConfig = field(default_factory=SplitConfig)
+
+
+# 全局配置实例
+config = Config()

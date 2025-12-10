@@ -2,15 +2,15 @@ import torch
 import os
 import json
 
-from core.config import PATHS, TRAINING, MODEL
+from core.config import config
 from core.inference import load_mapping_and_model, calculate_threshold
 
 CONFIG = {
-    "model_dir": PATHS["dev"],
-    "val_data_dir": PATHS["split"],
-    "target_recall": TRAINING["target_recall"],
-    "feature_dim": MODEL["feature_dim"],
-    "hyperparams_file": os.path.join(PATHS["dev"], "hyperparameters.json")
+    "model_dir": config.paths.dev,
+    "val_data_dir": config.paths.split,
+    "target_recall": config.training.target_recall,
+    "feature_dim": config.model.feature_dim,
+    "hyperparams_file": os.path.join(config.paths.dev, "hyperparameters.json")
 }
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
