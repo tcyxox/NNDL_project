@@ -1,17 +1,14 @@
-"""
-模型评估脚本：支持多种子测试取平均
-"""
-import torch
 import os
-import json
+
 import numpy as np
+import torch
+import torch.nn.functional as F
 from sklearn.metrics import accuracy_score
 
 from core.config import config
-from core.train import set_seed, create_label_mapping, train_classifier, train_hierarchical, create_super_to_sub_mapping
-from core.models import HierarchicalClassifier
-from core.inference import load_linear_model, predict_with_linear_model, load_hierarchical_model, predict_with_hierarchical_model, calculate_threshold
-import torch.nn.functional as F
+from core.inference import predict_with_linear_model, predict_with_hierarchical_model, calculate_threshold_linear, calculate_threshold_hierarchical
+from core.train import run_training
+from core.utils import set_seed
 
 CONFIG = {
     "feature_dir": config.paths.split_features,
@@ -22,9 +19,10 @@ CONFIG = {
     "epochs": config.experiment.epochs,
     "novel_super_idx": config.osr.novel_super_index,
     "novel_sub_idx": config.osr.novel_sub_index,
+    "target_recall": config.experiment.target_recall,
     "enable_feature_gating": config.experiment.enable_feature_gating,
     "enable_hierarchical_masking": config.experiment.enable_hierarchical_masking,
-    "target_recall": config.experiment.target_recall,
+    "enable_energy": config.experiment.enable_energy,
 }
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -53,12 +51,8 @@ def run_single_trial(seed):
     """运行单次实验，返回各项指标"""
     set_seed(seed)
     
-    # 加载数据
-    train_features = torch.load(os.path.join(CONFIG["feature_dir"], "train_features.pt"))
-    train_super_labels = torch.load(os.path.join(CONFIG["feature_dir"], "train_super_labels.pt"))
-    train_sub_labels = torch.load(os.path.join(CONFIG["feature_dir"], "train_sub_labels.pt"))
-    
-    val_features = torch.load(os.path.join(CONFIG["feature_dir"], "val_features.pt")).to(device)
+    # 加载验证和测试数据
+    val_features = torch.load(os.path.join(CONFIG["feature_dir"], "val_features.pt"))
     val_super_labels = torch.load(os.path.join(CONFIG["feature_dir"], "val_super_labels.pt"))
     val_sub_labels = torch.load(os.path.join(CONFIG["feature_dir"], "val_sub_labels.pt"))
     
@@ -66,68 +60,56 @@ def run_single_trial(seed):
     test_super_labels = torch.load(os.path.join(CONFIG["feature_dir"], "test_super_labels.pt"))
     test_sub_labels = torch.load(os.path.join(CONFIG["feature_dir"], "test_sub_labels.pt"))
     
-    # 创建映射
-    num_super, super_map = create_label_mapping(train_super_labels, "super", CONFIG["output_dir"])
-    num_sub, sub_map = create_label_mapping(train_sub_labels, "sub", CONFIG["output_dir"])
-    create_super_to_sub_mapping(train_super_labels, train_sub_labels, CONFIG["output_dir"])
+    # 使用 run_training 训练（不保存文件）
+    result = run_training(
+        feature_dim=CONFIG["feature_dim"],
+        batch_size=CONFIG["batch_size"],
+        learning_rate=CONFIG["learning_rate"],
+        epochs=CONFIG["epochs"],
+        enable_feature_gating=CONFIG["enable_feature_gating"],
+        device=device,
+        feature_dir=CONFIG["feature_dir"]
+    )
     
-    # 加载 super_to_sub (用于 hierarchical masking)
-    super_to_sub = None
-    if CONFIG["enable_hierarchical_masking"]:
-        with open(os.path.join(CONFIG["output_dir"], "super_to_sub_map.json"), 'r') as f:
-            super_to_sub = {int(k): v for k, v in json.load(f).items()}
+    if CONFIG["enable_feature_gating"]:
+        model, super_map, sub_map, super_to_sub = result
+    else:
+        super_model, sub_model, super_map, sub_map, super_to_sub = result
     
+    # 创建反向映射
     super_map_inv = {v: int(k) for k, v in super_map.items()}
     sub_map_inv = {v: int(k) for k, v in sub_map.items()}
     
+    # hierarchical masking
+    if not CONFIG["enable_hierarchical_masking"]:
+        super_to_sub = None
+    
+    use_energy = CONFIG["enable_energy"]
+    
     if CONFIG["enable_feature_gating"]:
-        # 联合训练
-        model = HierarchicalClassifier(CONFIG["feature_dim"], num_super, num_sub)
-        model = train_hierarchical(
-            model, train_features, train_super_labels, train_sub_labels,
-            super_map, sub_map, CONFIG["batch_size"], CONFIG["learning_rate"], CONFIG["epochs"], device
-        )
-        
         # 计算阈值
-        model.eval()
-        with torch.no_grad():
-            super_logits, sub_logits = model(val_features)
-        
-        known_super = torch.tensor([l.item() in super_map_inv for l in val_super_labels])
-        super_probs = F.softmax(super_logits[known_super], dim=1)
-        thresh_super = torch.quantile(super_probs.max(dim=1)[0], 1 - CONFIG["target_recall"]).item()
-        
-        known_sub = torch.tensor([l.item() in sub_map_inv for l in val_sub_labels])
-        sub_probs = F.softmax(sub_logits[known_sub], dim=1)
-        thresh_sub = torch.quantile(sub_probs.max(dim=1)[0], 1 - CONFIG["target_recall"]).item()
+        thresh_super, thresh_sub = calculate_threshold_hierarchical(
+            model, val_features, val_super_labels, val_sub_labels,
+            super_map_inv, sub_map_inv, CONFIG["target_recall"], device, use_energy
+        )
         
         # 推理
         super_preds, sub_preds = predict_with_hierarchical_model(
             test_features, model, super_map_inv, sub_map_inv,
             thresh_super, thresh_sub, CONFIG["novel_super_idx"], CONFIG["novel_sub_idx"], device,
-            super_to_sub=super_to_sub
+            use_energy, super_to_sub
         )
     else:
-        # 独立训练
-        super_model = train_classifier(
-            train_features, train_super_labels, super_map, num_super, "Super",
-            CONFIG["feature_dim"], CONFIG["batch_size"], CONFIG["learning_rate"], CONFIG["epochs"], device
-        )
-        sub_model = train_classifier(
-            train_features, train_sub_labels, sub_map, num_sub, "Sub",
-            CONFIG["feature_dim"], CONFIG["batch_size"], CONFIG["learning_rate"], CONFIG["epochs"], device
-        )
-        
         # 计算阈值
-        thresh_super = calculate_threshold(super_model, val_features, val_super_labels, super_map_inv, CONFIG["target_recall"], device)
-        thresh_sub = calculate_threshold(sub_model, val_features, val_sub_labels, sub_map_inv, CONFIG["target_recall"], device)
+        thresh_super = calculate_threshold_linear(super_model, val_features, val_super_labels, super_map_inv, CONFIG["target_recall"], device, use_energy)
+        thresh_sub = calculate_threshold_linear(sub_model, val_features, val_sub_labels, sub_map_inv, CONFIG["target_recall"], device, use_energy)
         
         # 推理
         super_preds, sub_preds = predict_with_linear_model(
             test_features, super_model, sub_model,
             super_map_inv, sub_map_inv,
             thresh_super, thresh_sub, CONFIG["novel_super_idx"], CONFIG["novel_sub_idx"], device,
-            super_to_sub=super_to_sub
+            use_energy, super_to_sub
         )
     
     # 计算指标

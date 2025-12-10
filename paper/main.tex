@@ -114,10 +114,9 @@ These methods define a scoring function based on the outputs (logits or softmax 
 \textbf{Threshold Methods:}
 \begin{itemize}
     \item Maximum Softmax Probability (MSP)~\cite{hendrycks2018baselinedetectingmisclassifiedoutofdistribution}: The baseline approach. It uses the maximum value of the softmax distribution as the confidence score. Logit $\to$ Softmax $\to$ Threshold Gate.
-    \item Out-of-Distribution Detector (ODIN)~\cite{liang2020enhancingreliabilityoutofdistributionimage}: Improves MSP by applying temperature scaling to the logits before softmax and adding small perturbations to the input image. Logit $\to$ Temperature Scaling $\to$ Softmax $\to$ Threshold Gate.
     \item Energy-based Out-of-distribution Detection~\cite{liu2021energybasedoutofdistributiondetection}: Instead of softmax, this method uses the free energy derived from the logits as the scoring function. Lower energy indicates known data, while higher energy indicates novel data. Logit $\to$ Energy $\to$ Threshold Gate.
 \end{itemize}
-A known issue with MSP and ODIN is their reliance on the Softmax function. Softmax forces output probabilities to sum to 1, losing the magnitude information of the underlying logits, which often leads to \textbf{overconfidence} on unseen data. Energy-based methods mitigate this by utilizing the raw logit magnitudes.
+A known issue with MSP is its reliance on the Softmax function. Softmax forces output probabilities to sum to 1, losing the magnitude information of the underlying logits, which often leads to \textbf{overconfidence} on unseen data. Energy-based methods mitigate this by utilizing the raw logit magnitudes.
 
 \begin{center}
 \includegraphics[width=\linewidth]{graph/PostHocScoreBasedMethods.png}
