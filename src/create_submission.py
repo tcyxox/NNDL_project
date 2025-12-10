@@ -1,10 +1,12 @@
-import torch
-import pandas as pd
-import os
 import json
+import os
+
+import pandas as pd
+import torch
 
 from core.config import config
-from core.inference import load_linear_model, predict_with_linear_model, load_hierarchical_model, predict_with_hierarchical_model
+from core.inference import load_linear_model, predict_with_linear_model, load_hierarchical_model, \
+    predict_with_hierarchical_model
 
 CONFIG = {
     "hyperparams_file": os.path.join(config.paths.dev, "hyperparameters.json"),

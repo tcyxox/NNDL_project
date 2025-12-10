@@ -1,6 +1,7 @@
-import torch
 import os
+
 import numpy as np
+import torch
 
 from core.config import config
 from core.utils import set_seed

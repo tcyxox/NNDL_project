@@ -1,7 +1,8 @@
+import json
+import os
+
 import torch
 import torch.nn.functional as F
-import os
-import json
 
 from .models import LinearClassifier, HierarchicalClassifier
 

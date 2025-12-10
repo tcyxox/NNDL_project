@@ -1,9 +1,10 @@
-import torch
-import pandas as pd
-from transformers import CLIPProcessor, CLIPModel
-from PIL import Image
 import os
+
+import pandas as pd
+import torch
+from PIL import Image
 from tqdm import tqdm
+from transformers import CLIPProcessor, CLIPModel
 
 from core.config import config
 

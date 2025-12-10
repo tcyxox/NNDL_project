@@ -1,9 +1,10 @@
+import json
+import os
+
 import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import TensorDataset, DataLoader
-import os
-import json
 
 from .models import LinearClassifier, HierarchicalClassifier
 
@@ -200,8 +201,7 @@ def run_training(feature_dim, batch_size, learning_rate, epochs, enable_feature_
         如果 enable_feature_gating=True: (model, super_map, sub_map, super_to_sub)
         如果 enable_feature_gating=False: (super_model, sub_model, super_map, sub_map, super_to_sub)
     """
-    from .models import HierarchicalClassifier
-    
+
     # 加载训练数据
     print("正在加载训练数据...")
     train_features = torch.load(os.path.join(feature_dir, "train_features.pt"))

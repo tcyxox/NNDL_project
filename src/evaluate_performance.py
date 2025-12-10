@@ -1,18 +1,14 @@
-"""
-模型评估脚本：支持多种子测试取平均
-"""
-import torch
 import os
-import json
+
 import numpy as np
+import torch
+import torch.nn.functional as F
 from sklearn.metrics import accuracy_score
 
 from core.config import config
-from core.train import run_training, create_super_to_sub_mapping
+from core.inference import predict_with_linear_model, predict_with_hierarchical_model, calculate_threshold
+from core.train import run_training
 from core.utils import set_seed
-from core.models import HierarchicalClassifier
-from core.inference import load_linear_model, predict_with_linear_model, load_hierarchical_model, predict_with_hierarchical_model, calculate_threshold
-import torch.nn.functional as F
 
 CONFIG = {
     "feature_dir": config.paths.split_features,
