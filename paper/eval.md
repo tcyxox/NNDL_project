@@ -13,8 +13,8 @@ class ExperimentConfig:
     target_recall: float = 0.95
     seed: int = 42
     # 实验开关
-    enable_soft_attention: bool = False
     enable_hierarchical_masking: bool = False
+    enable_soft_attention: bool = False
 ```
 
 ### Results
@@ -37,8 +37,8 @@ class ExperimentConfig:
     target_recall: float = 0.95
     seed: int = 42
     # 实验开关
-    enable_soft_attention: bool = False
     enable_hierarchical_masking: bool = True
+    enable_soft_attention: bool = False
 ```
 
   [Superclass] Overall     : 95.40% ± 0.16%
@@ -67,8 +67,8 @@ class ExperimentConfig:
     target_recall: float = 0.95
     seed: int = 42
     # 实验开关
-    enable_soft_attention: bool = True
     enable_hierarchical_masking: bool = True
+    enable_soft_attention: bool = True
 ```
 
   [Superclass] Overall     : 95.34% ± 0.17%

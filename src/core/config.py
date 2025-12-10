@@ -47,8 +47,8 @@ class ExperimentConfig:
     target_recall: float = 0.95
     seed: int = 42
     # 实验开关
-    enable_feature_gating: bool = True
     enable_hierarchical_masking: bool = True
+    enable_feature_gating: bool = True
 
 
 @dataclass
