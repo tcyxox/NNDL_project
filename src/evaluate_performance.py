@@ -8,8 +8,8 @@ from config import *
 from utils import load_mapping_and_model, predict_with_osr
 
 CONFIG = {
-    "hyperparams_file": os.path.join(MODELS_DIR, "hyperparameters.json"),
-    "model_dir": MODELS_DIR,
+    "hyperparams_file": os.path.join(DEV_DIR, "hyperparameters.json"),
+    "model_dir": DEV_DIR,
     "test_data_dir": SPLIT_DIR,
     "novel_super_idx": NOVEL_SUPER_INDEX,
     "novel_sub_idx": NOVEL_SUB_INDEX

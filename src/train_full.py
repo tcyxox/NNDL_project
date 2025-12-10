@@ -5,8 +5,8 @@ from config import *
 from utils import set_seed, create_label_mapping, train_classifier, create_super_to_sub_mapping
 
 CONFIG = {
-    "feature_dir": SPLIT_DIR,
-    "output_dir": DEV_DIR,
+    "feature_dir": FEATURES_DIR,
+    "output_dir": SUBMIT_DIR,
     "feature_dim": FEATURE_DIM,
     "learning_rate": LEARNING_RATE,
     "batch_size": BATCH_SIZE,
@@ -20,11 +20,12 @@ set_seed()
 
 
 if __name__ == "__main__":
-    # =============================== 加载划分后的训练数据 ===============================
-    print("正在加载划分后的训练数据 (Train Split)...")
+    # =============================== 加载全量训练数据 ===============================
+    print("正在加载全量训练数据...")
     train_features = torch.load(os.path.join(CONFIG["feature_dir"], "train_features.pt"))
     train_super_labels = torch.load(os.path.join(CONFIG["feature_dir"], "train_super_labels.pt"))
     train_sub_labels = torch.load(os.path.join(CONFIG["feature_dir"], "train_sub_labels.pt"))
+    print(f"  > 训练样本数: {len(train_features)}")
 
     # =============================== 创建标签映射 ===============================
     num_super, super_map = create_label_mapping(train_super_labels, "super", CONFIG["output_dir"])

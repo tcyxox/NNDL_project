@@ -4,17 +4,16 @@ import os
 import json
 
 from config import *
-from utils import load_mapping_and_model, calculate_threshold, predict_with_osr
+from utils import load_mapping_and_model, predict_with_osr
 
 CONFIG = {
-    "model_dir": MODELS_DIR,
-    "val_data_dir": SPLIT_DIR,
+    "hyperparams_file": os.path.join(DEV_DIR, "hyperparameters.json"),
+    "model_dir": SUBMIT_DIR,
     "test_feature_path": os.path.join(FEATURES_DIR, "test_features.pt"),
     "test_image_names": os.path.join(FEATURES_DIR, "test_image_names.pt"),
     "output_csv": os.path.join(OUTPUTS_DIR, "submission_osr.csv"),
     "novel_super_idx": NOVEL_SUPER_INDEX,
-    "novel_sub_idx": NOVEL_SUB_INDEX,
-    "target_recall": TARGET_RECALL
+    "novel_sub_idx": NOVEL_SUB_INDEX
 }
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -31,14 +30,12 @@ if __name__ == "__main__":
         super_to_sub = {int(k): v for k, v in json.load(f).items()}
     print(f"  > Hierarchical masking 已启用")
 
-    # --- Step 2: 计算阈值 ---
-    print("\n--- Step 2: 计算阈值 ---")
-    val_feat = torch.load(os.path.join(CONFIG["val_data_dir"], "val_features.pt"))
-    val_super_lbl = torch.load(os.path.join(CONFIG["val_data_dir"], "val_super_labels.pt"))
-    val_sub_lbl = torch.load(os.path.join(CONFIG["val_data_dir"], "val_sub_labels.pt"))
-
-    thresh_super = calculate_threshold(super_model, val_feat, val_super_lbl, super_map, CONFIG["target_recall"], device)
-    thresh_sub = calculate_threshold(sub_model, val_feat, val_sub_lbl, sub_map, CONFIG["target_recall"], device)
+    # --- Step 2: 加载阈值 ---
+    print("\n--- Step 2: 加载阈值 ---")
+    with open(CONFIG["hyperparams_file"], 'r') as f:
+        hyperparams = json.load(f)
+    thresh_super = hyperparams["thresh_super"]
+    thresh_sub = hyperparams["thresh_sub"]
     print(f"  > Superclass 阈值: {thresh_super:.4f}")
     print(f"  > Subclass 阈值:   {thresh_sub:.4f}")
 

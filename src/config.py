@@ -12,7 +12,8 @@ SPLIT_DIR = os.path.join(DATA_PROCESSED_DIR, "split")
 
 # 输出路径
 OUTPUTS_DIR = os.path.join(PROJECT_ROOT, "outputs")
-MODELS_DIR = os.path.join(OUTPUTS_DIR, "models")
+DEV_DIR = os.path.join(OUTPUTS_DIR, "dev")
+SUBMIT_DIR = os.path.join(OUTPUTS_DIR, "submit")
 
 # ================= 模型配置 =================
 CLIP_MODEL_ID = "openai/clip-vit-base-patch32"

@@ -25,9 +25,16 @@ Sidharth Sharma - ss7202@columbia.edu
 
 ## Workflow
 
+### Development (Evaluation)
+
 1. Extract Features
 2. Split Dataset
 3. Train Baseline
 4. Tune Hyperparameters
 5. Evaluate Performance
-6. Create Submission
+
+### Submission
+
+1. Extract Features
+2. Train Full
+3. Create Submission

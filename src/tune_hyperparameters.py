@@ -6,10 +6,10 @@ from config import *
 from utils import load_mapping_and_model, calculate_threshold
 
 CONFIG = {
-    "model_dir": MODELS_DIR,
+    "model_dir": DEV_DIR,
     "val_data_dir": SPLIT_DIR,
     "target_recall": TARGET_RECALL,
-    "hyperparams_file": os.path.join(MODELS_DIR, "hyperparameters.json")
+    "hyperparams_file": os.path.join(DEV_DIR, "hyperparameters.json")
 }
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
