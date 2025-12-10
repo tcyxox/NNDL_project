@@ -18,8 +18,8 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 if __name__ == "__main__":
     # --- Step 1: 加载模型和映射 ---
     print("--- Step 1: 加载模型和映射 ---")
-    super_model, super_map = load_mapping_and_model("superclass", CONFIG["model_dir"], device)
-    sub_model, sub_map = load_mapping_and_model("subclass", CONFIG["model_dir"], device)
+    super_model, super_map = load_mapping_and_model("super", CONFIG["model_dir"], device)
+    sub_model, sub_map = load_mapping_and_model("sub", CONFIG["model_dir"], device)
 
     # --- Step 2: 加载验证集特征 ---
     print("\n--- Step 2: 加载验证集特征 ---")

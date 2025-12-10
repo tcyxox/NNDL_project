@@ -42,11 +42,11 @@ def calculate_metrics(y_true, y_pred, novel_label, name="Task"):
 if __name__ == "__main__":
     # --- Step 1: 加载模型和映射 ---
     print("--- Step 1: 加载模型和映射 ---")
-    super_model, super_map = load_mapping_and_model("superclass", CONFIG["model_dir"], device)
-    sub_model, sub_map = load_mapping_and_model("subclass", CONFIG["model_dir"], device)
+    super_model, super_map = load_mapping_and_model("super", CONFIG["model_dir"], device)
+    sub_model, sub_map = load_mapping_and_model("sub", CONFIG["model_dir"], device)
     
     # 加载超类到子类的映射表（用于 hierarchical masking）
-    with open(os.path.join(CONFIG["model_dir"], "super_to_sub_mapping.json"), 'r') as f:
+    with open(os.path.join(CONFIG["model_dir"], "super_to_sub_map.json"), 'r') as f:
         super_to_sub = {int(k): v for k, v in json.load(f).items()}
     print(f"  > Hierarchical masking 已启用")
 

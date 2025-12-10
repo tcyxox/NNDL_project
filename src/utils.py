@@ -36,7 +36,7 @@ def load_mapping_and_model(prefix, model_dir, device):
     加载 json 映射表和对应的模型
     
     Args:
-        prefix: 'superclass' or 'subclass'
+        prefix: 'super' or 'sub'
         model_dir: 模型目录
         device: 'cuda' or 'cpu'
     
@@ -45,8 +45,8 @@ def load_mapping_and_model(prefix, model_dir, device):
         local_to_global: 映射字典 (模型内部ID -> 原始ID)
     """
     # 1. 加载映射表 (Local ID -> Global ID)
-    json_path = os.path.join(model_dir, f"{prefix}_mapping.json")
-    with open(json_path, 'r') as f:
+    mapping_path = os.path.join(model_dir, f"{prefix}_local_to_global_map.json")
+    with open(mapping_path, 'r') as f:
         local_to_global = {int(k): v for k, v in json.load(f).items()}
 
     num_classes = len(local_to_global)
@@ -185,7 +185,7 @@ def create_label_mapping(labels, label_name, output_dir):
 
     Args:
         labels: 原始标签张量
-        label_name: 标签名称 ('superclass' or 'subclass')
+        label_name: 标签名称 ('super' or 'sub')
         output_dir: 输出目录
 
     Returns:
@@ -203,8 +203,8 @@ def create_label_mapping(labels, label_name, output_dir):
     print(f"[{label_name}] 检测到 {num_classes} 个已知类别。")
     print(f"  > 原始标签示例: {unique_classes[:5]}...")
 
-    # 保存映射关系，推理时必须用！
-    mapping_path = os.path.join(output_dir, f"{label_name}_mapping.json")
+    # 保存 local_to_global 映射关系，推理时必须用！
+    mapping_path = os.path.join(output_dir, f"{label_name}_local_to_global_map.json")
     with open(mapping_path, 'w') as f:
         json.dump(local_to_global, f)
     print(f"  > 映射表已保存至: {mapping_path}")
@@ -292,7 +292,7 @@ def create_super_to_sub_mapping(super_labels, sub_labels, output_dir):
         super_to_sub[super_idx] = sub_indices
         print(f"  > Superclass {super_idx}: {len(sub_indices)} subclasses")
 
-    mapping_path = os.path.join(output_dir, "super_to_sub_mapping.json")
+    mapping_path = os.path.join(output_dir, "super_to_sub_map.json")
     with open(mapping_path, 'w') as f:
         json.dump(super_to_sub, f)
     print(f"  > 映射表已保存至: {mapping_path}")
