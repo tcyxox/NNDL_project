@@ -2,7 +2,7 @@ import torch
 import os
 import numpy as np
 
-from core import PATHS, OSR, SPLIT, TRAINING
+from core.config import PATHS, OSR, SPLIT, TRAINING
 from core.train import set_seed
 
 CONFIG = {

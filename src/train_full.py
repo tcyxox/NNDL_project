@@ -1,7 +1,7 @@
 import torch
 import os
 
-from core import PATHS, MODEL, TRAINING
+from core.config import PATHS, MODEL, TRAINING
 from core.train import set_seed, create_label_mapping, train_classifier, create_super_to_sub_mapping
 
 CONFIG = {

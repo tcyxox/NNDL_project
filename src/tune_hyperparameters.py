@@ -2,7 +2,7 @@ import torch
 import os
 import json
 
-from core import PATHS, TRAINING, MODEL
+from core.config import PATHS, TRAINING, MODEL
 from core.inference import load_mapping_and_model, calculate_threshold
 
 CONFIG = {

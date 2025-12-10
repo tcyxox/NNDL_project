@@ -4,7 +4,7 @@ import json
 import numpy as np
 from sklearn.metrics import accuracy_score
 
-from core import PATHS, OSR, MODEL
+from core.config import PATHS, OSR, MODEL
 from core.inference import load_mapping_and_model, predict_with_osr
 
 CONFIG = {
