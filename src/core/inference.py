@@ -1,34 +1,10 @@
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
 import os
 import json
-import random
-import numpy as np
 
-from config import FEATURE_DIM, SEED
-
-
-def set_seed(seed=SEED):
-    """设置所有随机种子，确保实验可复现"""
-    random.seed(seed)
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed(seed)
-        torch.cuda.manual_seed_all(seed)
-        torch.backends.cudnn.deterministic = True
-        torch.backends.cudnn.benchmark = False
-
-
-class LinearClassifier(nn.Module):
-    """线性分类器模型"""
-    def __init__(self, in_features, out_features):
-        super(LinearClassifier, self).__init__()
-        self.layer = nn.Linear(in_features, out_features)
-
-    def forward(self, x):
-        return self.layer(x)
+from .config import FEATURE_DIM
+from .models import LinearClassifier
 
 
 def load_mapping_and_model(prefix, model_dir, device):
@@ -36,7 +12,7 @@ def load_mapping_and_model(prefix, model_dir, device):
     加载 json 映射表和对应的模型
     
     Args:
-        prefix: 'superclass' or 'subclass'
+        prefix: 'super' or 'sub'
         model_dir: 模型目录
         device: 'cuda' or 'cpu'
     
@@ -45,8 +21,8 @@ def load_mapping_and_model(prefix, model_dir, device):
         local_to_global: 映射字典 (模型内部ID -> 原始ID)
     """
     # 1. 加载映射表 (Local ID -> Global ID)
-    json_path = os.path.join(model_dir, f"{prefix}_mapping.json")
-    with open(json_path, 'r') as f:
+    mapping_path = os.path.join(model_dir, f"{prefix}_local_to_global_map.json")
+    with open(mapping_path, 'r') as f:
         local_to_global = {int(k): v for k, v in json.load(f).items()}
 
     num_classes = len(local_to_global)
@@ -175,4 +151,3 @@ def predict_with_osr(features, super_model, sub_model,
             sub_preds.append(final_sub)
 
     return super_preds, sub_preds
-

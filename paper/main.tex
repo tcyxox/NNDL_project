@@ -48,11 +48,7 @@ OSR contrasts with traditional closed-set recognition, which assumes all testing
 
 \subsection{Dataset Preparation}
 
-\paragraph{Training Data with Novel Label}
-\begin{itemize}
-    \item \textbf{Mixup Data Augmentation:} Generate synthetic novel samples by creating linear interpolations between pairs of training images belonging to different known classes.
-    \item \textbf{Simulated Open-Set Split:} Simulate an open-set scenario by holding out specific subclasses to serve as novel samples in the validation set.
-\end{itemize}
+\paragraph{Simulate Open-Set:} Simulate an open-set scenario by holding out specific subclasses to serve as novel samples in the validation set.
 
 \paragraph{Distribution Shift}
 \begin{itemize}

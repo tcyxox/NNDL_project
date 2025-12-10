@@ -2,7 +2,8 @@ import os
 
 # ================= 路径配置 =================
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
+SRC_DIR = os.path.dirname(SCRIPT_DIR)
+PROJECT_ROOT = os.path.dirname(SRC_DIR)
 
 # 数据路径
 DATA_RAW_DIR = os.path.join(PROJECT_ROOT, "data/raw")
@@ -12,7 +13,8 @@ SPLIT_DIR = os.path.join(DATA_PROCESSED_DIR, "split")
 
 # 输出路径
 OUTPUTS_DIR = os.path.join(PROJECT_ROOT, "outputs")
-MODELS_DIR = os.path.join(OUTPUTS_DIR, "models")
+DEV_DIR = os.path.join(OUTPUTS_DIR, "dev")
+SUBMIT_DIR = os.path.join(OUTPUTS_DIR, "submit")
 
 # ================= 模型配置 =================
 CLIP_MODEL_ID = "openai/clip-vit-base-patch32"

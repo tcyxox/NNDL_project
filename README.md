@@ -22,3 +22,19 @@ type of project, but are welcome to if you’d like.
 ## Mentor
 
 Sidharth Sharma - ss7202@columbia.edu
+
+## Workflow
+
+### Development (Evaluation)
+
+1. Extract Features
+2. Split Dataset
+3. Train Baseline
+4. Tune Hyperparameters
+5. Evaluate Performance
+
+### Submission
+
+1. Extract Features
+2. Train Full
+3. Create Submission

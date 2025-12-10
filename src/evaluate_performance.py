@@ -4,16 +4,15 @@ import json
 import numpy as np
 from sklearn.metrics import accuracy_score
 
-from config import *
-from utils import load_mapping_and_model, calculate_threshold, predict_with_osr
+from core import *
+from core.inference import load_mapping_and_model, predict_with_osr
 
 CONFIG = {
-    "model_dir": MODELS_DIR,
-    "val_data_dir": SPLIT_DIR,
+    "hyperparams_file": os.path.join(DEV_DIR, "hyperparameters.json"),
+    "model_dir": DEV_DIR,
     "test_data_dir": SPLIT_DIR,
     "novel_super_idx": NOVEL_SUPER_INDEX,
-    "novel_sub_idx": NOVEL_SUB_INDEX,
-    "target_recall": TARGET_RECALL
+    "novel_sub_idx": NOVEL_SUB_INDEX
 }
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -43,22 +42,20 @@ def calculate_metrics(y_true, y_pred, novel_label, name="Task"):
 if __name__ == "__main__":
     # --- Step 1: 加载模型和映射 ---
     print("--- Step 1: 加载模型和映射 ---")
-    super_model, super_map = load_mapping_and_model("superclass", CONFIG["model_dir"], device)
-    sub_model, sub_map = load_mapping_and_model("subclass", CONFIG["model_dir"], device)
+    super_model, super_map = load_mapping_and_model("super", CONFIG["model_dir"], device)
+    sub_model, sub_map = load_mapping_and_model("sub", CONFIG["model_dir"], device)
     
     # 加载超类到子类的映射表（用于 hierarchical masking）
-    with open(os.path.join(CONFIG["model_dir"], "super_to_sub_mapping.json"), 'r') as f:
+    with open(os.path.join(CONFIG["model_dir"], "super_to_sub_map.json"), 'r') as f:
         super_to_sub = {int(k): v for k, v in json.load(f).items()}
     print(f"  > Hierarchical masking 已启用")
 
-    # --- Step 2: 用 Val 集计算阈值 ---
-    print("\n--- Step 2: 用 Val 集计算阈值 ---")
-    val_feat = torch.load(os.path.join(CONFIG["val_data_dir"], "val_features.pt")).to(device)
-    val_super_lbl = torch.load(os.path.join(CONFIG["val_data_dir"], "val_super_labels.pt"))
-    val_sub_lbl = torch.load(os.path.join(CONFIG["val_data_dir"], "val_sub_labels.pt"))
-
-    thresh_super = calculate_threshold(super_model, val_feat, val_super_lbl, super_map, CONFIG["target_recall"], device)
-    thresh_sub = calculate_threshold(sub_model, val_feat, val_sub_lbl, sub_map, CONFIG["target_recall"], device)
+    # --- Step 2: 加载阈值 ---
+    print("\n--- Step 2: 加载阈值 ---")
+    with open(CONFIG["hyperparams_file"], 'r') as f:
+        hyperparams = json.load(f)
+    thresh_super = hyperparams["thresh_super"]
+    thresh_sub = hyperparams["thresh_sub"]
     print(f"  > Superclass 阈值: {thresh_super:.4f}")
     print(f"  > Subclass 阈值:   {thresh_sub:.4f}")
 

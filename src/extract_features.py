@@ -5,7 +5,7 @@ from PIL import Image
 import os
 from tqdm import tqdm
 
-from config import *
+from core import *
 
 CONFIG = {
     "train_csv_path": os.path.join(DATA_RAW_DIR, "train_data.csv"),
