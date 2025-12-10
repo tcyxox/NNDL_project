@@ -5,25 +5,33 @@
 ### Config
 
 ```py
-# ================= 模型配置 =================
-CLIP_MODEL_ID = "openai/clip-vit-base-patch32"
-FEATURE_DIM = 512
+@dataclass
+class ModelConfig:
+    clip_model_id: str = "openai/clip-vit-base-patch32"
+    feature_dim: int = 512
 
-# ================= OSR 配置 =================
-NOVEL_SUPER_INDEX = 3   # 未知超类的 ID
-NOVEL_SUB_INDEX = 87    # 未知子类的 ID
 
-# ================= 训练配置 =================
-BATCH_SIZE = 64
-LEARNING_RATE = 1e-3
-EPOCHS = 50
-TARGET_RECALL = 0.95    # 阈值计算时的目标召回率
+@dataclass
+class OSRConfig:
+    novel_super_index: int = 3
+    novel_sub_index: int = 87
+    enable_hierarchical_masking: bool = False
 
-# ================= 数据划分配置 =================
-NOVEL_RATIO = 0.2       # 20% 子类作为未知类
-TRAIN_RATIO = 0.8       # 已知类中 80% 用于训练
-VAL_TEST_RATIO = 0.5    # Val 占 (Val+Test) 的比例
-SEED = 42               # 随机种子
+
+@dataclass
+class TrainingConfig:
+    batch_size: int = 64
+    learning_rate: float = 1e-3
+    epochs: int = 50
+    target_recall: float = 0.95
+    seed: int = 42
+
+
+@dataclass
+class SplitConfig:
+    novel_ratio: float = 0.2
+    train_ratio: float = 0.8
+    val_test_ratio: float = 0.5
 ```
 
 只当super是novel时，才强制sub也是novel。
@@ -42,7 +50,10 @@ SEED = 42               # 随机种子
 
 ## v1.1
 
-对任意super-sub pair使用hierarchical masking。其它同v1.0。
+```py
+enable_hierarchical_masking: bool = True
+```
+其它同v1.0。
 
 [Superclass] 评估报告:
   > 总体准确率 (Overall): 95.31%
