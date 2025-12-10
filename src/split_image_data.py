@@ -3,30 +3,30 @@ import numpy as np
 import json
 import os
 
-from config import *
+from core.config import config
 
 # ================= 配置 =================
 CONFIG = {
     # 文件读取路径
-    "train_csv": os.path.join(DATA_RAW_DIR, "train_data.csv"),
-    "img_dir": os.path.join(DATA_RAW_DIR, "train_images.csv"),
-    "super_map_csv": os.path.join(DATA_RAW_DIR, "superclass_mapping.csv"),
-    "sub_map_csv": os.path.join(DATA_RAW_DIR, "subclass_mapping.csv"),
+    "train_csv": os.path.join(config.paths.data_raw, "train_data.csv"),
+    "img_dir": os.path.join(config.paths.data_raw, "train_images.csv"),
+    "super_map_csv": os.path.join(config.paths.data_raw, "superclass_mapping.csv"),
+    "sub_map_csv": os.path.join(config.paths.data_raw, "subclass_mapping.csv"),
 
     # 输出路径
-    "split_train_path": os.path.join(SPLIT_DIR, "osr_train_split.json"),
-    "split_val_path": os.path.join(SPLIT_DIR, "osr_val_split.json"),
-    "split_test_path": os.path.join(SPLIT_DIR, "osr_test_split.json"),
-    "label_mapping_path": os.path.join(SPLIT_DIR, "osr_label_mapping.json"),
+    "split_train_path": os.path.join(config.paths.split, "osr_train_split.json"),
+    "split_val_path": os.path.join(config.paths.split, "osr_val_split.json"),
+    "split_test_path": os.path.join(config.paths.split, "osr_test_split.json"),
+    "label_mapping_path": os.path.join(config.paths.split, "osr_label_mapping.json"),
 
     # OSR 划分策略
-    "novel_subclass_ratio": NOVEL_RATIO,                # 每个超类中隐藏 20% 的子类
-    "train_ratio": TRAIN_RATIO,                         # 从已知类样本中划出 80% 做训练
-    "val_ratio": (1-TRAIN_RATIO)*VAL_TEST_RATIO,        # 从已知类样本中划出 10% 做验证
-    "test_ratio": (1-TRAIN_RATIO)*(1-VAL_TEST_RATIO),   # 从已知类样本中划出 10% 做测试
+    "novel_subclass_ratio": config.split.novel_ratio,           # 每个超类中隐藏 20% 的子类
+    "train_ratio": config.split.train_ratio,                    # 从已知类样本中划出 80% 做训练
+    "val_ratio": (1-config.split.train_ratio)*config.split.val_test_ratio,        # 从已知类样本中划出 10% 做验证
+    "test_ratio": (1-config.split.train_ratio)*(1-config.split.val_test_ratio),   # 从已知类样本中划出 10% 做测试
 
     # 随机种子
-    "seed": SEED
+    "seed": config.training.seed
 }
 
 
