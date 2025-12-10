@@ -2,7 +2,8 @@ import torch
 import os
 
 from core.config import config
-from core.train import set_seed, create_label_mapping, train_classifier, create_super_to_sub_mapping
+from core.train import set_seed, create_label_mapping, train_classifier, train_hierarchical, create_super_to_sub_mapping
+from core.models import HierarchicalClassifier
 
 CONFIG = {
     "feature_dir": config.paths.split_features,
@@ -10,7 +11,8 @@ CONFIG = {
     "feature_dim": config.model.feature_dim,
     "learning_rate": config.training.learning_rate,
     "batch_size": config.training.batch_size,
-    "epochs": config.training.epochs
+    "epochs": config.training.epochs,
+    "enable_soft_attention": config.training.enable_soft_attention
 }
 
 os.makedirs(CONFIG["output_dir"], exist_ok=True)
@@ -31,23 +33,38 @@ if __name__ == "__main__":
     num_sub, sub_map = create_label_mapping(train_sub_labels, "sub", CONFIG["output_dir"])
 
     # =============================== 训练模型 ===============================
-    # 1. 训练超类模型
-    super_model = train_classifier(
-        train_features, train_super_labels, super_map, num_super, "Superclass Model",
-        CONFIG["feature_dim"], CONFIG["batch_size"], CONFIG["learning_rate"], CONFIG["epochs"], device
-    )
-    torch.save(super_model.state_dict(), os.path.join(CONFIG["output_dir"], "super_model.pth"))
-    print("超类模型已保存。")
+    if CONFIG["enable_soft_attention"]:
+        # 使用 HierarchicalClassifier 联合训练
+        print("\n=== 使用 Soft Attention (联合训练模式) ===")
+        model = HierarchicalClassifier(
+            CONFIG["feature_dim"], num_super, num_sub, use_attention=True
+        )
+        model = train_hierarchical(
+            model, train_features, train_super_labels, train_sub_labels,
+            super_map, sub_map, CONFIG["batch_size"], CONFIG["learning_rate"], CONFIG["epochs"], device
+        )
+        torch.save(model.state_dict(), os.path.join(CONFIG["output_dir"], "hierarchical_model.pth"))
+        print("层次模型已保存。")
+    else:
+        # 独立训练 (现有逻辑)
+        print("\n=== 独立训练模式 ===")
+        # 1. 训练超类模型
+        super_model = train_classifier(
+            train_features, train_super_labels, super_map, num_super, "Superclass Model",
+            CONFIG["feature_dim"], CONFIG["batch_size"], CONFIG["learning_rate"], CONFIG["epochs"], device
+        )
+        torch.save(super_model.state_dict(), os.path.join(CONFIG["output_dir"], "super_model.pth"))
+        print("超类模型已保存。")
 
-    # 2. 训练子类模型
-    sub_model = train_classifier(
-        train_features, train_sub_labels, sub_map, num_sub, "Subclass Model",
-        CONFIG["feature_dim"], CONFIG["batch_size"], CONFIG["learning_rate"], CONFIG["epochs"], device
-    )
-    torch.save(sub_model.state_dict(), os.path.join(CONFIG["output_dir"], "sub_model.pth"))
-    print("子类模型已保存。")
+        # 2. 训练子类模型
+        sub_model = train_classifier(
+            train_features, train_sub_labels, sub_map, num_sub, "Subclass Model",
+            CONFIG["feature_dim"], CONFIG["batch_size"], CONFIG["learning_rate"], CONFIG["epochs"], device
+        )
+        torch.save(sub_model.state_dict(), os.path.join(CONFIG["output_dir"], "sub_model.pth"))
+        print("子类模型已保存。")
 
-    # 3. 生成超类到子类的映射表
+    # 3. 生成超类到子类的映射表 (两种模式都需要)
     create_super_to_sub_mapping(train_super_labels, train_sub_labels, CONFIG["output_dir"])
 
     print("\n--- 所有模型训练完毕 ---")

@@ -138,3 +138,62 @@ def create_super_to_sub_mapping(super_labels, sub_labels, output_dir):
     print(f"  > 映射表已保存至: {mapping_path}")
     
     return super_to_sub
+
+
+def train_hierarchical(model, features, super_labels, sub_labels,
+                       super_map, sub_map, batch_size, learning_rate, epochs, device):
+    """
+    联合训练层次分类器 (HierarchicalClassifier)
+
+    Args:
+        model: HierarchicalClassifier 实例
+        features: 训练特征
+        super_labels: 超类标签
+        sub_labels: 子类标签
+        super_map: 超类 global_to_local 映射
+        sub_map: 子类 global_to_local 映射
+        batch_size: 批大小
+        learning_rate: 学习率
+        epochs: 训练轮数
+        device: 'cuda' or 'cpu'
+
+    Returns:
+        model: 训练好的模型
+    """
+    model.to(device)
+    model.train()
+
+    # 转换标签为 Local ID
+    mapped_super = torch.tensor([super_map[l.item()] for l in super_labels], dtype=torch.long)
+    mapped_sub = torch.tensor([sub_map[l.item()] for l in sub_labels], dtype=torch.long)
+
+    # 创建数据集
+    dataset = TensorDataset(features, mapped_super, mapped_sub)
+    loader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
+
+    criterion = nn.CrossEntropyLoss()
+    optimizer = optim.Adam(model.parameters(), lr=learning_rate)
+
+    print(f"\n开始联合训练 HierarchicalClassifier...")
+
+    for epoch in range(epochs):
+        running_loss = 0.0
+        for inputs, super_targets, sub_targets in loader:
+            inputs = inputs.to(device)
+            super_targets = super_targets.to(device)
+            sub_targets = sub_targets.to(device)
+
+            optimizer.zero_grad()
+            super_logits, sub_logits = model(inputs)
+            
+            # 联合 Loss
+            loss = criterion(super_logits, super_targets) + criterion(sub_logits, sub_targets)
+            loss.backward()
+            optimizer.step()
+
+            running_loss += loss.item()
+
+        if (epoch + 1) % 10 == 0:
+            print(f"  Epoch [{epoch + 1}/{epochs}], Loss: {running_loss / len(loader):.4f}")
+
+    return model

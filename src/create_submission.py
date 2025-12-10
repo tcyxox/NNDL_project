@@ -4,7 +4,7 @@ import os
 import json
 
 from core.config import config
-from core.inference import load_mapping_and_model, predict_with_osr
+from core.inference import load_linear_model, predict_with_linear_model, load_hierarchical_model, predict_with_hierarchical_model
 
 CONFIG = {
     "hyperparams_file": os.path.join(config.paths.dev, "hyperparameters.json"),
@@ -15,7 +15,8 @@ CONFIG = {
     "novel_super_idx": config.osr.novel_super_index,
     "novel_sub_idx": config.osr.novel_sub_index,
     "enable_hierarchical_masking": config.osr.enable_hierarchical_masking,
-    "feature_dim": config.model.feature_dim
+    "feature_dim": config.model.feature_dim,
+    "enable_soft_attention": config.training.enable_soft_attention
 }
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -24,8 +25,14 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 if __name__ == "__main__":
     # --- Step 1: 加载模型和映射 ---
     print("--- Step 1: 加载模型和映射 ---")
-    super_model, super_map = load_mapping_and_model("super", CONFIG["model_dir"], CONFIG["feature_dim"], device)
-    sub_model, sub_map = load_mapping_and_model("sub", CONFIG["model_dir"], CONFIG["feature_dim"], device)
+    
+    # 加载映射表 (获取类别数量)
+    with open(os.path.join(CONFIG["model_dir"], "super_local_to_global_map.json"), 'r') as f:
+        super_map = {int(k): v for k, v in json.load(f).items()}
+    with open(os.path.join(CONFIG["model_dir"], "sub_local_to_global_map.json"), 'r') as f:
+        sub_map = {int(k): v for k, v in json.load(f).items()}
+    
+    num_super, num_sub = len(super_map), len(sub_map)
     
     # 加载超类到子类的映射表（用于 hierarchical masking）
     super_to_sub = None
@@ -50,13 +57,28 @@ if __name__ == "__main__":
     test_features = torch.load(CONFIG["test_feature_path"]).to(device)
     test_image_names = torch.load(CONFIG["test_image_names"])
 
-    super_preds, sub_preds = predict_with_osr(
-        test_features, super_model, sub_model,
-        super_map, sub_map,
-        thresh_super, thresh_sub,
-        CONFIG["novel_super_idx"], CONFIG["novel_sub_idx"], device,
-        super_to_sub=super_to_sub
-    )
+    if CONFIG["enable_soft_attention"]:
+        print("  > 使用 Soft Attention 模式")
+        model, super_map, sub_map = load_hierarchical_model(
+            CONFIG["model_dir"], CONFIG["feature_dim"], num_super, num_sub, True, device
+        )
+        super_preds, sub_preds = predict_with_hierarchical_model(
+            test_features, model, super_map, sub_map,
+            thresh_super, thresh_sub,
+            CONFIG["novel_super_idx"], CONFIG["novel_sub_idx"], device,
+            super_to_sub=super_to_sub
+        )
+    else:
+        print("  > 使用独立模型模式")
+        super_model, super_map = load_linear_model("super", CONFIG["model_dir"], CONFIG["feature_dim"], device)
+        sub_model, sub_map = load_linear_model("sub", CONFIG["model_dir"], CONFIG["feature_dim"], device)
+        super_preds, sub_preds = predict_with_linear_model(
+            test_features, super_model, sub_model,
+            super_map, sub_map,
+            thresh_super, thresh_sub,
+            CONFIG["novel_super_idx"], CONFIG["novel_sub_idx"], device,
+            super_to_sub=super_to_sub
+        )
 
     # --- Step 4: 保存提交文件 ---
     print("\n--- Step 4: 保存提交文件 ---")

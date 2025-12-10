@@ -39,6 +39,7 @@ class TrainingConfig:
     epochs: int = 50
     target_recall: float = 0.95
     seed: int = 42
+    enable_soft_attention: bool = False
 
 
 @dataclass
