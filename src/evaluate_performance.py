@@ -6,7 +6,7 @@ import torch.nn.functional as F
 from sklearn.metrics import accuracy_score
 
 from core.config import config
-from core.inference import predict_with_linear_model, predict_with_hierarchical_model, calculate_threshold
+from core.inference import predict_with_linear_model, predict_with_hierarchical_model, calculate_threshold_linear, calculate_threshold_hierarchical
 from core.train import run_training
 from core.utils import set_seed
 
@@ -51,7 +51,7 @@ def run_single_trial(seed):
     set_seed(seed)
     
     # 加载验证和测试数据
-    val_features = torch.load(os.path.join(CONFIG["feature_dir"], "val_features.pt")).to(device)
+    val_features = torch.load(os.path.join(CONFIG["feature_dir"], "val_features.pt"))
     val_super_labels = torch.load(os.path.join(CONFIG["feature_dir"], "val_super_labels.pt"))
     val_sub_labels = torch.load(os.path.join(CONFIG["feature_dir"], "val_sub_labels.pt"))
     
@@ -85,17 +85,10 @@ def run_single_trial(seed):
     
     if CONFIG["enable_feature_gating"]:
         # 计算阈值
-        model.eval()
-        with torch.no_grad():
-            super_logits, sub_logits = model(val_features)
-        
-        known_super = torch.tensor([l.item() in super_map_inv for l in val_super_labels])
-        super_probs = F.softmax(super_logits[known_super], dim=1)
-        thresh_super = torch.quantile(super_probs.max(dim=1)[0], 1 - CONFIG["target_recall"]).item()
-        
-        known_sub = torch.tensor([l.item() in sub_map_inv for l in val_sub_labels])
-        sub_probs = F.softmax(sub_logits[known_sub], dim=1)
-        thresh_sub = torch.quantile(sub_probs.max(dim=1)[0], 1 - CONFIG["target_recall"]).item()
+        thresh_super, thresh_sub = calculate_threshold_hierarchical(
+            model, val_features, val_super_labels, val_sub_labels,
+            super_map_inv, sub_map_inv, CONFIG["target_recall"], device
+        )
         
         # 推理
         super_preds, sub_preds = predict_with_hierarchical_model(
@@ -105,8 +98,8 @@ def run_single_trial(seed):
         )
     else:
         # 计算阈值
-        thresh_super = calculate_threshold(super_model, val_features, val_super_labels, super_map_inv, CONFIG["target_recall"], device)
-        thresh_sub = calculate_threshold(sub_model, val_features, val_sub_labels, sub_map_inv, CONFIG["target_recall"], device)
+        thresh_super = calculate_threshold_linear(super_model, val_features, val_super_labels, super_map_inv, CONFIG["target_recall"], device)
+        thresh_sub = calculate_threshold_linear(sub_model, val_features, val_sub_labels, sub_map_inv, CONFIG["target_recall"], device)
         
         # 推理
         super_preds, sub_preds = predict_with_linear_model(

@@ -7,12 +7,12 @@ import torch.nn.functional as F
 from .models import LinearClassifier, HierarchicalClassifier
 
 
-def calculate_threshold(model, val_features, val_labels, label_map, target_recall, device):
+def calculate_threshold_linear(model, val_features, val_labels, label_map, target_recall, device):
     """
-    在验证集上计算 OSR 阈值
+    在验证集上为 LinearClassifier 计算 OSR 阈值
 
     Args:
-        model: 分类模型
+        model: LinearClassifier 模型
         val_features: 验证集特征
         val_labels: 验证集标签
         label_map: local_to_global 映射
@@ -40,6 +40,49 @@ def calculate_threshold(model, val_features, val_labels, label_map, target_recal
     # 找到一个阈值 T，使得 target_recall% 的样本分数 > T
     threshold = torch.quantile(max_probs, 1 - target_recall).item()
     return threshold
+
+
+def calculate_threshold_hierarchical(model, val_features, val_super_labels, val_sub_labels, 
+                                      super_map_inv, sub_map_inv, target_recall, device):
+    """
+    在验证集上为 HierarchicalClassifier 计算 OSR 阈值
+
+    Args:
+        model: HierarchicalClassifier 模型
+        val_features: 验证集特征
+        val_super_labels: 验证集超类标签
+        val_sub_labels: 验证集子类标签
+        super_map_inv: 超类 local_to_global 映射
+        sub_map_inv: 子类 local_to_global 映射
+        target_recall: 目标召回率 (如 0.95)
+        device: 'cuda' or 'cpu'
+
+    Returns:
+        thresh_super: 超类阈值
+        thresh_sub: 子类阈值
+    """
+    model.eval()
+    
+    with torch.no_grad():
+        super_logits, sub_logits = model(val_features.to(device))
+    
+    # 超类阈值
+    known_super = torch.tensor([l.item() in super_map_inv for l in val_super_labels])
+    if known_super.sum() > 0:
+        super_probs = F.softmax(super_logits[known_super], dim=1)
+        thresh_super = torch.quantile(super_probs.max(dim=1)[0], 1 - target_recall).item()
+    else:
+        thresh_super = 0.5
+    
+    # 子类阈值
+    known_sub = torch.tensor([l.item() in sub_map_inv for l in val_sub_labels])
+    if known_sub.sum() > 0:
+        sub_probs = F.softmax(sub_logits[known_sub], dim=1)
+        thresh_sub = torch.quantile(sub_probs.max(dim=1)[0], 1 - target_recall).item()
+    else:
+        thresh_sub = 0.5
+    
+    return thresh_super, thresh_sub
 
 
 def load_linear_model(prefix, model_dir, feature_dim, device):
