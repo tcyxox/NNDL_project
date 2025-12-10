@@ -79,3 +79,21 @@ class ExperimentConfig:
   [Subclass] Unseen        : 46.02% ± 4.35%
 
 变化：未知subclass准确率显著提高。
+
+```py
+class ExperimentConfig:
+    # 训练参数
+    batch_size: int = 64
+    learning_rate: float = 1e-2
+    epochs: int = 400
+    target_recall: float = 0.95
+    seed: int = 42
+    # 实验开关
+    alpha: float = 10
+    lambda_w: float = 0.1
+```
+
+  [Subclass] Overall            : 68.63% ± 0.64%
+  [Subclass] Seen               : 94.86% ± 0.29%
+  [Subclass] Unseen             : 46.25% ± 1.31%
+  AUROC                         : 0.8642 ± 0.0003
