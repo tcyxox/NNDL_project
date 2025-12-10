@@ -37,7 +37,7 @@ if __name__ == "__main__":
         # 使用 HierarchicalClassifier 联合训练
         print("\n=== 使用 Soft Attention (联合训练模式) ===")
         model = HierarchicalClassifier(
-            CONFIG["feature_dim"], num_super, num_sub, use_attention=True
+            CONFIG["feature_dim"], num_super, num_sub
         )
         model = train_hierarchical(
             model, train_features, train_super_labels, train_sub_labels,

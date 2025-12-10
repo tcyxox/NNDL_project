@@ -12,28 +12,27 @@ class LinearClassifier(nn.Module):
 
 
 class HierarchicalClassifier(nn.Module):
-    """层次分类器模型，支持 Soft Attention"""
-    def __init__(self, feature_dim, num_super, num_sub, use_attention=True):
+    """层次分类器模型，使用 SE Attention"""
+    def __init__(self, feature_dim, num_super, num_sub):
         super(HierarchicalClassifier, self).__init__()
         self.super_head = nn.Linear(feature_dim, num_super)
         self.sub_head = nn.Linear(feature_dim, num_sub)
-        self.use_attention = use_attention
         
-        if use_attention:
-            # SE-style attention: super_logits -> feature weights
-            self.attention = nn.Sequential(
-                nn.Linear(num_super, feature_dim // 4),
-                nn.ReLU(),
-                nn.Linear(feature_dim // 4, feature_dim),
-                nn.Sigmoid()
-            )
+        # SE-style attention: feature -> squeeze -> excite -> feature weights
+        reduction = 4
+        self.attention = nn.Sequential(
+            nn.Linear(feature_dim, feature_dim // reduction),  # Squeeze
+            nn.ReLU(),
+            nn.Linear(feature_dim // reduction, feature_dim),  # Excitation
+            nn.Sigmoid()
+        )
     
     def forward(self, features):
         super_logits = self.super_head(features)
         
-        if self.use_attention:
-            attn_weights = self.attention(super_logits)
-            features = features * attn_weights
+        # SE Attention
+        attn_weights = self.attention(features)
+        attended_features = features * attn_weights
+        sub_logits = self.sub_head(attended_features)
         
-        sub_logits = self.sub_head(features)
         return super_logits, sub_logits

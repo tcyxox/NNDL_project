@@ -149,14 +149,13 @@ def predict_with_linear_model(features, super_model, sub_model,
     return super_preds, sub_preds
 
 
-def load_hierarchical_model(model_dir, feature_dim, num_super, num_sub, use_attention, device):
+def load_hierarchical_model(model_dir, feature_dim, num_super, num_sub, device):
     """
     Args:
         model_dir: 模型目录
         feature_dim: 特征维度
         num_super: 超类数量
         num_sub: 子类数量
-        use_attention: 是否使用 attention
         device: 'cuda' or 'cpu'
     
     Returns:
@@ -174,7 +173,7 @@ def load_hierarchical_model(model_dir, feature_dim, num_super, num_sub, use_atte
     print(f"[hierarchical] 加载映射表: {len(super_map)} 超类, {len(sub_map)} 子类")
     
     # 初始化并加载模型
-    model = HierarchicalClassifier(feature_dim, num_super, num_sub, use_attention=use_attention)
+    model = HierarchicalClassifier(feature_dim, num_super, num_sub)
     model_path = os.path.join(model_dir, "hierarchical_model.pth")
     model.load_state_dict(torch.load(model_path))
     model.to(device)

@@ -71,11 +71,11 @@ class ExperimentConfig:
     enable_hierarchical_masking: bool = True
 ```
 
-  [Superclass] Overall     : 95.14% ± 0.16%
-  [Superclass] Seen        : 95.14% ± 0.16%
+  [Superclass] Overall     : 95.34% ± 0.17%
+  [Superclass] Seen        : 95.34% ± 0.17%
   [Superclass] Unseen      :  0.00% ± 0.00%
-  [Subclass] Overall       : 63.01% ± 1.17%
-  [Subclass] Seen          : 88.16% ± 0.44%
-  [Subclass] Unseen        : 41.57% ± 2.28%
+  [Subclass] Overall       : 65.25% ± 2.35%
+  [Subclass] Seen          : 87.80% ± 0.98%
+  [Subclass] Unseen        : 46.02% ± 4.35%
 
 变化：未知subclass准确率显著提高。

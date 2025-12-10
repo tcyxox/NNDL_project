@@ -63,7 +63,7 @@ if __name__ == "__main__":
     if CONFIG["enable_soft_attention"]:
         print("  > 使用 Soft Attention 模式")
         model, _, _ = load_hierarchical_model(
-            CONFIG["model_dir"], CONFIG["feature_dim"], num_super, num_sub, True, device
+            CONFIG["model_dir"], CONFIG["feature_dim"], num_super, num_sub, device
         )
         thresh_super = calculate_threshold_hierarchical(model, val_feat, val_super_lbl, super_map, CONFIG["target_recall"], device, is_super=True)
         thresh_sub = calculate_threshold_hierarchical(model, val_feat, val_sub_lbl, sub_map, CONFIG["target_recall"], device, is_super=False)

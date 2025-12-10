@@ -82,7 +82,7 @@ def run_single_trial(seed):
     
     if CONFIG["enable_soft_attention"]:
         # 联合训练
-        model = HierarchicalClassifier(CONFIG["feature_dim"], num_super, num_sub, use_attention=True)
+        model = HierarchicalClassifier(CONFIG["feature_dim"], num_super, num_sub)
         model = train_hierarchical(
             model, train_features, train_super_labels, train_sub_labels,
             super_map, sub_map, CONFIG["batch_size"], CONFIG["learning_rate"], CONFIG["epochs"], device
