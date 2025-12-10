@@ -7,7 +7,7 @@ from core.train import set_seed
 
 CONFIG = {
     "feature_dir": config.paths.features,
-    "output_dir": config.paths.split,
+    "output_dir": config.paths.split_features,
     "novel_ratio": config.split.novel_ratio,
     "train_ratio": config.split.train_ratio,
     "val_test_ratio": config.split.val_test_ratio,

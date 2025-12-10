@@ -14,10 +14,10 @@ CONFIG = {
     "sub_map_csv": os.path.join(config.paths.data_raw, "subclass_mapping.csv"),
 
     # 输出路径
-    "split_train_path": os.path.join(config.paths.split, "osr_train_split.json"),
-    "split_val_path": os.path.join(config.paths.split, "osr_val_split.json"),
-    "split_test_path": os.path.join(config.paths.split, "osr_test_split.json"),
-    "label_mapping_path": os.path.join(config.paths.split, "osr_label_mapping.json"),
+    "split_train_path": os.path.join(config.paths.split_images, "osr_train_split.json"),
+    "split_val_path": os.path.join(config.paths.split_images, "osr_val_split.json"),
+    "split_test_path": os.path.join(config.paths.split_images, "osr_test_split.json"),
+    "label_mapping_path": os.path.join(config.paths.split_images, "osr_label_mapping.json"),
 
     # OSR 划分策略
     "novel_subclass_ratio": config.split.novel_ratio,           # 每个超类中隐藏 20% 的子类

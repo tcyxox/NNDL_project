@@ -5,7 +5,7 @@ from core.config import config
 from core.train import set_seed, create_label_mapping, train_classifier, create_super_to_sub_mapping
 
 CONFIG = {
-    "feature_dir": config.paths.split,
+    "feature_dir": config.paths.split_features,
     "output_dir": config.paths.dev,
     "feature_dim": config.model.feature_dim,
     "learning_rate": config.training.learning_rate,

@@ -10,7 +10,7 @@ from core.inference import load_mapping_and_model, predict_with_osr
 CONFIG = {
     "hyperparams_file": os.path.join(config.paths.dev, "hyperparameters.json"),
     "model_dir": config.paths.dev,
-    "test_data_dir": config.paths.split,
+    "test_data_dir": config.paths.split_features,
     "novel_super_idx": config.osr.novel_super_index,
     "novel_sub_idx": config.osr.novel_sub_index,
     "enable_hierarchical_masking": config.osr.enable_hierarchical_masking,

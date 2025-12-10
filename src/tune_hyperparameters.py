@@ -7,7 +7,7 @@ from core.inference import load_mapping_and_model, calculate_threshold
 
 CONFIG = {
     "model_dir": config.paths.dev,
-    "val_data_dir": config.paths.split,
+    "val_data_dir": config.paths.split_features,
     "target_recall": config.training.target_recall,
     "feature_dim": config.model.feature_dim,
     "hyperparams_file": os.path.join(config.paths.dev, "hyperparameters.json")
