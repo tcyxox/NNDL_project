@@ -28,7 +28,7 @@ Sidharth Sharma - ss7202@columbia.edu
 ### Development (Evaluation)
 
 1. Extract Features
-2. Split Dataset
+2. Split Feature Dataset
 3. Train Baseline
 4. Tune Hyperparameters
 5. Evaluate Performance
