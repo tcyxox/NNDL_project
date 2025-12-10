@@ -1,3 +1,6 @@
+"""
+模型评估脚本：支持多种子测试取平均
+"""
 import torch
 import os
 import json
@@ -5,24 +8,33 @@ import numpy as np
 from sklearn.metrics import accuracy_score
 
 from core.config import config
-from core.inference import load_linear_model, predict_with_linear_model, load_hierarchical_model, predict_with_hierarchical_model
+from core.train import set_seed, create_label_mapping, train_classifier, train_hierarchical, create_super_to_sub_mapping
+from core.models import HierarchicalClassifier
+from core.inference import load_linear_model, predict_with_linear_model, load_hierarchical_model, predict_with_hierarchical_model, calculate_threshold
+import torch.nn.functional as F
 
 CONFIG = {
-    "hyperparams_file": os.path.join(config.paths.dev, "hyperparameters.json"),
-    "model_dir": config.paths.dev,
-    "test_data_dir": config.paths.split_features,
+    "feature_dir": config.paths.split_features,
+    "output_dir": config.paths.dev,
+    "feature_dim": config.model.feature_dim,
+    "learning_rate": config.experiment.learning_rate,
+    "batch_size": config.experiment.batch_size,
+    "epochs": config.experiment.epochs,
     "novel_super_idx": config.osr.novel_super_index,
     "novel_sub_idx": config.osr.novel_sub_index,
-    "enable_hierarchical_masking": config.osr.enable_hierarchical_masking,
-    "feature_dim": config.model.feature_dim,
-    "enable_soft_attention": config.training.enable_soft_attention
+    "enable_soft_attention": config.experiment.enable_soft_attention,
+    "enable_hierarchical_masking": config.experiment.enable_hierarchical_masking,
+    "target_recall": config.experiment.target_recall,
 }
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
+# 多种子评估配置
+SEEDS = [42, 123, 456, 789, 1024]
 
-def calculate_metrics(y_true, y_pred, novel_label, name="Task"):
-    """计算详细的准确率指标"""
+
+def calculate_metrics(y_true, y_pred, novel_label):
+    """计算准确率指标"""
     y_true = np.array(y_true)
     y_pred = np.array(y_pred)
 
@@ -34,74 +46,140 @@ def calculate_metrics(y_true, y_pred, novel_label, name="Task"):
     mask_novel = (y_true == novel_label)
     acc_novel = accuracy_score(y_true[mask_novel], y_pred[mask_novel]) if np.sum(mask_novel) > 0 else 0.0
 
-    print(f"\n[{name}] 评估报告:")
-    print(f"  > 总体准确率 (Overall): {acc_all * 100:.2f}%")
-    print(f"  > 已知类准确率 (Seen):    {acc_known * 100:.2f}%  (目标: 保持高)")
-    print(f"  > 未知类准确率 (Unseen):  {acc_novel * 100:.2f}%  (目标: >0, 越高越好)")
+    return acc_all, acc_known, acc_novel
 
-    return acc_all
+
+def run_single_trial(seed):
+    """运行单次实验，返回各项指标"""
+    set_seed(seed)
+    
+    # 加载数据
+    train_features = torch.load(os.path.join(CONFIG["feature_dir"], "train_features.pt"))
+    train_super_labels = torch.load(os.path.join(CONFIG["feature_dir"], "train_super_labels.pt"))
+    train_sub_labels = torch.load(os.path.join(CONFIG["feature_dir"], "train_sub_labels.pt"))
+    
+    val_features = torch.load(os.path.join(CONFIG["feature_dir"], "val_features.pt")).to(device)
+    val_super_labels = torch.load(os.path.join(CONFIG["feature_dir"], "val_super_labels.pt"))
+    val_sub_labels = torch.load(os.path.join(CONFIG["feature_dir"], "val_sub_labels.pt"))
+    
+    test_features = torch.load(os.path.join(CONFIG["feature_dir"], "test_features.pt")).to(device)
+    test_super_labels = torch.load(os.path.join(CONFIG["feature_dir"], "test_super_labels.pt"))
+    test_sub_labels = torch.load(os.path.join(CONFIG["feature_dir"], "test_sub_labels.pt"))
+    
+    # 创建映射
+    num_super, super_map = create_label_mapping(train_super_labels, "super", CONFIG["output_dir"])
+    num_sub, sub_map = create_label_mapping(train_sub_labels, "sub", CONFIG["output_dir"])
+    create_super_to_sub_mapping(train_super_labels, train_sub_labels, CONFIG["output_dir"])
+    
+    # 加载 super_to_sub (用于 hierarchical masking)
+    super_to_sub = None
+    if CONFIG["enable_hierarchical_masking"]:
+        with open(os.path.join(CONFIG["output_dir"], "super_to_sub_map.json"), 'r') as f:
+            super_to_sub = {int(k): v for k, v in json.load(f).items()}
+    
+    super_map_inv = {v: int(k) for k, v in super_map.items()}
+    sub_map_inv = {v: int(k) for k, v in sub_map.items()}
+    
+    if CONFIG["enable_soft_attention"]:
+        # 联合训练
+        model = HierarchicalClassifier(CONFIG["feature_dim"], num_super, num_sub, use_attention=True)
+        model = train_hierarchical(
+            model, train_features, train_super_labels, train_sub_labels,
+            super_map, sub_map, CONFIG["batch_size"], CONFIG["learning_rate"], CONFIG["epochs"], device
+        )
+        
+        # 计算阈值
+        model.eval()
+        with torch.no_grad():
+            super_logits, sub_logits = model(val_features)
+        
+        known_super = torch.tensor([l.item() in super_map_inv for l in val_super_labels])
+        super_probs = F.softmax(super_logits[known_super], dim=1)
+        thresh_super = torch.quantile(super_probs.max(dim=1)[0], 1 - CONFIG["target_recall"]).item()
+        
+        known_sub = torch.tensor([l.item() in sub_map_inv for l in val_sub_labels])
+        sub_probs = F.softmax(sub_logits[known_sub], dim=1)
+        thresh_sub = torch.quantile(sub_probs.max(dim=1)[0], 1 - CONFIG["target_recall"]).item()
+        
+        # 推理
+        super_preds, sub_preds = predict_with_hierarchical_model(
+            test_features, model, super_map_inv, sub_map_inv,
+            thresh_super, thresh_sub, CONFIG["novel_super_idx"], CONFIG["novel_sub_idx"], device,
+            super_to_sub=super_to_sub
+        )
+    else:
+        # 独立训练
+        super_model = train_classifier(
+            train_features, train_super_labels, super_map, num_super, "Super",
+            CONFIG["feature_dim"], CONFIG["batch_size"], CONFIG["learning_rate"], CONFIG["epochs"], device
+        )
+        sub_model = train_classifier(
+            train_features, train_sub_labels, sub_map, num_sub, "Sub",
+            CONFIG["feature_dim"], CONFIG["batch_size"], CONFIG["learning_rate"], CONFIG["epochs"], device
+        )
+        
+        # 计算阈值
+        thresh_super = calculate_threshold(super_model, val_features, val_super_labels, super_map_inv, CONFIG["target_recall"], device)
+        thresh_sub = calculate_threshold(sub_model, val_features, val_sub_labels, sub_map_inv, CONFIG["target_recall"], device)
+        
+        # 推理
+        super_preds, sub_preds = predict_with_linear_model(
+            test_features, super_model, sub_model,
+            super_map_inv, sub_map_inv,
+            thresh_super, thresh_sub, CONFIG["novel_super_idx"], CONFIG["novel_sub_idx"], device,
+            super_to_sub=super_to_sub
+        )
+    
+    # 计算指标
+    super_all, super_seen, super_unseen = calculate_metrics(
+        test_super_labels.numpy(), super_preds, CONFIG["novel_super_idx"]
+    )
+    sub_all, sub_seen, sub_unseen = calculate_metrics(
+        test_sub_labels.numpy(), sub_preds, CONFIG["novel_sub_idx"]
+    )
+    
+    return {
+        "super_overall": super_all,
+        "super_seen": super_seen,
+        "super_unseen": super_unseen,
+        "sub_overall": sub_all,
+        "sub_seen": sub_seen,
+        "sub_unseen": sub_unseen,
+    }
 
 
 if __name__ == "__main__":
-    # --- Step 1: 加载模型和映射 ---
-    print("--- Step 1: 加载模型和映射 ---")
+    mode = "Soft Attention" if CONFIG["enable_soft_attention"] else "独立训练"
+    masking = "启用" if CONFIG["enable_hierarchical_masking"] else "禁用"
+    print("=" * 60)
+    print(f"多种子评估 | 模式: {mode} | Masking: {masking} | 试验: {len(SEEDS)}次")
+    print("=" * 60)
     
-    # 加载映射表 (获取类别数量)
-    with open(os.path.join(CONFIG["model_dir"], "super_local_to_global_map.json"), 'r') as f:
-        super_map = {int(k): v for k, v in json.load(f).items()}
-    with open(os.path.join(CONFIG["model_dir"], "sub_local_to_global_map.json"), 'r') as f:
-        sub_map = {int(k): v for k, v in json.load(f).items()}
+    all_results = []
     
-    num_super, num_sub = len(super_map), len(sub_map)
+    for i, seed in enumerate(SEEDS):
+        print(f"\n>>> Trial {i+1}/{len(SEEDS)}, Seed={seed}")
+        result = run_single_trial(seed)
+        all_results.append(result)
+        print(f"    Subclass Unseen: {result['sub_unseen']*100:.2f}%")
     
-    # 加载超类到子类的映射表（用于 hierarchical masking）
-    super_to_sub = None
-    if CONFIG["enable_hierarchical_masking"]:
-        with open(os.path.join(CONFIG["model_dir"], "super_to_sub_map.json"), 'r') as f:
-            super_to_sub = {int(k): v for k, v in json.load(f).items()}
-        print(f"  > Hierarchical masking 已启用")
-    else:
-        print(f"  > Hierarchical masking 已禁用")
-
-    # --- Step 2: 加载阈值 ---
-    print("\n--- Step 2: 加载阈值 ---")
-    with open(CONFIG["hyperparams_file"], 'r') as f:
-        hyperparams = json.load(f)
-    thresh_super = hyperparams["thresh_super"]
-    thresh_sub = hyperparams["thresh_sub"]
-    print(f"  > Superclass 阈值: {thresh_super:.4f}")
-    print(f"  > Subclass 阈值:   {thresh_sub:.4f}")
-
-    # --- Step 3: 在 Test 集上推理 ---
-    print("\n--- Step 3: 在 Test 集上推理 ---")
-    test_feat = torch.load(os.path.join(CONFIG["test_data_dir"], "test_features.pt")).to(device)
-    test_super_lbl = torch.load(os.path.join(CONFIG["test_data_dir"], "test_super_labels.pt"))
-    test_sub_lbl = torch.load(os.path.join(CONFIG["test_data_dir"], "test_sub_labels.pt"))
-
-    if CONFIG["enable_soft_attention"]:
-        print("  > 使用 Soft Attention 模式")
-        model, super_map, sub_map = load_hierarchical_model(
-            CONFIG["model_dir"], CONFIG["feature_dim"], num_super, num_sub, True, device
-        )
-        super_preds, sub_preds = predict_with_hierarchical_model(
-            test_feat, model, super_map, sub_map,
-            thresh_super, thresh_sub,
-            CONFIG["novel_super_idx"], CONFIG["novel_sub_idx"], device,
-            super_to_sub=super_to_sub
-        )
-    else:
-        print("  > 使用独立模型模式")
-        super_model, super_map = load_linear_model("super", CONFIG["model_dir"], CONFIG["feature_dim"], device)
-        sub_model, sub_map = load_linear_model("sub", CONFIG["model_dir"], CONFIG["feature_dim"], device)
-        super_preds, sub_preds = predict_with_linear_model(
-            test_feat, super_model, sub_model,
-            super_map, sub_map,
-            thresh_super, thresh_sub,
-            CONFIG["novel_super_idx"], CONFIG["novel_sub_idx"], device,
-            super_to_sub=super_to_sub
-        )
-
-    # --- Step 4: 评估结果 ---
-    print("\n--- Step 4: 评估结果 ---")
-    calculate_metrics(test_super_lbl.numpy(), super_preds, CONFIG["novel_super_idx"], "Superclass")
-    calculate_metrics(test_sub_lbl.numpy(), sub_preds, CONFIG["novel_sub_idx"], "Subclass")
+    # 汇总统计
+    print("\n" + "=" * 60)
+    print("评估报告")
+    print("=" * 60)
+    
+    metrics = ["super_overall", "super_seen", "super_unseen", "sub_overall", "sub_seen", "sub_unseen"]
+    labels = {
+        "super_overall": "[Superclass] Overall",
+        "super_seen": "[Superclass] Seen",
+        "super_unseen": "[Superclass] Unseen",
+        "sub_overall": "[Subclass] Overall",
+        "sub_seen": "[Subclass] Seen",
+        "sub_unseen": "[Subclass] Unseen",
+    }
+    
+    for m in metrics:
+        vals = [r[m] for r in all_results]
+        mean = np.mean(vals) * 100
+        std = np.std(vals) * 100
+        print(f"  {labels[m]:25s}: {mean:5.2f}% ± {std:.2f}%")

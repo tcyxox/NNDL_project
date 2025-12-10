@@ -20,29 +20,6 @@ class PathsConfig:
 
 
 @dataclass
-class ModelConfig:
-    clip_model_id: str = "openai/clip-vit-base-patch32"
-    feature_dim: int = 512
-
-
-@dataclass
-class OSRConfig:
-    novel_super_index: int = 3
-    novel_sub_index: int = 87
-    enable_hierarchical_masking: bool = True
-
-
-@dataclass
-class TrainingConfig:
-    batch_size: int = 64
-    learning_rate: float = 1e-3
-    epochs: int = 50
-    target_recall: float = 0.95
-    seed: int = 42
-    enable_soft_attention: bool = False
-
-
-@dataclass
 class SplitConfig:
     novel_ratio: float = 0.2
     train_ratio: float = 0.8
@@ -50,13 +27,37 @@ class SplitConfig:
 
 
 @dataclass
+class OSRConfig:
+    novel_super_index: int = 3
+    novel_sub_index: int = 87
+
+
+@dataclass
+class ModelConfig:
+    clip_model_id: str = "openai/clip-vit-base-patch32"
+    feature_dim: int = 512
+
+
+@dataclass
+class ExperimentConfig:
+    # 训练参数
+    batch_size: int = 64
+    learning_rate: float = 1e-3
+    epochs: int = 50
+    target_recall: float = 0.95
+    seed: int = 42
+    # 实验开关
+    enable_soft_attention: bool = True
+    enable_hierarchical_masking: bool = True
+
+
+@dataclass
 class Config:
     paths: PathsConfig = field(default_factory=PathsConfig)
-    model: ModelConfig = field(default_factory=ModelConfig)
-    osr: OSRConfig = field(default_factory=OSRConfig)
-    training: TrainingConfig = field(default_factory=TrainingConfig)
     split: SplitConfig = field(default_factory=SplitConfig)
+    osr: OSRConfig = field(default_factory=OSRConfig)
+    model: ModelConfig = field(default_factory=ModelConfig)
+    experiment: ExperimentConfig = field(default_factory=ExperimentConfig)
 
 
-# 全局配置实例
 config = Config()

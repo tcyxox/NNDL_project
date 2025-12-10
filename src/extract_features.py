@@ -13,7 +13,7 @@ CONFIG = {
     "test_img_dir": os.path.join(config.paths.data_raw, "test_images"),
     "output_dir": config.paths.features,
     "model_id": config.model.clip_model_id,
-    "batch_size": config.training.batch_size
+    "batch_size": config.experiment.batch_size
 }
 
 # 确保输出目录存在

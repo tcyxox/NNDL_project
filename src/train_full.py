@@ -9,16 +9,16 @@ CONFIG = {
     "feature_dir": config.paths.features,
     "output_dir": config.paths.submit,
     "feature_dim": config.model.feature_dim,
-    "learning_rate": config.training.learning_rate,
-    "batch_size": config.training.batch_size,
-    "epochs": config.training.epochs,
-    "enable_soft_attention": config.training.enable_soft_attention
+    "learning_rate": config.experiment.learning_rate,
+    "batch_size": config.experiment.batch_size,
+    "epochs": config.experiment.epochs,
+    "enable_soft_attention": config.experiment.enable_soft_attention
 }
 
 os.makedirs(CONFIG["output_dir"], exist_ok=True)
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
-set_seed(config.training.seed)
+set_seed(config.experiment.seed)
 
 
 if __name__ == "__main__":

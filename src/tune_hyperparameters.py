@@ -9,10 +9,10 @@ from core.inference import load_linear_model, calculate_threshold, load_hierarch
 CONFIG = {
     "model_dir": config.paths.dev,
     "val_data_dir": config.paths.split_features,
-    "target_recall": config.training.target_recall,
+    "target_recall": config.experiment.target_recall,
     "feature_dim": config.model.feature_dim,
     "hyperparams_file": os.path.join(config.paths.dev, "hyperparameters.json"),
-    "enable_soft_attention": config.training.enable_soft_attention
+    "enable_soft_attention": config.experiment.enable_soft_attention
 }
 
 device = "cuda" if torch.cuda.is_available() else "cpu"

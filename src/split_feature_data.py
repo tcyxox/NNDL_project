@@ -27,7 +27,7 @@ def save_split(name, features, super_labels, sub_labels):
 
 
 if __name__ == "__main__":
-    set_seed(config.training.seed)
+    set_seed(config.experiment.seed)
     
     # 1. 加载全量训练数据
     print("正在加载全量特征...")

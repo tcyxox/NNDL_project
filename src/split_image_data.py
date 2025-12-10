@@ -26,7 +26,7 @@ CONFIG = {
     "test_ratio": (1-config.split.train_ratio)*(1-config.split.val_test_ratio),   # 从已知类样本中划出 10% 做测试
 
     # 随机种子
-    "seed": config.training.seed
+    "seed": config.experiment.seed
 }
 
 os.makedirs(config.paths.split_images, exist_ok=True)

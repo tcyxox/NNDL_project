@@ -14,9 +14,9 @@ CONFIG = {
     "output_csv": os.path.join(config.paths.outputs, "submission_osr.csv"),
     "novel_super_idx": config.osr.novel_super_index,
     "novel_sub_idx": config.osr.novel_sub_index,
-    "enable_hierarchical_masking": config.osr.enable_hierarchical_masking,
+    "enable_hierarchical_masking": config.experiment.enable_hierarchical_masking,
     "feature_dim": config.model.feature_dim,
-    "enable_soft_attention": config.training.enable_soft_attention
+    "enable_soft_attention": config.experiment.enable_soft_attention
 }
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
