@@ -2,7 +2,8 @@ import os
 
 # ================= 路径配置 =================
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
+SRC_DIR = os.path.dirname(SCRIPT_DIR)
+PROJECT_ROOT = os.path.dirname(SRC_DIR)
 
 # 数据路径
 DATA_RAW_DIR = os.path.join(PROJECT_ROOT, "data/raw")

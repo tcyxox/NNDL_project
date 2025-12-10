@@ -2,8 +2,8 @@ import torch
 import os
 import json
 
-from config import *
-from utils import load_mapping_and_model, calculate_threshold
+from core import *
+from core.inference import load_mapping_and_model, calculate_threshold
 
 CONFIG = {
     "model_dir": DEV_DIR,

@@ -1,8 +1,8 @@
 import torch
 import os
 
-from config import *
-from utils import set_seed, create_label_mapping, train_classifier, create_super_to_sub_mapping
+from core import *
+from core.train import set_seed, create_label_mapping, train_classifier, create_super_to_sub_mapping
 
 CONFIG = {
     "feature_dir": FEATURES_DIR,

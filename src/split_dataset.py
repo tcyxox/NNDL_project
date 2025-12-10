@@ -2,8 +2,8 @@ import torch
 import os
 import numpy as np
 
-from config import *
-from utils import set_seed
+from core import *
+from core.train import set_seed
 
 CONFIG = {
     "feature_dir": FEATURES_DIR,

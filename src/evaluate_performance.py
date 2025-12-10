@@ -4,8 +4,8 @@ import json
 import numpy as np
 from sklearn.metrics import accuracy_score
 
-from config import *
-from utils import load_mapping_and_model, predict_with_osr
+from core import *
+from core.inference import load_mapping_and_model, predict_with_osr
 
 CONFIG = {
     "hyperparams_file": os.path.join(DEV_DIR, "hyperparameters.json"),
