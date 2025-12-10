@@ -198,6 +198,13 @@ def predict_with_linear_model(features, super_model, sub_model,
             # === 子类预测（带 Hierarchical Masking）===
             sub_logits = sub_model(feature)
             
+            # OOD 分数需要在 masking 之前计算（与阈值计算保持一致）
+            if use_energy:
+                sub_score = compute_energy(sub_logits).item()
+            else:
+                sub_probs_unmasked = F.softmax(sub_logits, dim=1)
+                sub_score = sub_probs_unmasked.max(dim=1)[0].item()
+            
             # 如果超类不是 novel 且启用了 masking，则 mask 掉不属于该超类的子类
             if use_masking and final_super != novel_super_idx and final_super in super_to_sub:
                 valid_subs = super_to_sub[final_super]
@@ -209,14 +216,13 @@ def predict_with_linear_model(features, super_model, sub_model,
                 sub_logits = sub_logits + mask
             
             sub_probs = F.softmax(sub_logits, dim=1)
-            max_sub_prob, sub_idx = torch.max(sub_probs, dim=1)
+            _, sub_idx = torch.max(sub_probs, dim=1)
             
-            # 判断是否为 novel
+            # 判断是否为 novel（使用 masking 前计算的分数）
             if use_energy:
-                energy = compute_energy(sub_logits).item()
-                is_novel_sub = energy > thresh_sub
+                is_novel_sub = sub_score > thresh_sub
             else:
-                is_novel_sub = max_sub_prob.item() < thresh_sub
+                is_novel_sub = sub_score < thresh_sub
 
             if is_novel_sub:
                 final_sub = novel_sub_idx
@@ -319,6 +325,13 @@ def predict_with_hierarchical_model(features, model, super_map, sub_map,
                 final_super = super_map[super_idx.item()]
             
             # === 子类预测（可选 Hard Masking）===
+            # OOD 分数需要在 masking 之前计算（与阈值计算保持一致）
+            if use_energy:
+                sub_score = compute_energy(sub_logits).item()
+            else:
+                sub_probs_unmasked = F.softmax(sub_logits, dim=1)
+                sub_score = sub_probs_unmasked.max(dim=1)[0].item()
+            
             if use_masking and final_super != novel_super_idx and final_super in super_to_sub:
                 valid_subs = super_to_sub[final_super]
                 mask = torch.full((1, num_sub_classes), float('-inf'), device=device)
@@ -329,14 +342,13 @@ def predict_with_hierarchical_model(features, model, super_map, sub_map,
                 sub_logits = sub_logits + mask
             
             sub_probs = F.softmax(sub_logits, dim=1)
-            max_sub_prob, sub_idx = torch.max(sub_probs, dim=1)
+            _, sub_idx = torch.max(sub_probs, dim=1)
             
-            # 判断是否为 novel
+            # 判断是否为 novel（使用 masking 前计算的分数）
             if use_energy:
-                energy = compute_energy(sub_logits).item()
-                is_novel_sub = energy > thresh_sub
+                is_novel_sub = sub_score > thresh_sub
             else:
-                is_novel_sub = max_sub_prob.item() < thresh_sub
+                is_novel_sub = sub_score < thresh_sub
             
             if is_novel_sub:
                 final_sub = novel_sub_idx
