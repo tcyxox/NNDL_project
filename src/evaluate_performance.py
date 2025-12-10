@@ -12,7 +12,8 @@ CONFIG = {
     "model_dir": DEV_DIR,
     "test_data_dir": SPLIT_DIR,
     "novel_super_idx": NOVEL_SUPER_INDEX,
-    "novel_sub_idx": NOVEL_SUB_INDEX
+    "novel_sub_idx": NOVEL_SUB_INDEX,
+    "enable_hierarchical_masking": ENABLE_HIERARCHICAL_MASKING
 }
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -46,9 +47,13 @@ if __name__ == "__main__":
     sub_model, sub_map = load_mapping_and_model("sub", CONFIG["model_dir"], device)
     
     # 加载超类到子类的映射表（用于 hierarchical masking）
-    with open(os.path.join(CONFIG["model_dir"], "super_to_sub_map.json"), 'r') as f:
-        super_to_sub = {int(k): v for k, v in json.load(f).items()}
-    print(f"  > Hierarchical masking 已启用")
+    super_to_sub = None
+    if CONFIG["enable_hierarchical_masking"]:
+        with open(os.path.join(CONFIG["model_dir"], "super_to_sub_map.json"), 'r') as f:
+            super_to_sub = {int(k): v for k, v in json.load(f).items()}
+        print(f"  > Hierarchical masking 已启用")
+    else:
+        print(f"  > Hierarchical masking 已禁用")
 
     # --- Step 2: 加载阈值 ---
     print("\n--- Step 2: 加载阈值 ---")

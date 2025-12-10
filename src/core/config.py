@@ -23,6 +23,7 @@ FEATURE_DIM = 512
 # ================= OSR 配置 =================
 NOVEL_SUPER_INDEX = 3   # 未知超类的 ID
 NOVEL_SUB_INDEX = 87    # 未知子类的 ID
+ENABLE_HIERARCHICAL_MASKING = True  # 是否启用层次化掩码
 
 # ================= 训练配置 =================
 BATCH_SIZE = 64
