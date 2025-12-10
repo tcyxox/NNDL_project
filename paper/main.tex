@@ -13,6 +13,7 @@
 \usepackage{amsmath}
 \usepackage{graphicx}
 \usepackage[colorlinks=true, allcolors=blue]{hyperref}
+\usepackage{amsfonts}
 
 \title{Transfer Learning Project}
 \author{%
@@ -61,11 +62,48 @@ OSR contrasts with traditional closed-set recognition, which assumes all testing
 Since it is a hierarchical OSR problem, we propose different hierarchical models.
 
 \begin{itemize}
-    \item \textbf{Feature Extraction:} We use the same base model (e.g., CLIP) as a feature extractor and train two different heads for superclass classification and subclass classification.
-    \item \textbf{Hierarchical Constraints:} To ensure the superclass classification impacts the subclass classification, we apply a soft constraint (Channel-Wise Attention~\cite{hu2019squeezeandexcitationnetworks}) during training and a hard constraint (Masking) during inference.
+    \item \textbf{Model Structure:} Use a pre-trained feature extractor (e.g., CLIP~\cite{radford2021learningtransferablevisualmodels}) followed by a superclass classification head and a subclass classification head, and train the network jointly using a combined loss from both heads.
+    \item \textbf{Hierarchical Constraints:} To ensure the superclass classification impacts the subclass classification, we apply a soft constraint (SE-style Feature Gating~\cite{hu2019squeezeandexcitationnetworks}) during training and a hard constraint (Masking) during inference.
 \end{itemize}
 
-\paragraph{Model Structure:} Use a pre-trained feature extractor followed by a superclass classification head and a subclass classification head. Train the network jointly using a combined loss from both heads.
+\paragraph{Training with SE-style Feature Gating:}
+During Training, we apply SE-style Feature Gating to recalibrate features based on their importance for superclass classification.
+
+Given input features $\mathbf{x} \in \mathbb{R}^{d}$ from CLIP, we define:
+
+\textit{Superclass Head:}
+\begin{equation}
+    \mathbf{z}^{\text{super}} = W^{\text{super}} \mathbf{x} + \mathbf{b}^{\text{super}}
+\end{equation}
+
+\textit{SE Feature Gating (Squeeze-Excitation):}
+\begin{align}
+    \mathbf{s} &= \sigma(W_2 \cdot \text{ReLU}(W_1 \mathbf{x})) \quad &\text{(Squeeze \& Excitation)} \\
+    \tilde{\mathbf{x}} &= \mathbf{s} \odot \mathbf{x} \quad &\text{(Feature Recalibration)}
+\end{align}
+where $W_1 \in \mathbb{R}^{(d/r) \times d}$, $W_2 \in \mathbb{R}^{d \times (d/r)}$, $r=4$ is the reduction ratio, and $\odot$ denotes element-wise multiplication.
+
+\textit{Subclass Head (with attended features):}
+\begin{equation}
+    \mathbf{z}^{\text{sub}} = W^{\text{sub}} \tilde{\mathbf{x}} + \mathbf{b}^{\text{sub}}
+\end{equation}
+
+\textit{Joint Cross-Entropy Loss:}
+\begin{equation}
+    \mathcal{L} = \mathcal{L}_{\text{CE}}(\mathbf{z}^{\text{super}}, y^{\text{super}}) + \mathcal{L}_{\text{CE}}(\mathbf{z}^{\text{sub}}, y^{\text{sub}})
+\end{equation}
+
+\paragraph{Inference with Hierarchical Masking:}
+During inference, we apply hierarchical masking to enforce consistency between superclass and subclass predictions.
+
+Let $\hat{c}^{\text{super}}$ be the predicted superclass and $\mathcal{S}_c$ be the set of valid subclass indices for superclass $c$. The masked subclass logits are:
+\begin{equation}
+    \tilde{z}^{\text{sub}}_i = 
+    \begin{cases}
+        z^{\text{sub}}_i & \text{if } i \in \mathcal{S}_{\hat{c}^{\text{super}}} \\
+        -\infty & \text{otherwise}
+    \end{cases}
+\end{equation}
 
 \subsection{Models}
 
