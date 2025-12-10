@@ -12,7 +12,7 @@ CONFIG = {
     "learning_rate": config.experiment.learning_rate,
     "batch_size": config.experiment.batch_size,
     "epochs": config.experiment.epochs,
-    "enable_soft_attention": config.experiment.enable_soft_attention
+    "enable_feature_gating": config.experiment.enable_feature_gating
 }
 
 os.makedirs(CONFIG["output_dir"], exist_ok=True)
@@ -33,7 +33,7 @@ if __name__ == "__main__":
     num_sub, sub_map = create_label_mapping(train_sub_labels, "sub", CONFIG["output_dir"])
 
     # =============================== 训练模型 ===============================
-    if CONFIG["enable_soft_attention"]:
+    if CONFIG["enable_feature_gating"]:
         # 使用 HierarchicalClassifier 联合训练
         print("\n=== 使用 Soft Attention (联合训练模式) ===")
         model = HierarchicalClassifier(

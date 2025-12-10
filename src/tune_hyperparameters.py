@@ -12,7 +12,7 @@ CONFIG = {
     "target_recall": config.experiment.target_recall,
     "feature_dim": config.model.feature_dim,
     "hyperparams_file": os.path.join(config.paths.dev, "hyperparameters.json"),
-    "enable_soft_attention": config.experiment.enable_soft_attention
+    "enable_feature_gating": config.experiment.enable_feature_gating
 }
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -60,7 +60,7 @@ if __name__ == "__main__":
     # --- Step 3: 计算阈值 ---
     print("\n--- Step 3: 计算阈值 ---")
     
-    if CONFIG["enable_soft_attention"]:
+    if CONFIG["enable_feature_gating"]:
         print("  > 使用 Soft Attention 模式")
         model, _, _ = load_hierarchical_model(
             CONFIG["model_dir"], CONFIG["feature_dim"], num_super, num_sub, device

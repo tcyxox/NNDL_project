@@ -22,7 +22,7 @@ CONFIG = {
     "epochs": config.experiment.epochs,
     "novel_super_idx": config.osr.novel_super_index,
     "novel_sub_idx": config.osr.novel_sub_index,
-    "enable_soft_attention": config.experiment.enable_soft_attention,
+    "enable_feature_gating": config.experiment.enable_feature_gating,
     "enable_hierarchical_masking": config.experiment.enable_hierarchical_masking,
     "target_recall": config.experiment.target_recall,
 }
@@ -80,7 +80,7 @@ def run_single_trial(seed):
     super_map_inv = {v: int(k) for k, v in super_map.items()}
     sub_map_inv = {v: int(k) for k, v in sub_map.items()}
     
-    if CONFIG["enable_soft_attention"]:
+    if CONFIG["enable_feature_gating"]:
         # 联合训练
         model = HierarchicalClassifier(CONFIG["feature_dim"], num_super, num_sub)
         model = train_hierarchical(
@@ -149,7 +149,7 @@ def run_single_trial(seed):
 
 
 if __name__ == "__main__":
-    mode = "Soft Attention" if CONFIG["enable_soft_attention"] else "独立训练"
+    mode = "Soft Attention" if CONFIG["enable_feature_gating"] else "独立训练"
     masking = "启用" if CONFIG["enable_hierarchical_masking"] else "禁用"
     print("=" * 60)
     print(f"多种子评估 | 模式: {mode} | Masking: {masking} | 试验: {len(SEEDS)}次")

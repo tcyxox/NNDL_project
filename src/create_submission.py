@@ -16,7 +16,7 @@ CONFIG = {
     "novel_sub_idx": config.osr.novel_sub_index,
     "enable_hierarchical_masking": config.experiment.enable_hierarchical_masking,
     "feature_dim": config.model.feature_dim,
-    "enable_soft_attention": config.experiment.enable_soft_attention
+    "enable_feature_gating": config.experiment.enable_feature_gating
 }
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -57,7 +57,7 @@ if __name__ == "__main__":
     test_features = torch.load(CONFIG["test_feature_path"]).to(device)
     test_image_names = torch.load(CONFIG["test_image_names"])
 
-    if CONFIG["enable_soft_attention"]:
+    if CONFIG["enable_feature_gating"]:
         print("  > 使用 Soft Attention 模式")
         model, super_map, sub_map = load_hierarchical_model(
             CONFIG["model_dir"], CONFIG["feature_dim"], num_super, num_sub, True, device
