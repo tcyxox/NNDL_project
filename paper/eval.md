@@ -2,8 +2,6 @@
 
 ## v1.0
 
-### Config
-
 ```py
 class ExperimentConfig:
     # 训练参数
@@ -13,11 +11,10 @@ class ExperimentConfig:
     target_recall: float = 0.95
     seed: int = 42
     # 实验开关
-    enable_hierarchical_masking: bool = False
-    enable_soft_attention: bool = False
+    enable_hierarchical_masking: bool = False  # 推理时使用 Hierarchical Masking
+    enable_feature_gating: bool = False  # 训练时使用 SE Feature Gating
+    enable_energy: bool = False  # 使用 Energy-based OOD 检测 替代 MSP
 ```
-
-### Results
 
   [Superclass] Overall     : 95.40% ± 0.16%
   [Superclass] Seen        : 95.40% ± 0.16%
@@ -37,8 +34,9 @@ class ExperimentConfig:
     target_recall: float = 0.95
     seed: int = 42
     # 实验开关
-    enable_hierarchical_masking: bool = True
-    enable_soft_attention: bool = False
+    enable_hierarchical_masking: bool = True  # 推理时使用 Hierarchical Masking
+    enable_feature_gating: bool = False  # 训练时使用 SE Feature Gating
+    enable_energy: bool = False  # 使用 Energy-based OOD 检测 替代 MSP
 ```
 
   [Superclass] Overall     : 95.40% ± 0.16%
@@ -67,8 +65,9 @@ class ExperimentConfig:
     target_recall: float = 0.95
     seed: int = 42
     # 实验开关
-    enable_hierarchical_masking: bool = True
-    enable_soft_attention: bool = True
+    enable_hierarchical_masking: bool = True  # 推理时使用 Hierarchical Masking
+    enable_feature_gating: bool = True  # 训练时使用 SE Feature Gating
+    enable_energy: bool = False  # 使用 Energy-based OOD 检测 替代 MSP
 ```
 
   [Superclass] Overall     : 95.34% ± 0.17%
@@ -79,3 +78,19 @@ class ExperimentConfig:
   [Subclass] Unseen        : 46.02% ± 4.35%
 
 变化：未知subclass准确率显著提高。
+
+## v1.3
+
+```py
+class ExperimentConfig:
+    # 训练参数
+    batch_size: int = 64
+    learning_rate: float = 1e-3
+    epochs: int = 50
+    target_recall: float = 0.95
+    seed: int = 42
+    # 实验开关
+    enable_hierarchical_masking: bool = True  # 推理时使用 Hierarchical Masking
+    enable_feature_gating: bool = True  # 训练时使用 SE Feature Gating
+    enable_energy: bool = True  # 使用 Energy-based OOD 检测 替代 MSP
+```

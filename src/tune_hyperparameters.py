@@ -12,7 +12,8 @@ CONFIG = {
     "target_recall": config.experiment.target_recall,
     "feature_dim": config.model.feature_dim,
     "hyperparams_file": os.path.join(config.paths.dev, "hyperparameters.json"),
-    "enable_feature_gating": config.experiment.enable_feature_gating
+    "enable_feature_gating": config.experiment.enable_feature_gating,
+    "enable_energy": config.experiment.enable_energy,
 }
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -43,6 +44,7 @@ if __name__ == "__main__":
 
     # --- Step 3: 计算阈值 ---
     print("\n--- Step 3: 计算阈值 ---")
+    use_energy = CONFIG["enable_energy"]
     
     if CONFIG["enable_feature_gating"]:
         print("  > 使用 Soft Attention 模式")
@@ -51,14 +53,14 @@ if __name__ == "__main__":
         )
         thresh_super, thresh_sub = calculate_threshold_hierarchical(
             model, val_feat, val_super_lbl, val_sub_lbl, 
-            super_map_inv, sub_map_inv, CONFIG["target_recall"], device
+            super_map_inv, sub_map_inv, CONFIG["target_recall"], device, use_energy
         )
     else:
         print("  > 使用独立模型模式")
         super_model, _ = load_linear_model("super", CONFIG["model_dir"], CONFIG["feature_dim"], device)
         sub_model, _ = load_linear_model("sub", CONFIG["model_dir"], CONFIG["feature_dim"], device)
-        thresh_super = calculate_threshold_linear(super_model, val_feat, val_super_lbl, super_map, CONFIG["target_recall"], device)
-        thresh_sub = calculate_threshold_linear(sub_model, val_feat, val_sub_lbl, sub_map, CONFIG["target_recall"], device)
+        thresh_super = calculate_threshold_linear(super_model, val_feat, val_super_lbl, super_map, CONFIG["target_recall"], device, use_energy)
+        thresh_sub = calculate_threshold_linear(sub_model, val_feat, val_sub_lbl, sub_map, CONFIG["target_recall"], device, use_energy)
     
     print(f"  > Superclass 阈值: {thresh_super:.4f}")
     print(f"  > Subclass 阈值:   {thresh_sub:.4f}")

@@ -19,9 +19,10 @@ CONFIG = {
     "epochs": config.experiment.epochs,
     "novel_super_idx": config.osr.novel_super_index,
     "novel_sub_idx": config.osr.novel_sub_index,
+    "target_recall": config.experiment.target_recall,
     "enable_feature_gating": config.experiment.enable_feature_gating,
     "enable_hierarchical_masking": config.experiment.enable_hierarchical_masking,
-    "target_recall": config.experiment.target_recall,
+    "enable_energy": config.experiment.enable_energy,
 }
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -83,30 +84,32 @@ def run_single_trial(seed):
     if not CONFIG["enable_hierarchical_masking"]:
         super_to_sub = None
     
+    use_energy = CONFIG["enable_energy"]
+    
     if CONFIG["enable_feature_gating"]:
         # 计算阈值
         thresh_super, thresh_sub = calculate_threshold_hierarchical(
             model, val_features, val_super_labels, val_sub_labels,
-            super_map_inv, sub_map_inv, CONFIG["target_recall"], device
+            super_map_inv, sub_map_inv, CONFIG["target_recall"], device, use_energy
         )
         
         # 推理
         super_preds, sub_preds = predict_with_hierarchical_model(
             test_features, model, super_map_inv, sub_map_inv,
             thresh_super, thresh_sub, CONFIG["novel_super_idx"], CONFIG["novel_sub_idx"], device,
-            super_to_sub=super_to_sub
+            use_energy, super_to_sub
         )
     else:
         # 计算阈值
-        thresh_super = calculate_threshold_linear(super_model, val_features, val_super_labels, super_map_inv, CONFIG["target_recall"], device)
-        thresh_sub = calculate_threshold_linear(sub_model, val_features, val_sub_labels, sub_map_inv, CONFIG["target_recall"], device)
+        thresh_super = calculate_threshold_linear(super_model, val_features, val_super_labels, super_map_inv, CONFIG["target_recall"], device, use_energy)
+        thresh_sub = calculate_threshold_linear(sub_model, val_features, val_sub_labels, sub_map_inv, CONFIG["target_recall"], device, use_energy)
         
         # 推理
         super_preds, sub_preds = predict_with_linear_model(
             test_features, super_model, sub_model,
             super_map_inv, sub_map_inv,
             thresh_super, thresh_sub, CONFIG["novel_super_idx"], CONFIG["novel_sub_idx"], device,
-            super_to_sub=super_to_sub
+            use_energy, super_to_sub
         )
     
     # 计算指标
