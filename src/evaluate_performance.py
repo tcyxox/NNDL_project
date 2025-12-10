@@ -4,16 +4,17 @@ import json
 import numpy as np
 from sklearn.metrics import accuracy_score
 
-from core import *
+from core import PATHS, OSR, MODEL
 from core.inference import load_mapping_and_model, predict_with_osr
 
 CONFIG = {
-    "hyperparams_file": os.path.join(DEV_DIR, "hyperparameters.json"),
-    "model_dir": DEV_DIR,
-    "test_data_dir": SPLIT_DIR,
-    "novel_super_idx": NOVEL_SUPER_INDEX,
-    "novel_sub_idx": NOVEL_SUB_INDEX,
-    "enable_hierarchical_masking": ENABLE_HIERARCHICAL_MASKING
+    "hyperparams_file": os.path.join(PATHS["dev"], "hyperparameters.json"),
+    "model_dir": PATHS["dev"],
+    "test_data_dir": PATHS["split"],
+    "novel_super_idx": OSR["novel_super_index"],
+    "novel_sub_idx": OSR["novel_sub_index"],
+    "enable_hierarchical_masking": OSR["enable_hierarchical_masking"],
+    "feature_dim": MODEL["feature_dim"]
 }
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -43,8 +44,8 @@ def calculate_metrics(y_true, y_pred, novel_label, name="Task"):
 if __name__ == "__main__":
     # --- Step 1: 加载模型和映射 ---
     print("--- Step 1: 加载模型和映射 ---")
-    super_model, super_map = load_mapping_and_model("super", CONFIG["model_dir"], device)
-    sub_model, sub_map = load_mapping_and_model("sub", CONFIG["model_dir"], device)
+    super_model, super_map = load_mapping_and_model("super", CONFIG["model_dir"], CONFIG["feature_dim"], device)
+    sub_model, sub_map = load_mapping_and_model("sub", CONFIG["model_dir"], CONFIG["feature_dim"], device)
     
     # 加载超类到子类的映射表（用于 hierarchical masking）
     super_to_sub = None

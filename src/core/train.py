@@ -7,11 +7,10 @@ import json
 import random
 import numpy as np
 
-from .config import SEED
 from .models import LinearClassifier
 
 
-def set_seed(seed=SEED):
+def set_seed(seed):
     """设置所有随机种子，确保实验可复现"""
     random.seed(seed)
     np.random.seed(seed)

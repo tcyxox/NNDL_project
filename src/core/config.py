@@ -5,34 +5,41 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 SRC_DIR = os.path.dirname(SCRIPT_DIR)
 PROJECT_ROOT = os.path.dirname(SRC_DIR)
 
-# 数据路径
-DATA_RAW_DIR = os.path.join(PROJECT_ROOT, "data/raw")
-DATA_PROCESSED_DIR = os.path.join(PROJECT_ROOT, "data/processed")
-FEATURES_DIR = os.path.join(DATA_PROCESSED_DIR, "features")
-SPLIT_DIR = os.path.join(DATA_PROCESSED_DIR, "split")
-
-# 输出路径
-OUTPUTS_DIR = os.path.join(PROJECT_ROOT, "outputs")
-DEV_DIR = os.path.join(OUTPUTS_DIR, "dev")
-SUBMIT_DIR = os.path.join(OUTPUTS_DIR, "submit")
+PATHS = {
+    "data_raw": os.path.join(PROJECT_ROOT, "data/raw"),
+    "data_processed": os.path.join(PROJECT_ROOT, "data/processed"),
+    "features": os.path.join(PROJECT_ROOT, "data/processed/features"),
+    "split": os.path.join(PROJECT_ROOT, "data/processed/split"),
+    "outputs": os.path.join(PROJECT_ROOT, "outputs"),
+    "dev": os.path.join(PROJECT_ROOT, "outputs/dev"),
+    "submit": os.path.join(PROJECT_ROOT, "outputs/submit")
+}
 
 # ================= 模型配置 =================
-CLIP_MODEL_ID = "openai/clip-vit-base-patch32"
-FEATURE_DIM = 512
+MODEL = {
+    "clip_model_id": "openai/clip-vit-base-patch32",
+    "feature_dim": 512
+}
 
 # ================= OSR 配置 =================
-NOVEL_SUPER_INDEX = 3   # 未知超类的 ID
-NOVEL_SUB_INDEX = 87    # 未知子类的 ID
-ENABLE_HIERARCHICAL_MASKING = True  # 是否启用层次化掩码
+OSR = {
+    "novel_super_index": 3,
+    "novel_sub_index": 87,
+    "enable_hierarchical_masking": True
+}
 
 # ================= 训练配置 =================
-BATCH_SIZE = 64
-LEARNING_RATE = 1e-3
-EPOCHS = 50
-TARGET_RECALL = 0.95    # 阈值计算时的目标召回率
+TRAINING = {
+    "batch_size": 64,
+    "learning_rate": 1e-3,
+    "epochs": 50,
+    "target_recall": 0.95,
+    "seed": 42
+}
 
 # ================= 数据划分配置 =================
-NOVEL_RATIO = 0.2       # 20% 子类作为未知类
-TRAIN_RATIO = 0.8       # 已知类中 80% 用于训练
-VAL_TEST_RATIO = 0.5    # Val 占 (Val+Test) 的比例
-SEED = 42               # 随机种子
+SPLIT = {
+    "novel_ratio": 0.2,
+    "train_ratio": 0.8,
+    "val_test_ratio": 0.5
+}

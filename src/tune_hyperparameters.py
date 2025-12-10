@@ -2,14 +2,15 @@ import torch
 import os
 import json
 
-from core import *
+from core import PATHS, TRAINING, MODEL
 from core.inference import load_mapping_and_model, calculate_threshold
 
 CONFIG = {
-    "model_dir": DEV_DIR,
-    "val_data_dir": SPLIT_DIR,
-    "target_recall": TARGET_RECALL,
-    "hyperparams_file": os.path.join(DEV_DIR, "hyperparameters.json")
+    "model_dir": PATHS["dev"],
+    "val_data_dir": PATHS["split"],
+    "target_recall": TRAINING["target_recall"],
+    "feature_dim": MODEL["feature_dim"],
+    "hyperparams_file": os.path.join(PATHS["dev"], "hyperparameters.json")
 }
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -18,8 +19,8 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 if __name__ == "__main__":
     # --- Step 1: 加载模型和映射 ---
     print("--- Step 1: 加载模型和映射 ---")
-    super_model, super_map = load_mapping_and_model("super", CONFIG["model_dir"], device)
-    sub_model, sub_map = load_mapping_and_model("sub", CONFIG["model_dir"], device)
+    super_model, super_map = load_mapping_and_model("super", CONFIG["model_dir"], CONFIG["feature_dim"], device)
+    sub_model, sub_map = load_mapping_and_model("sub", CONFIG["model_dir"], CONFIG["feature_dim"], device)
 
     # --- Step 2: 加载验证集特征 ---
     print("\n--- Step 2: 加载验证集特征 ---")

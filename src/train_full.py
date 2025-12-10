@@ -1,22 +1,22 @@
 import torch
 import os
 
-from core import *
+from core import PATHS, MODEL, TRAINING
 from core.train import set_seed, create_label_mapping, train_classifier, create_super_to_sub_mapping
 
 CONFIG = {
-    "feature_dir": FEATURES_DIR,
-    "output_dir": SUBMIT_DIR,
-    "feature_dim": FEATURE_DIM,
-    "learning_rate": LEARNING_RATE,
-    "batch_size": BATCH_SIZE,
-    "epochs": EPOCHS
+    "feature_dir": PATHS["features"],
+    "output_dir": PATHS["submit"],
+    "feature_dim": MODEL["feature_dim"],
+    "learning_rate": TRAINING["learning_rate"],
+    "batch_size": TRAINING["batch_size"],
+    "epochs": TRAINING["epochs"]
 }
 
 os.makedirs(CONFIG["output_dir"], exist_ok=True)
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
-set_seed()
+set_seed(TRAINING["seed"])
 
 
 if __name__ == "__main__":

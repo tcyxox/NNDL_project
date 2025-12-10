@@ -3,17 +3,17 @@ import torch.nn.functional as F
 import os
 import json
 
-from .config import FEATURE_DIM
 from .models import LinearClassifier
 
 
-def load_mapping_and_model(prefix, model_dir, device):
+def load_mapping_and_model(prefix, model_dir, feature_dim, device):
     """
     加载 json 映射表和对应的模型
     
     Args:
         prefix: 'super' or 'sub'
         model_dir: 模型目录
+        feature_dim: 特征维度
         device: 'cuda' or 'cpu'
     
     Returns:
@@ -29,7 +29,7 @@ def load_mapping_and_model(prefix, model_dir, device):
     print(f"[{prefix}] 加载映射表: 检测到 {num_classes} 个已知类")
 
     # 2. 初始化模型
-    model = LinearClassifier(FEATURE_DIM, num_classes)
+    model = LinearClassifier(feature_dim, num_classes)
     model_path = os.path.join(model_dir, f"{prefix}_model.pth")
     model.load_state_dict(torch.load(model_path))
     model.to(device)
