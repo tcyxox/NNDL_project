@@ -8,14 +8,14 @@ import json
 from .models import LinearClassifier, HierarchicalClassifier
 
 
-def create_label_mapping(labels, label_name, output_dir):
+def create_label_mapping(labels, label_name, output_dir=None):
     """
-    为标签创建连续ID映射，并保存映射文件
+    为标签创建连续ID映射
 
     Args:
         labels: 原始标签张量
         label_name: 标签名称 ('super' or 'sub')
-        output_dir: 输出目录
+        output_dir: 输出目录（可选，如果提供则保存映射文件）
 
     Returns:
         num_classes: 类别数量
@@ -32,23 +32,24 @@ def create_label_mapping(labels, label_name, output_dir):
     print(f"[{label_name}] 检测到 {num_classes} 个已知类别。")
     print(f"  > 原始标签示例: {unique_classes[:5]}...")
 
-    # 保存 local_to_global 映射关系，推理时必须用！
-    mapping_path = os.path.join(output_dir, f"{label_name}_local_to_global_map.json")
-    with open(mapping_path, 'w') as f:
-        json.dump(local_to_global, f)
-    print(f"  > 映射表已保存至: {mapping_path}")
+    # 保存 local_to_global 映射关系（可选）
+    if output_dir:
+        mapping_path = os.path.join(output_dir, f"{label_name}_local_to_global_map.json")
+        with open(mapping_path, 'w') as f:
+            json.dump(local_to_global, f)
+        print(f"  > 映射表已保存至: {mapping_path}")
 
     return num_classes, global_to_local
 
 
-def create_super_to_sub_mapping(super_labels, sub_labels, output_dir):
+def create_super_to_sub_mapping(super_labels, sub_labels, output_dir=None):
     """
-    生成并保存超类到子类的映射表
+    生成超类到子类的映射表
 
     Args:
         super_labels: 超类标签
         sub_labels: 子类标签
-        output_dir: 输出目录
+        output_dir: 输出目录（可选，如果提供则保存映射文件）
 
     Returns:
         super_to_sub: 映射字典 {super_id: [sub_ids]}
@@ -62,10 +63,11 @@ def create_super_to_sub_mapping(super_labels, sub_labels, output_dir):
         super_to_sub[super_idx] = sub_indices
         print(f"  > Superclass {super_idx}: {len(sub_indices)} subclasses")
 
-    mapping_path = os.path.join(output_dir, "super_to_sub_map.json")
-    with open(mapping_path, 'w') as f:
-        json.dump(super_to_sub, f)
-    print(f"  > 映射表已保存至: {mapping_path}")
+    if output_dir:
+        mapping_path = os.path.join(output_dir, "super_to_sub_map.json")
+        with open(mapping_path, 'w') as f:
+            json.dump(super_to_sub, f)
+        print(f"  > 映射表已保存至: {mapping_path}")
 
     return super_to_sub
 
@@ -179,24 +181,26 @@ def train_hierarchical_model(features, super_labels, sub_labels, super_map, sub_
     return model
 
 
-def run_training(feature_dir, output_dir, feature_dim, batch_size, learning_rate, 
-                 epochs, enable_feature_gating, device):
+def run_training(feature_dim, batch_size, learning_rate, epochs, enable_feature_gating, device,
+                 feature_dir, output_dir=None):
     """
     训练模型的主函数
     
     Args:
-        feature_dir: 特征目录
-        output_dir: 输出目录
         feature_dim: 特征维度
         batch_size: 批大小
         learning_rate: 学习率
         epochs: 训练轮数
         enable_feature_gating: 是否启用 SE Feature Gating
         device: 'cuda' or 'cpu'
+        feature_dir: 特征目录
+        output_dir: 输出目录（可选，如果提供则保存模型和映射文件）
+        
+    Returns:
+        如果 enable_feature_gating=True: (model, super_map, sub_map, super_to_sub)
+        如果 enable_feature_gating=False: (super_model, sub_model, super_map, sub_map, super_to_sub)
     """
     from .models import HierarchicalClassifier
-    
-    os.makedirs(output_dir, exist_ok=True)
     
     # 加载训练数据
     print("正在加载训练数据...")
@@ -204,6 +208,9 @@ def run_training(feature_dir, output_dir, feature_dim, batch_size, learning_rate
     train_super_labels = torch.load(os.path.join(feature_dir, "train_super_labels.pt"))
     train_sub_labels = torch.load(os.path.join(feature_dir, "train_sub_labels.pt"))
     print(f"  > 训练样本数: {len(train_features)}")
+    
+    if output_dir:
+        os.makedirs(output_dir, exist_ok=True)
     
     # 创建标签映射
     num_super, super_map = create_label_mapping(train_super_labels, "super", output_dir)
@@ -216,8 +223,9 @@ def run_training(feature_dir, output_dir, feature_dim, batch_size, learning_rate
             train_features, train_super_labels, train_sub_labels, super_map, sub_map, num_super, num_sub,
             feature_dim, batch_size, learning_rate, epochs, device
         )
-        torch.save(model.state_dict(), os.path.join(output_dir, "hierarchical_model.pth"))
-        print("层次模型已保存。")
+        if output_dir:
+            torch.save(model.state_dict(), os.path.join(output_dir, "hierarchical_model.pth"))
+            print("层次模型已保存。")
     else:
         print("\n=== 独立训练模式 ===")
         print(f"开始训练 Superclass Model (Classes: {num_super})...")
@@ -225,19 +233,30 @@ def run_training(feature_dir, output_dir, feature_dim, batch_size, learning_rate
             train_features, train_super_labels, super_map, num_super,
             feature_dim, batch_size, learning_rate, epochs, device
         )
-        torch.save(super_model.state_dict(), os.path.join(output_dir, "super_model.pth"))
-        print("超类模型已保存。")
+        if output_dir:
+            torch.save(super_model.state_dict(), os.path.join(output_dir, "super_model.pth"))
+            print("超类模型已保存。")
         
         print(f"开始训练 Subclass Model (Classes: {num_sub})...")
         sub_model = train_linear_model(
             train_features, train_sub_labels, sub_map, num_sub,
             feature_dim, batch_size, learning_rate, epochs, device
         )
-        torch.save(sub_model.state_dict(), os.path.join(output_dir, "sub_model.pth"))
-        print("子类模型已保存。")
+        if output_dir:
+            torch.save(sub_model.state_dict(), os.path.join(output_dir, "sub_model.pth"))
+            print("子类模型已保存。")
     
-    # 生成超类到子类的映射表
-    create_super_to_sub_mapping(train_super_labels, train_sub_labels, output_dir)
+    # 生成 super_to_sub 映射
+    super_to_sub = create_super_to_sub_mapping(train_super_labels, train_sub_labels, output_dir)
     
-    print("\n--- 所有模型训练完毕 ---")
-    print(f"请检查 {output_dir} 目录下的模型文件 (.pth) 和 映射文件 (.json)。")
+    if output_dir:
+        print("\n--- 所有模型训练完毕 ---")
+        print(f"请检查 {output_dir} 目录下的模型文件 (.pth) 和 映射文件 (.json)。")
+    
+    # 返回结果
+    if enable_feature_gating:
+        return model, super_map, sub_map, super_to_sub
+    else:
+        return super_model, sub_model, super_map, sub_map, super_to_sub
+
+

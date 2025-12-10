@@ -8,7 +8,7 @@ import numpy as np
 from sklearn.metrics import accuracy_score
 
 from core.config import config
-from core.train import create_label_mapping, train_linear_model, train_hierarchical_model, create_super_to_sub_mapping
+from core.train import run_training, create_super_to_sub_mapping
 from core.utils import set_seed
 from core.models import HierarchicalClassifier
 from core.inference import load_linear_model, predict_with_linear_model, load_hierarchical_model, predict_with_hierarchical_model, calculate_threshold
@@ -54,11 +54,7 @@ def run_single_trial(seed):
     """运行单次实验，返回各项指标"""
     set_seed(seed)
     
-    # 加载数据
-    train_features = torch.load(os.path.join(CONFIG["feature_dir"], "train_features.pt"))
-    train_super_labels = torch.load(os.path.join(CONFIG["feature_dir"], "train_super_labels.pt"))
-    train_sub_labels = torch.load(os.path.join(CONFIG["feature_dir"], "train_sub_labels.pt"))
-    
+    # 加载验证和测试数据
     val_features = torch.load(os.path.join(CONFIG["feature_dir"], "val_features.pt")).to(device)
     val_super_labels = torch.load(os.path.join(CONFIG["feature_dir"], "val_super_labels.pt"))
     val_sub_labels = torch.load(os.path.join(CONFIG["feature_dir"], "val_sub_labels.pt"))
@@ -67,27 +63,31 @@ def run_single_trial(seed):
     test_super_labels = torch.load(os.path.join(CONFIG["feature_dir"], "test_super_labels.pt"))
     test_sub_labels = torch.load(os.path.join(CONFIG["feature_dir"], "test_sub_labels.pt"))
     
-    # 创建映射
-    num_super, super_map = create_label_mapping(train_super_labels, "super", CONFIG["output_dir"])
-    num_sub, sub_map = create_label_mapping(train_sub_labels, "sub", CONFIG["output_dir"])
-    create_super_to_sub_mapping(train_super_labels, train_sub_labels, CONFIG["output_dir"])
+    # 使用 run_training 训练（不保存文件）
+    result = run_training(
+        feature_dim=CONFIG["feature_dim"],
+        batch_size=CONFIG["batch_size"],
+        learning_rate=CONFIG["learning_rate"],
+        epochs=CONFIG["epochs"],
+        enable_feature_gating=CONFIG["enable_feature_gating"],
+        device=device,
+        feature_dir=CONFIG["feature_dir"]
+    )
     
-    # 加载 super_to_sub (用于 hierarchical masking)
-    super_to_sub = None
-    if CONFIG["enable_hierarchical_masking"]:
-        with open(os.path.join(CONFIG["output_dir"], "super_to_sub_map.json"), 'r') as f:
-            super_to_sub = {int(k): v for k, v in json.load(f).items()}
+    if CONFIG["enable_feature_gating"]:
+        model, super_map, sub_map, super_to_sub = result
+    else:
+        super_model, sub_model, super_map, sub_map, super_to_sub = result
     
+    # 创建反向映射
     super_map_inv = {v: int(k) for k, v in super_map.items()}
     sub_map_inv = {v: int(k) for k, v in sub_map.items()}
     
+    # hierarchical masking
+    if not CONFIG["enable_hierarchical_masking"]:
+        super_to_sub = None
+    
     if CONFIG["enable_feature_gating"]:
-        # 联合训练
-        model = train_hierarchical_model(
-            train_features, train_super_labels, train_sub_labels, super_map, sub_map, num_super, num_sub,
-            CONFIG["feature_dim"], CONFIG["batch_size"], CONFIG["learning_rate"], CONFIG["epochs"], device
-        )
-        
         # 计算阈值
         model.eval()
         with torch.no_grad():
@@ -108,16 +108,6 @@ def run_single_trial(seed):
             super_to_sub=super_to_sub
         )
     else:
-        # 独立训练
-        super_model = train_linear_model(
-            train_features, train_super_labels, super_map, num_super,
-            CONFIG["feature_dim"], CONFIG["batch_size"], CONFIG["learning_rate"], CONFIG["epochs"], device
-        )
-        sub_model = train_linear_model(
-            train_features, train_sub_labels, sub_map, num_sub,
-            CONFIG["feature_dim"], CONFIG["batch_size"], CONFIG["learning_rate"], CONFIG["epochs"], device
-        )
-        
         # 计算阈值
         thresh_super = calculate_threshold(super_model, val_features, val_super_labels, super_map_inv, CONFIG["target_recall"], device)
         thresh_sub = calculate_threshold(sub_model, val_features, val_sub_labels, sub_map_inv, CONFIG["target_recall"], device)
