@@ -3,7 +3,7 @@ import os
 import numpy as np
 
 from core.config import config
-from core.train import set_seed
+from core.utils import set_seed
 
 CONFIG = {
     "feature_dir": config.paths.features,

@@ -8,7 +8,8 @@ import numpy as np
 from sklearn.metrics import accuracy_score
 
 from core.config import config
-from core.train import set_seed, create_label_mapping, train_classifier, train_hierarchical, create_super_to_sub_mapping
+from core.train import create_label_mapping, train_linear_model, train_hierarchical_model, create_super_to_sub_mapping
+from core.utils import set_seed
 from core.models import HierarchicalClassifier
 from core.inference import load_linear_model, predict_with_linear_model, load_hierarchical_model, predict_with_hierarchical_model, calculate_threshold
 import torch.nn.functional as F
@@ -82,10 +83,9 @@ def run_single_trial(seed):
     
     if CONFIG["enable_feature_gating"]:
         # 联合训练
-        model = HierarchicalClassifier(CONFIG["feature_dim"], num_super, num_sub)
-        model = train_hierarchical(
-            model, train_features, train_super_labels, train_sub_labels,
-            super_map, sub_map, CONFIG["batch_size"], CONFIG["learning_rate"], CONFIG["epochs"], device
+        model = train_hierarchical_model(
+            train_features, train_super_labels, train_sub_labels, super_map, sub_map, num_super, num_sub,
+            CONFIG["feature_dim"], CONFIG["batch_size"], CONFIG["learning_rate"], CONFIG["epochs"], device
         )
         
         # 计算阈值
@@ -109,12 +109,12 @@ def run_single_trial(seed):
         )
     else:
         # 独立训练
-        super_model = train_classifier(
-            train_features, train_super_labels, super_map, num_super, "Super",
+        super_model = train_linear_model(
+            train_features, train_super_labels, super_map, num_super,
             CONFIG["feature_dim"], CONFIG["batch_size"], CONFIG["learning_rate"], CONFIG["epochs"], device
         )
-        sub_model = train_classifier(
-            train_features, train_sub_labels, sub_map, num_sub, "Sub",
+        sub_model = train_linear_model(
+            train_features, train_sub_labels, sub_map, num_sub,
             CONFIG["feature_dim"], CONFIG["batch_size"], CONFIG["learning_rate"], CONFIG["epochs"], device
         )
         

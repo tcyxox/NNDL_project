@@ -4,22 +4,8 @@ import torch.optim as optim
 from torch.utils.data import TensorDataset, DataLoader
 import os
 import json
-import random
-import numpy as np
 
-from .models import LinearClassifier
-
-
-def set_seed(seed):
-    """设置所有随机种子，确保实验可复现"""
-    random.seed(seed)
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed(seed)
-        torch.cuda.manual_seed_all(seed)
-        torch.backends.cudnn.deterministic = True
-        torch.backends.cudnn.benchmark = False
+from .models import LinearClassifier, HierarchicalClassifier
 
 
 def create_label_mapping(labels, label_name, output_dir):
@@ -55,17 +41,43 @@ def create_label_mapping(labels, label_name, output_dir):
     return num_classes, global_to_local
 
 
-def train_classifier(features, labels, label_map, num_classes, model_name, 
-                     feature_dim, batch_size, learning_rate, epochs, device):
+def create_super_to_sub_mapping(super_labels, sub_labels, output_dir):
     """
-    训练分类器模型
+    生成并保存超类到子类的映射表
 
+    Args:
+        super_labels: 超类标签
+        sub_labels: 子类标签
+        output_dir: 输出目录
+
+    Returns:
+        super_to_sub: 映射字典 {super_id: [sub_ids]}
+    """
+    print("\n生成超类到子类映射表...")
+    super_to_sub = {}
+    unique_super = torch.unique(super_labels).tolist()
+    for super_idx in unique_super:
+        mask = (super_labels == super_idx)
+        sub_indices = torch.unique(sub_labels[mask]).tolist()
+        super_to_sub[super_idx] = sub_indices
+        print(f"  > Superclass {super_idx}: {len(sub_indices)} subclasses")
+
+    mapping_path = os.path.join(output_dir, "super_to_sub_map.json")
+    with open(mapping_path, 'w') as f:
+        json.dump(super_to_sub, f)
+    print(f"  > 映射表已保存至: {mapping_path}")
+
+    return super_to_sub
+
+
+def train_linear_model(features, labels, label_map, num_classes,
+                       feature_dim, batch_size, learning_rate, epochs, device):
+    """
     Args:
         features: 训练特征
         labels: 训练标签
         label_map: global_to_local 映射
         num_classes: 类别数量
-        model_name: 模型名称（用于日志）
         feature_dim: 特征维度
         batch_size: 批大小
         learning_rate: 学习率
@@ -90,8 +102,6 @@ def train_classifier(features, labels, label_map, num_classes, model_name,
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
 
-    print(f"\n开始训练 {model_name} (Classes: {num_classes})...")
-
     for epoch in range(epochs):
         running_loss = 0.0
         for inputs, targets in loader:
@@ -111,47 +121,18 @@ def train_classifier(features, labels, label_map, num_classes, model_name,
     return model
 
 
-def create_super_to_sub_mapping(super_labels, sub_labels, output_dir):
+def train_hierarchical_model(features, super_labels, sub_labels, super_map, sub_map, num_super, num_sub,
+                             feature_dim, batch_size, learning_rate, epochs, device):
     """
-    生成并保存超类到子类的映射表
-    
     Args:
-        super_labels: 超类标签
-        sub_labels: 子类标签
-        output_dir: 输出目录
-    
-    Returns:
-        super_to_sub: 映射字典 {super_id: [sub_ids]}
-    """
-    print("\n生成超类到子类映射表...")
-    super_to_sub = {}
-    unique_super = torch.unique(super_labels).tolist()
-    for super_idx in unique_super:
-        mask = (super_labels == super_idx)
-        sub_indices = torch.unique(sub_labels[mask]).tolist()
-        super_to_sub[super_idx] = sub_indices
-        print(f"  > Superclass {super_idx}: {len(sub_indices)} subclasses")
-
-    mapping_path = os.path.join(output_dir, "super_to_sub_map.json")
-    with open(mapping_path, 'w') as f:
-        json.dump(super_to_sub, f)
-    print(f"  > 映射表已保存至: {mapping_path}")
-    
-    return super_to_sub
-
-
-def train_hierarchical(model, features, super_labels, sub_labels,
-                       super_map, sub_map, batch_size, learning_rate, epochs, device):
-    """
-    联合训练层次分类器 (HierarchicalClassifier)
-
-    Args:
-        model: HierarchicalClassifier 实例
         features: 训练特征
         super_labels: 超类标签
         sub_labels: 子类标签
+        num_super: 超类数量
+        num_sub: 子类数量
         super_map: 超类 global_to_local 映射
         sub_map: 子类 global_to_local 映射
+        feature_dim: 特征维度
         batch_size: 批大小
         learning_rate: 学习率
         epochs: 训练轮数
@@ -160,6 +141,7 @@ def train_hierarchical(model, features, super_labels, sub_labels,
     Returns:
         model: 训练好的模型
     """
+    model = HierarchicalClassifier(feature_dim, num_super, num_sub)
     model.to(device)
     model.train()
 
@@ -173,8 +155,6 @@ def train_hierarchical(model, features, super_labels, sub_labels,
 
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
-
-    print(f"\n开始联合训练 HierarchicalClassifier...")
 
     for epoch in range(epochs):
         running_loss = 0.0
@@ -197,3 +177,67 @@ def train_hierarchical(model, features, super_labels, sub_labels,
             print(f"  Epoch [{epoch + 1}/{epochs}], Loss: {running_loss / len(loader):.4f}")
 
     return model
+
+
+def run_training(feature_dir, output_dir, feature_dim, batch_size, learning_rate, 
+                 epochs, enable_feature_gating, device):
+    """
+    训练模型的主函数
+    
+    Args:
+        feature_dir: 特征目录
+        output_dir: 输出目录
+        feature_dim: 特征维度
+        batch_size: 批大小
+        learning_rate: 学习率
+        epochs: 训练轮数
+        enable_feature_gating: 是否启用 SE Feature Gating
+        device: 'cuda' or 'cpu'
+    """
+    from .models import HierarchicalClassifier
+    
+    os.makedirs(output_dir, exist_ok=True)
+    
+    # 加载训练数据
+    print("正在加载训练数据...")
+    train_features = torch.load(os.path.join(feature_dir, "train_features.pt"))
+    train_super_labels = torch.load(os.path.join(feature_dir, "train_super_labels.pt"))
+    train_sub_labels = torch.load(os.path.join(feature_dir, "train_sub_labels.pt"))
+    print(f"  > 训练样本数: {len(train_features)}")
+    
+    # 创建标签映射
+    num_super, super_map = create_label_mapping(train_super_labels, "super", output_dir)
+    num_sub, sub_map = create_label_mapping(train_sub_labels, "sub", output_dir)
+    
+    # 训练模型
+    if enable_feature_gating:
+        print("\n=== 使用 Feature Gating (联合训练模式) ===")
+        model = train_hierarchical_model(
+            train_features, train_super_labels, train_sub_labels, super_map, sub_map, num_super, num_sub,
+            feature_dim, batch_size, learning_rate, epochs, device
+        )
+        torch.save(model.state_dict(), os.path.join(output_dir, "hierarchical_model.pth"))
+        print("层次模型已保存。")
+    else:
+        print("\n=== 独立训练模式 ===")
+        print(f"开始训练 Superclass Model (Classes: {num_super})...")
+        super_model = train_linear_model(
+            train_features, train_super_labels, super_map, num_super,
+            feature_dim, batch_size, learning_rate, epochs, device
+        )
+        torch.save(super_model.state_dict(), os.path.join(output_dir, "super_model.pth"))
+        print("超类模型已保存。")
+        
+        print(f"开始训练 Subclass Model (Classes: {num_sub})...")
+        sub_model = train_linear_model(
+            train_features, train_sub_labels, sub_map, num_sub,
+            feature_dim, batch_size, learning_rate, epochs, device
+        )
+        torch.save(sub_model.state_dict(), os.path.join(output_dir, "sub_model.pth"))
+        print("子类模型已保存。")
+    
+    # 生成超类到子类的映射表
+    create_super_to_sub_mapping(train_super_labels, train_sub_labels, output_dir)
+    
+    print("\n--- 所有模型训练完毕 ---")
+    print(f"请检查 {output_dir} 目录下的模型文件 (.pth) 和 映射文件 (.json)。")
