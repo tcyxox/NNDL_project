@@ -130,8 +130,8 @@ def run_single_trial(seed):
         super_auroc = roc_auc_score(super_binary_labels, super_scores)
         sub_auroc = roc_auc_score(sub_binary_labels, sub_scores)
     except ValueError as e:
-        # 如果只有一个类别，无法计算 AUROC
-        print(f"警告: 无法计算 AUROC - {e}")
+        # If only one class is present, cannot calculate AUROC
+        print(f"Warning: Cannot calculate AUROC - {e}")
         super_auroc = 0.0
         sub_auroc = 0.0
     
@@ -143,10 +143,10 @@ def run_single_trial(seed):
 
 
 if __name__ == "__main__":
-    mode = "Soft Attention" if CONFIG["enable_feature_gating"] else "独立训练"
-    masking = "启用" if CONFIG["enable_hierarchical_masking"] else "禁用"
+    mode = "SE Feature Gating" if CONFIG["enable_feature_gating"] else "Independent Training"
+    masking = "Enabled" if CONFIG["enable_hierarchical_masking"] else "Disabled"
     print("=" * 60)
-    print(f"多种子评估 | 模式: {mode} | Masking: {masking} | 试验: {len(SEEDS)}次")
+    print(f"Multi-seed Evaluation | Mode: {mode} | Masking: {masking} | Trials: {len(SEEDS)}")
     print("=" * 60)
     
     all_results = []
@@ -157,9 +157,9 @@ if __name__ == "__main__":
         all_results.append(result)
         print(f"    Subclass Unseen: {result['sub_unseen']*100:.2f}%")
     
-    # 汇总统计
+    # Summary statistics
     print("\n" + "=" * 60)
-    print("评估报告")
+    print("Evaluation Report")
     print("=" * 60)
     
     super_overall_list = [r["super_overall"] for r in all_results]
