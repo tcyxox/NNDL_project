@@ -63,11 +63,11 @@ def calculate_threshold_hierarchical(model, val_features, val_super_labels, val_
 
     Args:
         model: HierarchicalClassifier 模型
-        val_features: 验证集特征
-        val_super_labels: 验证集超类标签
-        val_sub_labels: 验证集子类标签
-        super_map_inv: 超类 local_to_global 映射
-        sub_map_inv: 子类 local_to_global 映射
+        val_features: 验证集特征 [N, 512]
+        val_super_labels: 验证集超类标签 [N]
+        val_sub_labels: 验证集子类标签 [N]
+        super_map_inv: 超类 local_to_global 映射 {local_id: global_id}
+        sub_map_inv: 子类 local_to_global 映射 {local_id: global_id}
         target_recall: 目标召回率 (如 0.95)
         device: 'cuda' or 'cpu'
         use_energy: 是否使用 energy score（否则用 MSP）
@@ -76,36 +76,44 @@ def calculate_threshold_hierarchical(model, val_features, val_super_labels, val_
         thresh_super: 超类阈值
         thresh_sub: 子类阈值
     """
+    
+    def _calculate_single_threshold(logits, known_mask, class_name, use_energy, target_recall):
+        """
+        Args:
+            logits: [N, C] - 模型输出的 logits
+            known_mask: [N] - 布尔掩码，标记已知类样本
+            class_name: str - 类别名称（用于日志）
+            use_energy: bool - 是否使用 energy score
+            target_recall: float - 目标召回率
+            
+        Returns:
+            threshold: scalar - 计算出的阈值
+        """
+        if known_mask.sum() > 0:
+            if use_energy:
+                scores = compute_energy(logits[known_mask])  # [N_known, C] -> [N_known]
+                threshold = torch.quantile(scores, target_recall).item()
+            else:
+                probs = F.softmax(logits[known_mask], dim=1)  # [N_known, C] -> [N_known, C]
+                threshold = torch.quantile(probs.max(dim=1)[0], 1 - target_recall).item()  # [N_known]
+        else:
+            print(f"Warning: No known {class_name} samples in validation set, using default threshold")
+            threshold = -5 if use_energy else 0.5
+        
+        return threshold
+    
     model.eval()
     
     with torch.no_grad():
-        super_logits, sub_logits = model(val_features.to(device))
+        super_logits, sub_logits = model(val_features.to(device))  # [N, 512] -> [N, 3], [N, 70]
     
-    # 超类阈值
-    known_super = torch.tensor([l.item() in super_map_inv for l in val_super_labels])
-    if known_super.sum() > 0:
-        if use_energy:
-            scores = compute_energy(super_logits[known_super])
-            thresh_super = torch.quantile(scores, target_recall).item()
-        else:
-            super_probs = F.softmax(super_logits[known_super], dim=1)
-            thresh_super = torch.quantile(super_probs.max(dim=1)[0], 1 - target_recall).item()
-    else:
-        print("警告: 验证集中没有已知超类样本，使用默认阈值")
-        thresh_super = -5 if use_energy else 0.5
+    # Calculate superclass threshold
+    known_super = torch.tensor([l.item() in super_map_inv for l in val_super_labels])  # [N] - bool mask
+    thresh_super = _calculate_single_threshold(super_logits, known_super, "superclass", use_energy, target_recall)
     
-    # 子类阈值
-    known_sub = torch.tensor([l.item() in sub_map_inv for l in val_sub_labels])
-    if known_sub.sum() > 0:
-        if use_energy:
-            scores = compute_energy(sub_logits[known_sub])
-            thresh_sub = torch.quantile(scores, target_recall).item()
-        else:
-            sub_probs = F.softmax(sub_logits[known_sub], dim=1)
-            thresh_sub = torch.quantile(sub_probs.max(dim=1)[0], 1 - target_recall).item()
-    else:
-        print("警告: 验证集中没有已知子类样本，使用默认阈值")
-        thresh_sub = -5 if use_energy else 0.5
+    # Calculate subclass threshold
+    known_sub = torch.tensor([l.item() in sub_map_inv for l in val_sub_labels])  # [N] - bool mask
+    thresh_sub = _calculate_single_threshold(sub_logits, known_sub, "subclass", use_energy, target_recall)
     
     return thresh_super, thresh_sub
 
