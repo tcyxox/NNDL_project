@@ -140,7 +140,8 @@ class ExperimentConfig:
 1. Feature Gating 联合双头 + Hierarchical Masking 是一定要使用的。
 2. MSP 受益于较高温度（T=2.5 时性能最优）：高温时，模型关注相对尖锐度。
 3. Energy-based OOD 受益于较低温度（T=0.15 时性能最优）：低温时，模型关注绝对幅值。
-4. MSP 中 Softmax 的强制归一化导致丢失幅值信息，在理论上并不完备；而基于 Logits 的 Energy-based OOD 则保留了幅值信息。但实际效果上，MSP 的表现略优于 Energy-based OOD，这是因为依然基于 Cross-Entropy Loss 作为损失函数，因此，后面讲其替换为 Binary Cross-Entropy Loss。
+4. 问题：Softmax 的强制归一化导致丢失了幅值信息；方案：使用基于 Logits 的 Energy-based OOD。
+5. MSP 中使用基于 Softmax 的不保留幅值信息的阈值方法 + 基于 Softmax 的不保留幅值信息的 CE 损失函数，是统一的；而 Energy-based OOD 中使用基于 Logits 的保留幅值信息的阈值方法 + 基于 Softmax 的不保留幅值信息的 CE 损失函数，十部统一的。所以应将 Softmax 替换为保留幅值信息的 Sigmoid。
 
 ## CAC v1.0
 

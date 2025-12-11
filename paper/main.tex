@@ -111,33 +111,33 @@ We categorize the approaches we explored into post-hoc methods applied to standa
 
 \subsubsection{Post-hoc Score-based Methods}
 These methods define a scoring function based on the outputs (logits or softmax probabilities) of a pre-trained closed-set classifier. A threshold is applied to this score to reject novel samples.
-\textbf{Threshold Methods:}
+\paragraph{Threshold Methods:}
 \begin{itemize}
     \item Maximum Softmax Probability (MSP)~\cite{hendrycks2018baselinedetectingmisclassifiedoutofdistribution}: The baseline approach. It uses the maximum value of the softmax distribution as the confidence score. Logit $\to$ Softmax $\to$ Threshold Gate.
     \item Out-of-Distribution Detector (ODIN)~\cite{liang2020enhancingreliabilityoutofdistributionimage}: Improves MSP by applying temperature scaling to the logits before softmax and adding small perturbations to the input image. Logit $\to$ Temperature Scaling $\to$ Softmax $\to$ Threshold Gate.
     \item Energy-based Out-of-distribution Detection~\cite{liu2021energybasedoutofdistributiondetection}: Instead of softmax, this method uses the free energy derived from the logits as the scoring function. Lower energy indicates known data, while higher energy indicates novel data. Logit $\to$ Energy $\to$ Threshold Gate.
 \end{itemize}
 
-\textbf{Maximum Softmax Probability (MSP):}
+\paragraph{Maximum Softmax Probability (MSP):}
 Given an input $\mathbf{x}$, the MSP score is defined as the maximum class probability:
 \begin{equation}
     S_{\text{MSP}}(\mathbf{x}) = \max_{i} \frac{\exp(z_i(\mathbf{x}))}{\sum_{j=1}^{C} \exp(z_j(\mathbf{x}))}
 \end{equation}
 
-\textbf{ODIN (with Temperature Scaling):}
+\paragraph{ODIN (with Temperature Scaling):}
 ODIN applies temperature scaling $T > 1$ to the logits to separate the softmax score distributions of ID and OOD samples:
 \begin{equation}
     S_{\text{ODIN}}(\mathbf{x}; T) = \max_{i} \frac{\exp(z_i(\mathbf{x})/T)}{\sum_{j=1}^{C} \exp(z_j(\mathbf{x})/T)}
 \end{equation}
 
-\textbf{Energy Score (with Temperature Scaling):}
+\paragraph{Energy Score (with Temperature Scaling):}
 The free energy function $E(\mathbf{x}; T)$ using temperature $T$ is defined as:
 \begin{equation}
     E(\mathbf{x}; T) = -T \cdot \log \sum_{i=1}^{C} \exp(z_i(\mathbf{x})/T)
 \end{equation}
 Lower energy values indicate higher confidence that the sample belongs to a known class.
 
-\textbf{Temperature Limit Analysis:}
+\paragraph{Temperature Limit Analysis:}
 The effect of temperature can be understood by examining the limiting cases:
 
 \textit{ODIN as $T \to \infty$:} As temperature increases, the softmax distribution becomes uniform, and the score approaches a linear function of the logit gap:
@@ -152,6 +152,7 @@ where $z_{\max}$ is the maximum logit and $\bar{z}$ is the mean logit. This reve
 \end{equation}
 This shows that low-temperature Energy reduces to the negative \textbf{MaxLogit}, measuring the \textbf{Absolute Magnitude} of the strongest prediction.
 
+\paragraph{Magnitude Information:}
 A known issue with MSP and ODIN is their reliance on the Softmax function. Softmax forces output probabilities to sum to 1, losing the magnitude information of the underlying logits, which often leads to \textbf{overconfidence} on unseen data. Energy-based methods mitigate this by utilizing the raw logit magnitudes.
 
 \begin{center}
@@ -160,10 +161,14 @@ A known issue with MSP and ODIN is their reliance on the Softmax function. Softm
 
 \subsubsection{Trainable Confidence Estimation Methods}
 Unlike post-hoc methods, these approaches modify the loss function or model architecture during training to explicitly learn representations better suited for distinguishing known from unknown.
+
 \begin{itemize}
     \item \textbf{Class-wise Sigmoid with Binary Cross-Entropy (BCE) Loss:} Replace the standard Softmax + Cross-Entropy loss with independent sigmoid activation functions for each class, trained with BCE loss. This treats the multi-class problem as multiple binary classification problems. During inference, if the maximum sigmoid probability across all classes is below a threshold, the sample is rejected as novel.
     \item \textbf{Auxiliary Confidence Gating~\cite{devries2018learningconfidenceoutofdistributiondetection}:} Add a parallel confidence branch alongside the main classification branch. The network is trained to output both a class prediction and a scalar confidence score via a sigmoid output. The model learns to output low confidence for samples that are difficult to classify or likely out-of-distribution.
 \end{itemize}
+
+\paragraph{Consistency between Threshold Method and Training Objective:}
+In the MSP framework, the thresholding method (based on Softmax probabilities) and the training objective (Cross-Entropy loss based on Softmax) are consistent, as neither preserves magnitude information. However, for Energy-based OOD detection, there is a theoretical inconsistency: the thresholding method relies on Logits and their magnitude information, whereas the training objective (CE loss with Softmax) discards this information. Therefore, to ensure consistency and preserve magnitude information, we propose replacing Softmax with Class-wise Sigmoids.
 
 \subsubsection{OpenMax Hierarchical Classifier}
 OpenMax~\cite{7780542} is a classic discriminative method in OSR, which is based on \textbf{Feature Distribution} (Weibull Distribution).
