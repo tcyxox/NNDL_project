@@ -189,7 +189,7 @@ def predict_with_linear_model(features, super_model, sub_model,
     super_preds = []
     sub_preds = []
     super_scores = []  # OOD 得分（用于 AUROC）
-    sub_scores = []
+    sub_scores = []    # OOD 得分（用于 AUROC）
     
     # 是否启用 hierarchical masking
     use_masking = (super_to_sub is not None)
@@ -207,15 +207,23 @@ def predict_with_linear_model(features, super_model, sub_model,
             super_probs = F.softmax(super_logits, dim=1)
             max_super_prob, super_idx = torch.max(super_probs, dim=1)
             
-            # 判断是否为 novel（并保存 OOD 得分）
+            # 计算 OOD 得分
             if use_energy:
-                super_score = -compute_energy(super_logits).item()  # 取负，使得越高越像已知类
-                is_novel_super = -super_score > thresh_super
+                energy = compute_energy(super_logits).item()
+                super_score = -energy  # 取负，Energy 越高越像已知类
             else:
-                super_score = max_super_prob.item()  # MSP 本身就是越高越像已知类
-                is_novel_super = super_score < thresh_super
-            
+                msp = max_super_prob.item()
+                super_score = msp  # MSP 越高越像已知类
+
             super_scores.append(super_score)
+
+            # 判断是否为 novel
+            if use_energy:
+                energy = compute_energy(super_logits).item()
+                is_novel_super = energy > thresh_super
+            else:
+                msp = max_super_prob.item()
+                is_novel_super = msp < thresh_super
 
             if is_novel_super:
                 final_super = novel_super_idx
@@ -225,13 +233,14 @@ def predict_with_linear_model(features, super_model, sub_model,
             # === 子类预测（带 Hierarchical Masking）===
             sub_logits = sub_model(feature)
             
-            # OOD 分数需要在 masking 之前计算（与阈值计算保持一致）
+            # 计算 OOD 得分 （必须在 masking 之前，与阈值计算保持一致）
             if use_energy:
-                sub_score_raw = compute_energy(sub_logits).item()
-                sub_score = -sub_score_raw  # 取负，使得越高越像已知类
+                energy = compute_energy(sub_logits).item()
+                sub_score = -energy  # 取负，Energy 越高越像已知类
             else:
                 sub_probs_unmasked = F.softmax(sub_logits, dim=1)
-                sub_score = sub_probs_unmasked.max(dim=1)[0].item()  # MSP 本身就是越高越像已知类
+                msp = sub_probs_unmasked.max(dim=1)[0].item()
+                sub_score = msp  # MSP 越高越像已知类
             
             sub_scores.append(sub_score)
             
@@ -250,9 +259,9 @@ def predict_with_linear_model(features, super_model, sub_model,
             
             # 判断是否为 novel（使用 masking 前计算的分数）
             if use_energy:
-                is_novel_sub = sub_score_raw > thresh_sub
+                is_novel_sub = energy > thresh_sub
             else:
-                is_novel_sub = sub_score < thresh_sub
+                is_novel_sub = msp < thresh_sub
 
             if is_novel_sub:
                 final_sub = novel_sub_idx
@@ -330,7 +339,7 @@ def predict_with_hierarchical_model(features, model, super_map, sub_map,
     super_preds = []
     sub_preds = []
     super_scores = []  # OOD 得分（用于 AUROC）
-    sub_scores = []
+    sub_scores = []    # OOD 得分（用于 AUROC）
     
     use_masking = (super_to_sub is not None)
     num_sub_classes = len(sub_map)
@@ -344,37 +353,45 @@ def predict_with_hierarchical_model(features, model, super_map, sub_map,
             super_logits, sub_logits = model(feature)
             
             # === 超类预测 ===
+            super_probs = F.softmax(super_logits / temperature, dim=1)
+            max_super_prob, super_idx = torch.max(super_probs, dim=1)
+            
+            # 计算 OOD 得分
             if use_energy:
-                super_score = -compute_energy(super_logits, temperature=temperature).item()
-                is_novel_super = -super_score > thresh_super
-                # Get class index from unscaled softmax for mapping
-                _, super_idx = torch.max(F.softmax(super_logits, dim=1), dim=1)
+                energy = compute_energy(super_logits, temperature=temperature).item()
+                super_score = -energy  # 取负，Energy 越高越像已知类
             else:
-                # MSP with temperature = ODIN
-                super_probs = F.softmax(super_logits / temperature, dim=1)
-                max_super_prob, super_idx = torch.max(super_probs, dim=1)
-                super_score = max_super_prob.item()
-                is_novel_super = super_score < thresh_super
+                msp = max_super_prob.item()
+                super_score = msp  # MSP 越高越像已知类
             
             super_scores.append(super_score)
+            
+            # 判断是否为 novel
+            if use_energy:
+                is_novel_super = energy > thresh_super
+            else:
+                is_novel_super = msp < thresh_super
             
             if is_novel_super:
                 final_super = novel_super_idx
             else:
                 final_super = super_map[super_idx.item()]
             
-            # === 子类预测（可选 Hard Masking）===
-            # OOD 分数需要在 masking 之前计算（与阈值计算保持一致）
+            # === 子类预测（带 Hierarchical Masking）===
+            
+            # 计算 OOD 得分 （必须在 masking 之前，与阈值计算保持一致）
             if use_energy:
-                sub_score_raw = compute_energy(sub_logits, temperature=temperature).item()
-                sub_score = -sub_score_raw  # 取负，使得越高越像已知类
+                energy = compute_energy(sub_logits, temperature=temperature).item()
+                sub_score = -energy  # 取负，Energy 越高越像已知类
             else:
                 # MSP with temperature = ODIN
                 sub_probs_unmasked = F.softmax(sub_logits / temperature, dim=1)
-                sub_score = sub_probs_unmasked.max(dim=1)[0].item()  # MSP 本身就是越高越像已知类
+                msp = sub_probs_unmasked.max(dim=1)[0].item()
+                sub_score = msp  # MSP 越高越像已知类
             
             sub_scores.append(sub_score)
             
+            # 如果超类不是 novel 且启用了 masking，则 mask 掉不属于该超类的子类
             if use_masking and final_super != novel_super_idx and final_super in super_to_sub:
                 valid_subs = super_to_sub[final_super]
                 mask = torch.full((1, num_sub_classes), float('-inf'), device=device)
@@ -389,9 +406,9 @@ def predict_with_hierarchical_model(features, model, super_map, sub_map,
             
             # 判断是否为 novel（使用 masking 前计算的分数）
             if use_energy:
-                is_novel_sub = sub_score_raw > thresh_sub
+                is_novel_sub = energy > thresh_sub
             else:
-                is_novel_sub = sub_score < thresh_sub
+                is_novel_sub = msp < thresh_sub
             
             if is_novel_sub:
                 final_sub = novel_sub_idx
