@@ -143,7 +143,8 @@ class ExperimentConfig:
 4. 问题：Softmax 的强制归一化导致丢失了幅值信息；方案：使用基于 Logits 的 Energy-based OOD。
 5. MSP 中使用基于 Softmax 的不保留幅值信息的阈值方法 + 基于 Softmax 的不保留幅值信息的 CE 损失函数，是统一的；而 Energy-based OOD 中使用基于 Logits 的保留幅值信息的阈值方法 + 基于 Softmax 的不保留幅值信息的 CE 损失函数，十部统一的。所以应将 Softmax 替换为保留幅值信息的 Sigmoid。
 
-## CAC v1.0
+# CAC 
+## v1.0
 
 ```py
 class ExperimentConfig:
@@ -155,10 +156,86 @@ class ExperimentConfig:
     seed: int = 42
     # 实验开关
     alpha: float = 10
-    lambda_w: float = 0.1
+    lambda_w: float
+    anchor_mode: "axis_aligned"
+```
+[Subclass] Overall : 68.63% ± 0.64% 
+[Subclass] Seen : 94.86% ± 0.29% 
+[Subclass] Unseen : 46.25% ± 1.31% 
+[Subclass] AUROC : 0.8642 ± 0.0003
+
+|   lambda_w  | Subclass Overall |  Subclass Seen  | Subclass Unseen| Subclass AUROC | 
+|-------------|------------------|-----------------|----------------|----------------|
+| 0.1         | 68.63% ± 0.64%   | 94.86% ± 0.29%  | 46.25% ± 1.31% | 0.8642 ± 0.0003|
+| 0           | 72.00% ± 0.47%   | 95.10% ± 0.12%  | 52.31% ± 0.87% | 0.8908 ± 0.0010|
+
+在模型放弃最小化样本与其真实类别锚点之间的距离（lambda_w=0）时，已知和未知subclass准确率均提高，可能是因为即使样本较锚点远，模型已经能够划分开已知和未知
+  
+## v1.1
+```py
+class ExperimentConfig:
+    # 训练参数
+    batch_size: int = 64
+    learning_rate: float = 1e-2
+    epochs: int = 300
+    target_recall: float = 0.95
+    # 模型参数
+    alpha: float = 8.0
+    lambda_w: float
+    anchor_mode: "uniform_hypersphere"
 ```
 
-  [Subclass] Overall            : 68.63% ± 0.64%
-  [Subclass] Seen               : 94.86% ± 0.29%
-  [Subclass] Unseen             : 46.25% ± 1.31%
-  [Subclass] AUROC              : 0.8642 ± 0.0003
+|   lambda_w  | Subclass Overall |  Subclass Seen | Subclass Unseen| Subclass AUROC | 
+|-------------|------------------|----------------|----------------|----------------|
+| 0.1         | 69.66% ± 1.09%   | 93.80% ± 0.27% | 49.06% ± 1.99% | 0.8715 ± 0.0012|
+| 0           | 71.70% ± 0.44%   | 94.71% ± 0.35% | 52.07% ± 0.57% | 0.8859 ± 0.0005|
+
+无提升
+
+## v1.2
+```py
+class ExperimentConfig:
+    # 训练参数
+    batch_size: int = 64
+    learning_rate: float = 1e-2
+    epochs: int = 300
+    target_recall: float = 0.95
+    # 模型参数
+    alpha: float = 8.0
+    lambda_w: float = 0
+    se_reduction: float = 4
+    anchor_mode: "axis_aligned"
+```
+| se_reduction | Subclass Overall |  Subclass Seen  | Subclass Unseen | Subclass AUROC | 
+|--------------|------------------|-----------------|-----------------|----------------|
+| 2            | 71.95% ± 0.87%   | 94.82% ± 0.24%  | 52.44% ± 1.59%  | 0.8930 ± 0.0013|
+| 4            | 72.53% ± 0.97%   | 94.55% ± 0.26%  | 53.75% ± 1.86%  | 0.8913 ± 0.0030|
+| 8            | 71.52% ± 0.76%   | 94.78% ± 0.16%  | 51.67% ± 1.46%  | 0.8925 ± 0.0018|
+
+se_reduction=4相较于v1.0有更好表现
+
+```py
+class ExperimentConfig:
+    # 训练参数
+    batch_size: int = 64
+    learning_rate: float = 1e-2
+    epochs: int = 300
+    target_recall: float = 0.95
+    # 模型参数
+    alpha: float = 8.0
+    lambda_w: float = 0
+    se_reduction: float
+    anchor_mode: "uniform_hypersphere"
+```
+
+| se_reduction | Subclass Overall  | Subclass Seen   | Subclass Unseen | Subclass AUROC | 
+|--------------|-------------------|-----------------|-----------------|----------------|
+| 2            | 71.71% ± 0.66%    | 94.59% ± 0.29%  | 52.21% ± 1.30%  | 0.8857 ± 0.0027|
+| 4            | 71.84% ± 0.69%    | 94.47% ± 0.19%  | 52.54% ± 1.21%  | 0.8864 ± 0.0011|
+| 8            | 72.08% ± 0.61%    | 94.63% ± 0.53%  | 52.84% ± 1.03%  | 0.8877 ± 0.0013|
+
+7 0 4
+[Subclass] Overall            : 71.28% ± 0.96%
+[Subclass] Seen               : 94.12% ± 0.59%
+[Subclass] Unseen             : 51.81% ± 1.49%
+AUROC                         : 0.8798 ± 0.0020
