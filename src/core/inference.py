@@ -161,11 +161,15 @@ def predict_with_linear_model(features, super_model, sub_model,
         use_energy: 是否使用 energy score（否则用 MSP）
 
     Returns:
-        super_preds: 超类预测列表
-        sub_preds: 子类预测列表
+        super_preds: 超类预测列表 [N]
+        sub_preds: 子类预测列表 [N]
+        super_scores: 超类 OOD 得分列表 [N] (用于 AUROC，越高越像已知类)
+        sub_scores: 子类 OOD 得分列表 [N] (用于 AUROC，越高越像已知类)
     """
     super_preds = []
     sub_preds = []
+    super_scores = []  # OOD 得分（用于 AUROC）
+    sub_scores = []
     
     # 是否启用 hierarchical masking
     use_masking = (super_to_sub is not None)
@@ -183,12 +187,15 @@ def predict_with_linear_model(features, super_model, sub_model,
             super_probs = F.softmax(super_logits, dim=1)
             max_super_prob, super_idx = torch.max(super_probs, dim=1)
             
-            # 判断是否为 novel
+            # 判断是否为 novel（并保存 OOD 得分）
             if use_energy:
-                energy = compute_energy(super_logits).item()
-                is_novel_super = energy > thresh_super
+                super_score = -compute_energy(super_logits).item()  # 取负，使得越高越像已知类
+                is_novel_super = -super_score > thresh_super
             else:
-                is_novel_super = max_super_prob.item() < thresh_super
+                super_score = max_super_prob.item()  # MSP 本身就是越高越像已知类
+                is_novel_super = super_score < thresh_super
+            
+            super_scores.append(super_score)
 
             if is_novel_super:
                 final_super = novel_super_idx
@@ -200,10 +207,13 @@ def predict_with_linear_model(features, super_model, sub_model,
             
             # OOD 分数需要在 masking 之前计算（与阈值计算保持一致）
             if use_energy:
-                sub_score = compute_energy(sub_logits).item()
+                sub_score_raw = compute_energy(sub_logits).item()
+                sub_score = -sub_score_raw  # 取负，使得越高越像已知类
             else:
                 sub_probs_unmasked = F.softmax(sub_logits, dim=1)
-                sub_score = sub_probs_unmasked.max(dim=1)[0].item()
+                sub_score = sub_probs_unmasked.max(dim=1)[0].item()  # MSP 本身就是越高越像已知类
+            
+            sub_scores.append(sub_score)
             
             # 如果超类不是 novel 且启用了 masking，则 mask 掉不属于该超类的子类
             if use_masking and final_super != novel_super_idx and final_super in super_to_sub:
@@ -220,7 +230,7 @@ def predict_with_linear_model(features, super_model, sub_model,
             
             # 判断是否为 novel（使用 masking 前计算的分数）
             if use_energy:
-                is_novel_sub = sub_score > thresh_sub
+                is_novel_sub = sub_score_raw > thresh_sub
             else:
                 is_novel_sub = sub_score < thresh_sub
 
@@ -236,7 +246,7 @@ def predict_with_linear_model(features, super_model, sub_model,
             super_preds.append(final_super)
             sub_preds.append(final_sub)
 
-    return super_preds, sub_preds
+    return super_preds, sub_preds, super_scores, sub_scores
 
 
 def load_hierarchical_model(model_dir, feature_dim, num_super, num_sub, device):
@@ -291,11 +301,15 @@ def predict_with_hierarchical_model(features, model, super_map, sub_map,
         use_energy: 是否使用 energy score（否则用 MSP）
     
     Returns:
-        super_preds: 超类预测列表
-        sub_preds: 子类预测列表
+        super_preds: 超类预测列表 [N]
+        sub_preds: 子类预测列表 [N]
+        super_scores: 超类 OOD 得分列表 [N] (用于 AUROC，越高越像已知类)
+        sub_scores: 子类 OOD 得分列表 [N] (用于 AUROC，越高越像已知类)
     """
     super_preds = []
     sub_preds = []
+    super_scores = []  # OOD 得分（用于 AUROC）
+    sub_scores = []
     
     use_masking = (super_to_sub is not None)
     num_sub_classes = len(sub_map)
@@ -312,12 +326,15 @@ def predict_with_hierarchical_model(features, model, super_map, sub_map,
             super_probs = F.softmax(super_logits, dim=1)
             max_super_prob, super_idx = torch.max(super_probs, dim=1)
             
-            # 判断是否为 novel
+            # 判断是否为 novel（并保存 OOD 得分）
             if use_energy:
-                energy = compute_energy(super_logits).item()
-                is_novel_super = energy > thresh_super
+                super_score = -compute_energy(super_logits).item()  # 取负，使得越高越像已知类
+                is_novel_super = -super_score > thresh_super
             else:
-                is_novel_super = max_super_prob.item() < thresh_super
+                super_score = max_super_prob.item()  # MSP 本身就是越高越像已知类
+                is_novel_super = super_score < thresh_super
+            
+            super_scores.append(super_score)
             
             if is_novel_super:
                 final_super = novel_super_idx
@@ -327,10 +344,13 @@ def predict_with_hierarchical_model(features, model, super_map, sub_map,
             # === 子类预测（可选 Hard Masking）===
             # OOD 分数需要在 masking 之前计算（与阈值计算保持一致）
             if use_energy:
-                sub_score = compute_energy(sub_logits).item()
+                sub_score_raw = compute_energy(sub_logits).item()
+                sub_score = -sub_score_raw  # 取负，使得越高越像已知类
             else:
                 sub_probs_unmasked = F.softmax(sub_logits, dim=1)
-                sub_score = sub_probs_unmasked.max(dim=1)[0].item()
+                sub_score = sub_probs_unmasked.max(dim=1)[0].item()  # MSP 本身就是越高越像已知类
+            
+            sub_scores.append(sub_score)
             
             if use_masking and final_super != novel_super_idx and final_super in super_to_sub:
                 valid_subs = super_to_sub[final_super]
@@ -346,7 +366,7 @@ def predict_with_hierarchical_model(features, model, super_map, sub_map,
             
             # 判断是否为 novel（使用 masking 前计算的分数）
             if use_energy:
-                is_novel_sub = sub_score > thresh_sub
+                is_novel_sub = sub_score_raw > thresh_sub
             else:
                 is_novel_sub = sub_score < thresh_sub
             
@@ -362,4 +382,4 @@ def predict_with_hierarchical_model(features, model, super_map, sub_map,
             super_preds.append(final_super)
             sub_preds.append(final_sub)
     
-    return super_preds, sub_preds
+    return super_preds, sub_preds, super_scores, sub_scores

@@ -3,7 +3,7 @@ import os
 import numpy as np
 import torch
 import torch.nn.functional as F
-from sklearn.metrics import accuracy_score
+from sklearn.metrics import accuracy_score, roc_auc_score
 
 from core.config import config
 from core.inference import predict_with_linear_model, predict_with_hierarchical_model, calculate_threshold_linear, calculate_threshold_hierarchical
@@ -94,7 +94,7 @@ def run_single_trial(seed):
         )
         
         # 推理
-        super_preds, sub_preds = predict_with_hierarchical_model(
+        super_preds, sub_preds, super_scores, sub_scores = predict_with_hierarchical_model(
             test_features, model, super_map_inv, sub_map_inv,
             thresh_super, thresh_sub, CONFIG["novel_super_idx"], CONFIG["novel_sub_idx"], device,
             use_energy, super_to_sub
@@ -105,7 +105,7 @@ def run_single_trial(seed):
         thresh_sub = calculate_threshold_linear(sub_model, val_features, val_sub_labels, sub_map_inv, CONFIG["target_recall"], device, use_energy)
         
         # 推理
-        super_preds, sub_preds = predict_with_linear_model(
+        super_preds, sub_preds, super_scores, sub_scores = predict_with_linear_model(
             test_features, super_model, sub_model,
             super_map_inv, sub_map_inv,
             thresh_super, thresh_sub, CONFIG["novel_super_idx"], CONFIG["novel_sub_idx"], device,
@@ -120,13 +120,25 @@ def run_single_trial(seed):
         test_sub_labels.numpy(), sub_preds, CONFIG["novel_sub_idx"]
     )
     
+    # 计算 AUROC
+    # 对于 AUROC，我们需要二分类标签：1=已知类, 0=未知类
+    super_binary_labels = (test_super_labels.numpy() != CONFIG["novel_super_idx"]).astype(int)
+    sub_binary_labels = (test_sub_labels.numpy() != CONFIG["novel_sub_idx"]).astype(int)
+    
+    # 计算 AUROC（得分越高，越像已知类）
+    try:
+        super_auroc = roc_auc_score(super_binary_labels, super_scores)
+        sub_auroc = roc_auc_score(sub_binary_labels, sub_scores)
+    except ValueError as e:
+        # 如果只有一个类别，无法计算 AUROC
+        print(f"警告: 无法计算 AUROC - {e}")
+        super_auroc = 0.0
+        sub_auroc = 0.0
+    
     return {
-        "super_overall": super_all,
-        "super_seen": super_seen,
-        "super_unseen": super_unseen,
-        "sub_overall": sub_all,
-        "sub_seen": sub_seen,
-        "sub_unseen": sub_unseen,
+        "super_overall": super_all, "super_seen": super_seen, "super_unseen": super_unseen,
+        "sub_overall": sub_all, "sub_seen": sub_seen, "sub_unseen": sub_unseen,
+        "super_auroc": super_auroc, "sub_auroc": sub_auroc
     }
 
 
@@ -150,18 +162,20 @@ if __name__ == "__main__":
     print("评估报告")
     print("=" * 60)
     
-    metrics = ["super_overall", "super_seen", "super_unseen", "sub_overall", "sub_seen", "sub_unseen"]
-    labels = {
-        "super_overall": "[Superclass] Overall",
-        "super_seen": "[Superclass] Seen",
-        "super_unseen": "[Superclass] Unseen",
-        "sub_overall": "[Subclass] Overall",
-        "sub_seen": "[Subclass] Seen",
-        "sub_unseen": "[Subclass] Unseen",
-    }
-    
-    for m in metrics:
-        vals = [r[m] for r in all_results]
-        mean = np.mean(vals) * 100
-        std = np.std(vals) * 100
-        print(f"  {labels[m]:25s}: {mean:5.2f}% ± {std:.2f}%")
+    super_overall_list = [r["super_overall"] for r in all_results]
+    super_seen_list = [r["super_seen"] for r in all_results]
+    super_unseen_list = [r["super_unseen"] for r in all_results]
+    sub_overall_list = [r["sub_overall"] for r in all_results]
+    sub_seen_list = [r["sub_seen"] for r in all_results]
+    sub_unseen_list = [r["sub_unseen"] for r in all_results]
+    super_auroc_list = [r["super_auroc"] for r in all_results]
+    sub_auroc_list = [r["sub_auroc"] for r in all_results]
+
+    print(f"  [Superclass] Overall     : {np.mean(super_overall_list)*100:.2f}% ± {np.std(super_overall_list)*100:.2f}%")
+    print(f"  [Superclass] Seen        : {np.mean(super_seen_list)*100:.2f}% ± {np.std(super_seen_list)*100:.2f}%")
+    print(f"  [Superclass] Unseen      : {np.mean(super_unseen_list)*100:.2f}% ± {np.std(super_unseen_list)*100:.2f}%")
+    print(f"  [Subclass] Overall       : {np.mean(sub_overall_list)*100:.2f}% ± {np.std(sub_overall_list)*100:.2f}%")
+    print(f"  [Subclass] Seen          : {np.mean(sub_seen_list)*100:.2f}% ± {np.std(sub_seen_list)*100:.2f}%")
+    print(f"  [Subclass] Unseen        : {np.mean(sub_unseen_list)*100:.2f}% ± {np.std(sub_unseen_list)*100:.2f}%")
+    print(f"  [Superclass] AUROC       : {np.mean(super_auroc_list):.4f} ± {np.std(super_auroc_list):.4f}")
+    print(f"  [Subclass] AUROC         : {np.mean(sub_auroc_list):.4f} ± {np.std(sub_auroc_list):.4f}")
