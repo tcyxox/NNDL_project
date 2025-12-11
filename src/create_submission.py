@@ -18,7 +18,9 @@ CONFIG = {
     "novel_sub_idx": config.osr.novel_sub_index,
     "enable_hierarchical_masking": config.experiment.enable_hierarchical_masking,
     "feature_dim": config.model.feature_dim,
-    "enable_feature_gating": config.experiment.enable_feature_gating
+    "enable_feature_gating": config.experiment.enable_feature_gating,
+    "enable_energy": config.experiment.enable_energy,
+    "ood_temperature": config.experiment.ood_temperature,
 }
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -64,22 +66,22 @@ if __name__ == "__main__":
         model, super_map, sub_map = load_hierarchical_model(
             CONFIG["model_dir"], CONFIG["feature_dim"], num_super, num_sub, True, device
         )
-        super_preds, sub_preds = predict_with_hierarchical_model(
+        super_preds, sub_preds, _, _ = predict_with_hierarchical_model(
             test_features, model, super_map, sub_map,
             thresh_super, thresh_sub,
             CONFIG["novel_super_idx"], CONFIG["novel_sub_idx"], device,
-            super_to_sub=super_to_sub
+            super_to_sub, CONFIG["enable_energy"], temperature=CONFIG["ood_temperature"]
         )
     else:
         print("  > 使用独立模型模式")
         super_model, super_map = load_linear_model("super", CONFIG["model_dir"], CONFIG["feature_dim"], device)
         sub_model, sub_map = load_linear_model("sub", CONFIG["model_dir"], CONFIG["feature_dim"], device)
-        super_preds, sub_preds = predict_with_linear_model(
+        super_preds, sub_preds, _, _ = predict_with_linear_model(
             test_features, super_model, sub_model,
             super_map, sub_map,
             thresh_super, thresh_sub,
             CONFIG["novel_super_idx"], CONFIG["novel_sub_idx"], device,
-            super_to_sub=super_to_sub
+            super_to_sub, CONFIG["enable_energy"], temperature=CONFIG["ood_temperature"]
         )
 
     # --- Step 4: 保存提交文件 ---

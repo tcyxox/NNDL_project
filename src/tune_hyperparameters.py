@@ -14,6 +14,7 @@ CONFIG = {
     "hyperparams_file": os.path.join(config.paths.dev, "hyperparameters.json"),
     "enable_feature_gating": config.experiment.enable_feature_gating,
     "enable_energy": config.experiment.enable_energy,
+    "ood_temperature": config.experiment.ood_temperature,
 }
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -53,14 +54,14 @@ if __name__ == "__main__":
         )
         thresh_super, thresh_sub = calculate_threshold_hierarchical(
             model, val_feat, val_super_lbl, val_sub_lbl, 
-            super_map_inv, sub_map_inv, CONFIG["target_recall"], device, use_energy
+            super_map_inv, sub_map_inv, CONFIG["target_recall"], device, use_energy, temperature=CONFIG["ood_temperature"]
         )
     else:
         print("  > 使用独立模型模式")
         super_model, _ = load_linear_model("super", CONFIG["model_dir"], CONFIG["feature_dim"], device)
         sub_model, _ = load_linear_model("sub", CONFIG["model_dir"], CONFIG["feature_dim"], device)
-        thresh_super = calculate_threshold_linear(super_model, val_feat, val_super_lbl, super_map, CONFIG["target_recall"], device, use_energy)
-        thresh_sub = calculate_threshold_linear(sub_model, val_feat, val_sub_lbl, sub_map, CONFIG["target_recall"], device, use_energy)
+        thresh_super = calculate_threshold_linear(super_model, val_feat, val_super_lbl, super_map, CONFIG["target_recall"], device, use_energy, temperature=CONFIG["ood_temperature"])
+        thresh_sub = calculate_threshold_linear(sub_model, val_feat, val_sub_lbl, sub_map, CONFIG["target_recall"], device, use_energy, temperature=CONFIG["ood_temperature"])
     
     print(f"  > Superclass 阈值: {thresh_super:.4f}")
     print(f"  > Subclass 阈值:   {thresh_sub:.4f}")

@@ -7,7 +7,7 @@ import torch.nn.functional as F
 from .models import LinearClassifier, HierarchicalClassifier
 
 
-def compute_energy(logits, temperature=1.0):
+def compute_energy(logits, temperature):
     """
     计算 Energy Score: E(x; T) = -log Σ exp(logit_i / T)
     
@@ -24,7 +24,7 @@ def compute_energy(logits, temperature=1.0):
     return -torch.logsumexp(logits / temperature, dim=1)
 
 
-def calculate_threshold_linear(model, val_features, val_labels, label_map, target_recall, device, use_energy):
+def calculate_threshold_linear(model, val_features, val_labels, label_map, target_recall, device, use_energy, temperature):
     """
     在验证集上为 LinearClassifier 计算 OSR 阈值
 
@@ -36,6 +36,7 @@ def calculate_threshold_linear(model, val_features, val_labels, label_map, targe
         target_recall: 目标召回率 (如 0.95)
         device: 'cuda' or 'cpu'
         use_energy: 是否使用 energy score（否则用 MSP）
+        temperature: OOD 温度缩放参数
 
     Returns:
         threshold: 计算出的阈值
@@ -54,11 +55,11 @@ def calculate_threshold_linear(model, val_features, val_labels, label_map, targe
         logits = model(X_known)
         if use_energy:
             # Energy: 越低越可能是已知类，阈值是能量上限
-            scores = compute_energy(logits)
+            scores = compute_energy(logits, temperature=temperature)
             threshold = torch.quantile(scores, target_recall).item()
         else:
-            # MSP: 越高越可能是已知类，阈值是概率下限
-            probs = F.softmax(logits, dim=1)
+            # MSP with temperature = ODIN
+            probs = F.softmax(logits / temperature, dim=1)
             max_probs, _ = torch.max(probs, dim=1)
             threshold = torch.quantile(max_probs, 1 - target_recall).item()
 
@@ -164,7 +165,7 @@ def predict_with_linear_model(features, super_model, sub_model,
                               super_map, sub_map,
                               thresh_super, thresh_sub,
                               novel_super_idx, novel_sub_idx, device,
-                              use_energy, super_to_sub):
+                              super_to_sub, use_energy, temperature):
     """
     Args:
         features: 输入特征 [N, 512]
@@ -179,6 +180,7 @@ def predict_with_linear_model(features, super_model, sub_model,
         device: 'cuda' or 'cpu'
         super_to_sub: 超类到子类的映射 {super_id: [sub_ids]}（可选，用于 masking）
         use_energy: 是否使用 energy score（否则用 MSP）
+        temperature: OOD 温度缩放参数
 
     Returns:
         super_preds: 超类预测列表 [N]
@@ -204,12 +206,12 @@ def predict_with_linear_model(features, super_model, sub_model,
 
             # === 超类预测 ===
             super_logits = super_model(feature)
-            super_probs = F.softmax(super_logits, dim=1)
+            super_probs = F.softmax(super_logits / temperature, dim=1)
             max_super_prob, super_idx = torch.max(super_probs, dim=1)
             
             # 计算 OOD 得分
             if use_energy:
-                energy = compute_energy(super_logits).item()
+                energy = compute_energy(super_logits, temperature=temperature).item()
                 super_score = -energy  # 取负，Energy 越高越像已知类
             else:
                 msp = max_super_prob.item()
@@ -219,10 +221,8 @@ def predict_with_linear_model(features, super_model, sub_model,
 
             # 判断是否为 novel
             if use_energy:
-                energy = compute_energy(super_logits).item()
                 is_novel_super = energy > thresh_super
             else:
-                msp = max_super_prob.item()
                 is_novel_super = msp < thresh_super
 
             if is_novel_super:
@@ -235,10 +235,11 @@ def predict_with_linear_model(features, super_model, sub_model,
             
             # 计算 OOD 得分 （必须在 masking 之前，与阈值计算保持一致）
             if use_energy:
-                energy = compute_energy(sub_logits).item()
+                energy = compute_energy(sub_logits, temperature=temperature).item()
                 sub_score = -energy  # 取负，Energy 越高越像已知类
             else:
-                sub_probs_unmasked = F.softmax(sub_logits, dim=1)
+                # MSP with temperature = ODIN
+                sub_probs_unmasked = F.softmax(sub_logits / temperature, dim=1)
                 msp = sub_probs_unmasked.max(dim=1)[0].item()
                 sub_score = msp  # MSP 越高越像已知类
             
@@ -314,7 +315,7 @@ def load_hierarchical_model(model_dir, feature_dim, num_super, num_sub, device):
 def predict_with_hierarchical_model(features, model, super_map, sub_map,
                                     thresh_super, thresh_sub,
                                     novel_super_idx, novel_sub_idx, device,
-                                    use_energy, super_to_sub, temperature):
+                                    super_to_sub, use_energy, temperature):
     """
     Args:
         features: [N, D] - 输入特征
