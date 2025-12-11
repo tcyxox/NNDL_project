@@ -23,6 +23,7 @@ CONFIG = {
     "enable_feature_gating": config.experiment.enable_feature_gating,
     "enable_hierarchical_masking": config.experiment.enable_hierarchical_masking,
     "enable_energy": config.experiment.enable_energy,
+    "ood_temperature": config.experiment.ood_temperature,
 }
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -90,14 +91,15 @@ def run_single_trial(seed):
         # 计算阈值
         thresh_super, thresh_sub = calculate_threshold_hierarchical(
             model, val_features, val_super_labels, val_sub_labels,
-            super_map_inv, sub_map_inv, CONFIG["target_recall"], device, use_energy
+            super_map_inv, sub_map_inv, CONFIG["target_recall"], device, use_energy,
+            temperature=CONFIG["ood_temperature"]
         )
         
         # 推理
         super_preds, sub_preds, super_scores, sub_scores = predict_with_hierarchical_model(
             test_features, model, super_map_inv, sub_map_inv,
             thresh_super, thresh_sub, CONFIG["novel_super_idx"], CONFIG["novel_sub_idx"], device,
-            use_energy, super_to_sub
+            use_energy, super_to_sub, temperature=CONFIG["ood_temperature"]
         )
     else:
         # 计算阈值

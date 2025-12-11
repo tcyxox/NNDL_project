@@ -7,12 +7,22 @@ import torch.nn.functional as F
 from .models import LinearClassifier, HierarchicalClassifier
 
 
-def compute_energy(logits):
+def compute_energy(logits, temperature=1.0):
     """
-    计算 Energy Score: E(x) = -log Σ exp(logit_i)
-    能量越低越可能是已知类，能量越高越可能是未知类
+    计算 Energy Score: E(x; T) = -log Σ exp(logit_i / T)
+    
+    Args:
+        logits: [batch_size, num_classes] - 模型输出的 logits
+        temperature: float - 温度缩放参数
+            - T < 1: 锐化（扩大差距）
+            - T = 1: 不变
+            - T > 1: 软化（缩小差距）
+    
+    Returns:
+        energy: [batch_size] - 能量得分
+            能量越低越可能是已知类，能量越高越可能是未知类
     """
-    return -torch.logsumexp(logits, dim=1)
+    return -torch.logsumexp(logits / temperature, dim=1)
 
 
 def calculate_threshold_linear(model, val_features, val_labels, label_map, target_recall, device, use_energy):
@@ -57,7 +67,7 @@ def calculate_threshold_linear(model, val_features, val_labels, label_map, targe
 
 
 def calculate_threshold_hierarchical(model, val_features, val_super_labels, val_sub_labels, 
-                                      super_map_inv, sub_map_inv, target_recall, device, use_energy):
+                                      super_map_inv, sub_map_inv, target_recall, device, use_energy, temperature):
     """
     在验证集上为 HierarchicalClassifier 计算 OSR 阈值
 
@@ -71,13 +81,14 @@ def calculate_threshold_hierarchical(model, val_features, val_super_labels, val_
         target_recall: 目标召回率 (如 0.95)
         device: 'cuda' or 'cpu'
         use_energy: 是否使用 energy score（否则用 MSP）
+        temperature: OOD 温度缩放参数
 
     Returns:
         thresh_super: 超类阈值
         thresh_sub: 子类阈值
     """
     
-    def _calculate_single_threshold(logits, known_mask, class_name, use_energy, target_recall):
+    def _calculate_single_threshold(logits, known_mask, class_name, use_energy, target_recall, temperature):
         """
         Args:
             logits: [N, C] - 模型输出的 logits
@@ -85,16 +96,18 @@ def calculate_threshold_hierarchical(model, val_features, val_super_labels, val_
             class_name: str - 类别名称（用于日志）
             use_energy: bool - 是否使用 energy score
             target_recall: float - 目标召回率
+            temperature: float - 温度缩放参数
             
         Returns:
             threshold: scalar - 计算出的阈值
         """
         if known_mask.sum() > 0:
             if use_energy:
-                scores = compute_energy(logits[known_mask])  # [N_known, C] -> [N_known]
+                scores = compute_energy(logits[known_mask], temperature=temperature)  # [N_known, C] -> [N_known]
                 threshold = torch.quantile(scores, target_recall).item()
             else:
-                probs = F.softmax(logits[known_mask], dim=1)  # [N_known, C] -> [N_known, C]
+                # MSP with temperature = ODIN
+                probs = F.softmax(logits[known_mask] / temperature, dim=1)  # [N_known, C] -> [N_known, C]
                 threshold = torch.quantile(probs.max(dim=1)[0], 1 - target_recall).item()  # [N_known]
         else:
             print(f"Warning: No known {class_name} samples in validation set, using default threshold")
@@ -109,11 +122,11 @@ def calculate_threshold_hierarchical(model, val_features, val_super_labels, val_
     
     # Calculate superclass threshold
     known_super = torch.tensor([l.item() in super_map_inv for l in val_super_labels])  # [N] - bool mask
-    thresh_super = _calculate_single_threshold(super_logits, known_super, "superclass", use_energy, target_recall)
+    thresh_super = _calculate_single_threshold(super_logits, known_super, "superclass", use_energy, target_recall, temperature)
     
     # Calculate subclass threshold
     known_sub = torch.tensor([l.item() in sub_map_inv for l in val_sub_labels])  # [N] - bool mask
-    thresh_sub = _calculate_single_threshold(sub_logits, known_sub, "subclass", use_energy, target_recall)
+    thresh_sub = _calculate_single_threshold(sub_logits, known_sub, "subclass", use_energy, target_recall, temperature)
     
     return thresh_super, thresh_sub
 
@@ -293,7 +306,7 @@ def load_hierarchical_model(model_dir, feature_dim, num_super, num_sub, device):
 def predict_with_hierarchical_model(features, model, super_map, sub_map,
                                     thresh_super, thresh_sub,
                                     novel_super_idx, novel_sub_idx, device,
-                                    use_energy, super_to_sub):
+                                    use_energy, super_to_sub, temperature):
     """
     Args:
         features: 输入特征 [N, 512]
@@ -307,6 +320,7 @@ def predict_with_hierarchical_model(features, model, super_map, sub_map,
         device: 'cuda' or 'cpu'
         super_to_sub: 超类到子类的映射（用于 hard masking，可选）
         use_energy: 是否使用 energy score（否则用 MSP）
+        temperature: OOD 温度缩放参数
     
     Returns:
         super_preds: 超类预测列表 [N]
@@ -331,15 +345,16 @@ def predict_with_hierarchical_model(features, model, super_map, sub_map,
             super_logits, sub_logits = model(feature)
             
             # === 超类预测 ===
-            super_probs = F.softmax(super_logits, dim=1)
-            max_super_prob, super_idx = torch.max(super_probs, dim=1)
-            
-            # 判断是否为 novel（并保存 OOD 得分）
             if use_energy:
-                super_score = -compute_energy(super_logits).item()  # 取负，使得越高越像已知类
+                super_score = -compute_energy(super_logits, temperature=temperature).item()
                 is_novel_super = -super_score > thresh_super
+                # Get class index from unscaled softmax for mapping
+                _, super_idx = torch.max(F.softmax(super_logits, dim=1), dim=1)
             else:
-                super_score = max_super_prob.item()  # MSP 本身就是越高越像已知类
+                # MSP with temperature = ODIN
+                super_probs = F.softmax(super_logits / temperature, dim=1)
+                max_super_prob, super_idx = torch.max(super_probs, dim=1)
+                super_score = max_super_prob.item()
                 is_novel_super = super_score < thresh_super
             
             super_scores.append(super_score)
@@ -352,10 +367,11 @@ def predict_with_hierarchical_model(features, model, super_map, sub_map,
             # === 子类预测（可选 Hard Masking）===
             # OOD 分数需要在 masking 之前计算（与阈值计算保持一致）
             if use_energy:
-                sub_score_raw = compute_energy(sub_logits).item()
+                sub_score_raw = compute_energy(sub_logits, temperature=temperature).item()
                 sub_score = -sub_score_raw  # 取负，使得越高越像已知类
             else:
-                sub_probs_unmasked = F.softmax(sub_logits, dim=1)
+                # MSP with temperature = ODIN
+                sub_probs_unmasked = F.softmax(sub_logits / temperature, dim=1)
                 sub_score = sub_probs_unmasked.max(dim=1)[0].item()  # MSP 本身就是越高越像已知类
             
             sub_scores.append(sub_score)
