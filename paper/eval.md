@@ -92,14 +92,14 @@ class ExperimentConfig:
 
 ### 评估结果
 
-  [Superclass] Overall     : 95.34% ± 0.17%
-  [Superclass] Seen        : 95.34% ± 0.17%
+  [Superclass] Overall     : 95.16% ± 0.27%
+  [Superclass] Seen        : 95.16% ± 0.27%
   [Superclass] Unseen      :  0.00% ± 0.00%
-  [Subclass] Overall       : 65.90% ± 2.39%
-  [Subclass] Seen          : 87.73% ± 0.92%
-  [Subclass] Unseen        : 47.29% ± 4.50%
+  [Subclass] Overall       : 69.64% ± 2.2%
+  [Subclass] Seen          : 87.25% ± 0.33%
+  [Subclass] Unseen        : 54.62% ± 4.40%
   [Superclass] AUROC       : nan ± nan
-  [Subclass] AUROC         : 0.8649 ± 0.0053
+  [Subclass] AUROC         : 0.8879 ± 0.0078
 
 结论：Feature Gating 联合双头 能使未知subclass准确率显著提高。
 
@@ -121,7 +121,7 @@ class ExperimentConfig:
     enable_energy: bool = True  # 使用 Energy-based OOD 检测 替代 MSP
 ```
 
-### Temperature Scaling 实验 (v1.3)
+### Temperature Scaling 实验
 
 | Temperature | Subclass Overall   | Subclass Unseen    | Subclass AUROC     |
 |-------------|--------------------|--------------------|--------------------|
@@ -143,11 +143,11 @@ class ExperimentConfig:
   [Superclass] Overall     : 95.22% ± 0.20%
   [Superclass] Seen        : 95.22% ± 0.20%
   [Superclass] Unseen      :  0.00% ± 0.00%
-  [Subclass] Overall       : 64.31% ± 2.08%
-  [Subclass] Seen          : 86.71% ± 0.67%
-  [Subclass] Unseen        : 45.22% ± 4.21%
+  [Subclass] Overall       : 65.90% ± 1.33%
+  [Subclass] Seen          : 87.02% ± 0.90%
+  [Subclass] Unseen        : 47.89% ± 2.82%
   [Superclass] AUROC       : nan ± nan
-  [Subclass] AUROC         : 0.8678 ± 0.0089
+  [Subclass] AUROC         : 0.8726 ± 0.0091
 
 ### 阶段性结论
 
