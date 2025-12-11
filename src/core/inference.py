@@ -12,15 +12,14 @@ def compute_energy(logits, temperature=1.0):
     计算 Energy Score: E(x; T) = -log Σ exp(logit_i / T)
     
     Args:
-        logits: [batch_size, num_classes] - 模型输出的 logits
+        logits: [N, C] - 模型输出的 logits
         temperature: float - 温度缩放参数
             - T < 1: 锐化（扩大差距）
             - T = 1: 不变
             - T > 1: 软化（缩小差距）
     
     Returns:
-        energy: [batch_size] - 能量得分
-            能量越低越可能是已知类，能量越高越可能是未知类
+        energy: [N] - 能量得分，越低越可能是已知类
     """
     return -torch.logsumexp(logits / temperature, dim=1)
 
@@ -73,19 +72,19 @@ def calculate_threshold_hierarchical(model, val_features, val_super_labels, val_
 
     Args:
         model: HierarchicalClassifier 模型
-        val_features: 验证集特征 [N, 512]
-        val_super_labels: 验证集超类标签 [N]
-        val_sub_labels: 验证集子类标签 [N]
-        super_map_inv: 超类 local_to_global 映射 {local_id: global_id}
-        sub_map_inv: 子类 local_to_global 映射 {local_id: global_id}
-        target_recall: 目标召回率 (如 0.95)
-        device: 'cuda' or 'cpu'
-        use_energy: 是否使用 energy score（否则用 MSP）
-        temperature: OOD 温度缩放参数
+        val_features: [N, D] - 验证集特征
+        val_super_labels: [N] - 验证集超类标签
+        val_sub_labels: [N] - 验证集子类标签
+        super_map_inv: {local_id: global_id} - 超类映射
+        sub_map_inv: {local_id: global_id} - 子类映射
+        target_recall: float - 目标召回率 (如 0.95)
+        device: str - 'cuda' or 'cpu'
+        use_energy: bool - 是否使用 energy score（否则用 MSP）
+        temperature: float - OOD 温度缩放参数
 
     Returns:
-        thresh_super: 超类阈值
-        thresh_sub: 子类阈值
+        thresh_super: float - 超类阈值
+        thresh_sub: float - 子类阈值
     """
     
     def _calculate_single_threshold(logits, known_mask, class_name, use_energy, target_recall, temperature):
@@ -99,7 +98,7 @@ def calculate_threshold_hierarchical(model, val_features, val_super_labels, val_
             temperature: float - 温度缩放参数
             
         Returns:
-            threshold: scalar - 计算出的阈值
+            threshold: float - 计算出的阈值
         """
         if known_mask.sum() > 0:
             if use_energy:
@@ -118,14 +117,14 @@ def calculate_threshold_hierarchical(model, val_features, val_super_labels, val_
     model.eval()
     
     with torch.no_grad():
-        super_logits, sub_logits = model(val_features.to(device))  # [N, 512] -> [N, 3], [N, 70]
+        super_logits, sub_logits = model(val_features.to(device))  # [N, D] -> [N, 3], [N, 70]
     
-    # Calculate superclass threshold
-    known_super = torch.tensor([l.item() in super_map_inv for l in val_super_labels])  # [N] - bool mask
+    # 计算 superclass threshold
+    known_super = torch.tensor([l.item() in super_map_inv for l in val_super_labels])  # [N]
     thresh_super = _calculate_single_threshold(super_logits, known_super, "superclass", use_energy, target_recall, temperature)
     
-    # Calculate subclass threshold
-    known_sub = torch.tensor([l.item() in sub_map_inv for l in val_sub_labels])  # [N] - bool mask
+    # 计算 subclass threshold
+    known_sub = torch.tensor([l.item() in sub_map_inv for l in val_sub_labels])  # [N]
     thresh_sub = _calculate_single_threshold(sub_logits, known_sub, "subclass", use_energy, target_recall, temperature)
     
     return thresh_super, thresh_sub
@@ -309,24 +308,24 @@ def predict_with_hierarchical_model(features, model, super_map, sub_map,
                                     use_energy, super_to_sub, temperature):
     """
     Args:
-        features: 输入特征 [N, 512]
+        features: [N, D] - 输入特征
         model: HierarchicalClassifier 模型
-        super_map: 超类 local_to_global 映射
-        sub_map: 子类 local_to_global 映射
-        thresh_super: 超类阈值
-        thresh_sub: 子类阈值
-        novel_super_idx: 未知超类的 ID (3)
-        novel_sub_idx: 未知子类的 ID (87)
-        device: 'cuda' or 'cpu'
-        super_to_sub: 超类到子类的映射（用于 hard masking，可选）
-        use_energy: 是否使用 energy score（否则用 MSP）
-        temperature: OOD 温度缩放参数
+        super_map: {local_id: global_id} - 超类映射
+        sub_map: {local_id: global_id} - 子类映射
+        thresh_super: float - 超类阈值
+        thresh_sub: float - 子类阈值
+        novel_super_idx: int - 未知超类的 ID (3)
+        novel_sub_idx: int - 未知子类的 ID (87)
+        device: str - 'cuda' or 'cpu'
+        super_to_sub: dict - 超类到子类的映射（用于 hard masking，可选）
+        use_energy: bool - 是否使用 energy score（否则用 MSP）
+        temperature: float - OOD 温度缩放参数
     
     Returns:
-        super_preds: 超类预测列表 [N]
-        sub_preds: 子类预测列表 [N]
-        super_scores: 超类 OOD 得分列表 [N] (用于 AUROC，越高越像已知类)
-        sub_scores: 子类 OOD 得分列表 [N] (用于 AUROC，越高越像已知类)
+        super_preds: list[int] - 超类预测列表 [N]
+        sub_preds: list[int] - 子类预测列表 [N]
+        super_scores: list[float] - 超类 OOD 得分 [N] (越高越像已知类)
+        sub_scores: list[float] - 子类 OOD 得分 [N] (越高越像已知类)
     """
     super_preds = []
     sub_preds = []
