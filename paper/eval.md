@@ -2,6 +2,8 @@
 
 ## Baseline: 独立双头 + MSP
 
+### 参数配置
+
 ```py
 class ExperimentConfig:
     # 训练参数
@@ -15,6 +17,8 @@ class ExperimentConfig:
     enable_feature_gating: bool = False  # 训练时使用 SE Feature Gating
     enable_energy: bool = False  # 使用 Energy-based OOD 检测 替代 MSP
 ```
+
+### 评估结果
 
   [Superclass] Overall     : 95.40% ± 0.16%
   [Superclass] Seen        : 95.40% ± 0.16%
@@ -41,6 +45,8 @@ class ExperimentConfig:
     enable_energy: bool = False  # 使用 Energy-based OOD 检测 替代 MSP
 ```
 
+### 评估结果
+
   [Superclass] Overall     : 95.40% ± 0.16%
   [Superclass] Seen        : 95.40% ± 0.16%
   [Superclass] Unseen      :  0.00% ± 0.00%
@@ -53,6 +59,8 @@ class ExperimentConfig:
 结论：根据理论，Baseline + Hierarchical Masking >= Baseline（实验结果为取等情况）。
 
 ## Feature Gating 联合双头 + MSP + Hierarchical Masking
+
+### 参数配置
 
 ```py
 class ExperimentConfig:
@@ -68,18 +76,7 @@ class ExperimentConfig:
     enable_energy: bool = False  # 使用 Energy-based OOD 检测 替代 MSP
 ```
 
-  [Superclass] Overall     : 95.34% ± 0.17%
-  [Superclass] Seen        : 95.34% ± 0.17%
-  [Superclass] Unseen      :  0.00% ± 0.00%
-  [Subclass] Overall       : 65.90% ± 2.39%
-  [Subclass] Seen          : 87.73% ± 0.92%
-  [Subclass] Unseen        : 47.29% ± 4.50%
-  [Superclass] AUROC       : nan ± nan
-  [Subclass] AUROC         : 0.8649 ± 0.0053
-
-结论：Feature Gating 联合双头 能使未知subclass准确率显著提高。
-
-### Temperature Scaling 实验 (v1.2)
+### Temperature 调优
 
 | Temperature | Subclass Overall   | Subclass Unseen    | Subclass AUROC     |
 |-------------|--------------------|--------------------|--------------------|
@@ -93,7 +90,22 @@ class ExperimentConfig:
 
 观察：MSP 方法受益于较高温度，T=2.5 时性能最优。
 
+### 评估结果
+
+  [Superclass] Overall     : 95.34% ± 0.17%
+  [Superclass] Seen        : 95.34% ± 0.17%
+  [Superclass] Unseen      :  0.00% ± 0.00%
+  [Subclass] Overall       : 65.90% ± 2.39%
+  [Subclass] Seen          : 87.73% ± 0.92%
+  [Subclass] Unseen        : 47.29% ± 4.50%
+  [Superclass] AUROC       : nan ± nan
+  [Subclass] AUROC         : 0.8649 ± 0.0053
+
+结论：Feature Gating 联合双头 能使未知subclass准确率显著提高。
+
 ## Feature Gating 联合双头 + Energy-based OOD + Hierarchical Masking
+
+### 参数配置
 
 ```py
 class ExperimentConfig:
@@ -108,15 +120,6 @@ class ExperimentConfig:
     enable_feature_gating: bool = True  # 训练时使用 SE Feature Gating
     enable_energy: bool = True  # 使用 Energy-based OOD 检测 替代 MSP
 ```
-
-  [Superclass] Overall     : 95.22% ± 0.20%
-  [Superclass] Seen        : 95.22% ± 0.20%
-  [Superclass] Unseen      :  0.00% ± 0.00%
-  [Subclass] Overall       : 64.31% ± 2.08%
-  [Subclass] Seen          : 86.71% ± 0.67%
-  [Subclass] Unseen        : 45.22% ± 4.21%
-  [Superclass] AUROC       : nan ± nan
-  [Subclass] AUROC         : 0.8678 ± 0.0089
 
 ### Temperature Scaling 实验 (v1.3)
 
@@ -134,6 +137,17 @@ class ExperimentConfig:
 | 1.2         | 63.65% ± 2.26%     | 43.98% ± 4.50%     | 0.8647 ± 0.0091    |
 
 观察：Energy-based 方法受益于较低温度，T=0.15 时性能最优。
+
+### 评估结果
+
+  [Superclass] Overall     : 95.22% ± 0.20%
+  [Superclass] Seen        : 95.22% ± 0.20%
+  [Superclass] Unseen      :  0.00% ± 0.00%
+  [Subclass] Overall       : 64.31% ± 2.08%
+  [Subclass] Seen          : 86.71% ± 0.67%
+  [Subclass] Unseen        : 45.22% ± 4.21%
+  [Superclass] AUROC       : nan ± nan
+  [Subclass] AUROC         : 0.8678 ± 0.0089
 
 ### 阶段性结论
 
