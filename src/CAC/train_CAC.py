@@ -10,7 +10,8 @@ import os
 
 from src.CAC.CAC import CACProjector, CACLoss
 from src.core.config import *
-from src.core.train import set_seed, create_label_mapping
+from src.core.train import create_label_mapping
+from src.core.utils import set_seed
 
 
 CONFIG = {
@@ -22,6 +23,7 @@ CONFIG = {
     "epochs": 400,
     "alpha": 10.0,
     "lambda_w": 0.1,
+    "anchor_mode": "uniform_hypersphere",
     "device": "cuda" if torch.cuda.is_available() else "cpu",
 }
 
@@ -31,15 +33,15 @@ def train_cac_classifier(
         train_features, train_labels,
         val_features, val_labels,
         label_map, num_classes, model_name,
-        feature_dim, batch_size, learning_rate, epochs, device, seed=114,
-        alpha=10.0, lambda_w=0.1, output_dir=CONFIG["output_dir"], metric="AUROC"
+        feature_dim, batch_size, learning_rate, epochs, device, seed=114, anchor_mode="axis_aligned",
+        alpha=10.0, lambda_w=0.1, se_reduction=-1, output_dir=None, metric="AUROC"
 ):
     """
     带验证集评估的 CAC 训练函数
     """
     set_seed(seed)
 
-    model = CACProjector(feature_dim, num_classes, alpha=alpha)
+    model = CACProjector(feature_dim, num_classes, alpha=alpha, se_reduction=se_reduction, anchor_mode=anchor_mode)
     model.to(device)
 
     # 训练集映射
@@ -55,9 +57,9 @@ def train_cac_classifier(
     criterion = CACLoss(lambda_w=lambda_w).to(device)
     optimizer = optim.SGD(model.parameters(), lr=learning_rate, momentum=0.9)
     # 学习率调整策略
-    scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=[int(epochs * 0.6), int(epochs * 0.8)], gamma=0.1)
+    # scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=[int(epochs * 0.6), int(epochs * 0.8)], gamma=0.1)
 
-    print(f"\n开始训练 {model_name} (CAC Mode)...")
+    print(f"\n开始训练 {model_name} - {anchor_mode} - alpha: {alpha} - lambda_w: {lambda_w} - se_reduction: {se_reduction}...")
 
     best_val_metric = 0.0
     best_model_state = None
@@ -73,12 +75,24 @@ def train_cac_classifier(
 
             _, distances = model(inputs)
             loss = criterion(distances, targets)
+            # -------------- DEBUG --------------
+            # if epoch > 200:
+            #     print(_.shape)
+            #     print(_[0].tolist())
+            #     print(distances.shape)
+            #     print(distances[0].tolist())
+            #     print(max(distances[0]))
+            #     print(min(distances[0]))
+            #     print(distances[0][targets[0].item()].item())
+            #     exit()
+            # -------------- DEBUG --------------
 
             loss.backward()
             optimizer.step()
             train_loss += loss.item()
 
-        scheduler.step()  # 更新学习率
+        # scheduler.step()  # 更新学习率
+        optimizer.step()
 
         # =============== 验证阶段 ===============
         model.eval()
@@ -141,21 +155,25 @@ def train_cac_classifier(
             if val_acc > best_val_metric:
                 best_val_metric = val_acc
                 best_model_state = copy.deepcopy(model.state_dict())
-                torch.save(best_model_state, os.path.join(output_dir, f"{model_name}_best.pth"))
+                # torch.save(best_model_state, os.path.join(output_dir, f"{model_name}_best.pth"))
         elif metric == "AUROC":
             # 记录AUROC最高的模型状态
             if val_auroc > best_val_metric:
                 best_val_metric = val_auroc
                 best_model_state = copy.deepcopy(model.state_dict())
-                torch.save(best_model_state, os.path.join(output_dir, f"{model_name}_best.pth"))
+                # torch.save(best_model_state, os.path.join(output_dir, f"{model_name}_best.pth"))
 
     print(f"训练结束。最佳验证集 {metric} : {best_val_metric:.2f}%")
 
     # 加载最佳权重并返回
     if best_model_state is not None:
         model.load_state_dict(best_model_state)
-    torch.save(model.state_dict(), os.path.join(CONFIG["output_dir"], f"best_cac_model_seed_{seed}.pth"))
-    print(f"已经保存权重：{os.path.join(CONFIG["output_dir"], f"best_cac_model_seed_{seed}.pth")}")
+
+    if output_dir is not None:
+        torch.save(model.state_dict(),
+                   os.path.join(CONFIG["output_dir"], f"best_cac_model_seed_{seed}_alpha_{alpha}_{anchor_mode}.pth"))
+
+        print(f"已经保存权重：{os.path.join(CONFIG["output_dir"], f"best_cac_model_seed_{seed}_alpha_{alpha}_{anchor_mode}.pth")}")
 
     return model
 
@@ -190,7 +208,7 @@ if __name__ == "__main__":
         learning_rate=0.01,
         epochs=CONFIG["epochs"],
         device=CONFIG["device"],
-        output_dir=CONFIG["output_dir"],
+        output_dir=None,
         alpha=CONFIG["alpha"],
         lambda_w=CONFIG["lambda_w"],
         seed=42

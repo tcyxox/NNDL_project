@@ -4,20 +4,25 @@ import os
 
 from src.CAC.CAC import CACProjector, CACLoss
 from src.CAC.train_CAC import train_cac_classifier
+# from src.CAC.train_mixup_CAC import train_cac_mixup_classifier as train_cac_classifier
 from src.CAC.test_CAC import test_cac_openset
 from src.core.config import *
-from src.core.train import set_seed, create_label_mapping
+from src.core.train import create_label_mapping
+from src.core.utils import set_seed
 
 # ================= 配置区域 =================
 CONFIG = {
     "feature_dir": config.paths.split_features,
-    "output_dir": config.paths.dev,
+    "output_dir": os.path.join(config.paths.dev, "CAC"),
     "feature_dim": config.model.feature_dim,
     "learning_rate": 0.01,
     "batch_size": config.experiment.batch_size,
-    "epochs": 400,
-    "alpha": 10.0,
-    "lambda_w": 0.1,
+    "epochs": 300,
+    "alpha": 8,
+    "lambda_w": 0,
+    "anchor_mode": "uniform_hypersphere",
+    # "anchor_mode": "axis_aligned",
+    "se_reduction": 2,
     "novel_sub_index": config.osr.novel_sub_index,
     "target_recall": config.experiment.target_recall,
     "device": "cuda" if torch.cuda.is_available() else "cpu",
@@ -85,7 +90,10 @@ if __name__ == "__main__":
             metric="AUROC",
             alpha=CONFIG["alpha"],
             lambda_w=CONFIG["lambda_w"],
-            output_dir=CONFIG["output_dir"]
+            se_reduction=CONFIG["se_reduction"],
+            anchor_mode=CONFIG["anchor_mode"],
+            # output_dir=CONFIG["output_dir"]
+            output_dir=None
         )
 
         # === 测试 ===
