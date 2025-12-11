@@ -117,6 +117,13 @@ These methods define a scoring function based on the outputs (logits or softmax 
     \item Out-of-Distribution Detector (ODIN)~\cite{liang2020enhancingreliabilityoutofdistributionimage}: Improves MSP by applying temperature scaling to the logits before softmax and adding small perturbations to the input image. Logit $\to$ Temperature Scaling $\to$ Softmax $\to$ Threshold Gate.
     \item Energy-based Out-of-distribution Detection~\cite{liu2021energybasedoutofdistributiondetection}: Instead of softmax, this method uses the free energy derived from the logits as the scoring function. Lower energy indicates known data, while higher energy indicates novel data. Logit $\to$ Energy $\to$ Threshold Gate.
 \end{itemize}
+
+For a model with logits $\mathbf{z} = [z_1, z_2, \ldots, z_C]$ for $C$ classes, the energy score is defined as:
+\begin{equation}
+    E(\mathbf{x}) = -\log \sum_{i=1}^{C} e^{z_i}
+\end{equation}
+where lower energy values indicate higher confidence that the sample belongs to a known class.
+
 A known issue with MSP and ODIN is their reliance on the Softmax function. Softmax forces output probabilities to sum to 1, losing the magnitude information of the underlying logits, which often leads to \textbf{overconfidence} on unseen data. Energy-based methods mitigate this by utilizing the raw logit magnitudes.
 
 \begin{center}
