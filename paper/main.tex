@@ -137,6 +137,21 @@ The free energy function $E(\mathbf{x}; T)$ using temperature $T$ is defined as:
 \end{equation}
 Lower energy values indicate higher confidence that the sample belongs to a known class.
 
+\textbf{Temperature Limit Analysis:}
+The effect of temperature can be understood by examining the limiting cases:
+
+\textit{ODIN as $T \to \infty$:} As temperature increases, the softmax distribution becomes uniform, and the score approaches a linear function of the logit gap:
+\begin{equation}
+    \lim_{T \to \infty} S_{\text{ODIN}}(\mathbf{x}; T) \approx \frac{1}{C} + \frac{1}{C \cdot T} \left( z_{\max}(\mathbf{x}) - \bar{z}(\mathbf{x}) \right)
+\end{equation}
+where $z_{\max}$ is the maximum logit and $\bar{z}$ is the mean logit. This reveals that high-temperature ODIN measures the \textbf{Relative Sharpness} of the logit distribution.
+
+\textit{Energy as $T \to 0$:} As temperature decreases, the LogSumExp converges to the maximum:
+\begin{equation}
+    \lim_{T \to 0} E(\mathbf{x}; T) = -\max_{i} z_i(\mathbf{x})
+\end{equation}
+This shows that low-temperature Energy reduces to the negative \textbf{MaxLogit}, measuring the \textbf{Absolute Magnitude} of the strongest prediction.
+
 A known issue with MSP and ODIN is their reliance on the Softmax function. Softmax forces output probabilities to sum to 1, losing the magnitude information of the underlying logits, which often leads to \textbf{overconfidence} on unseen data. Energy-based methods mitigate this by utilizing the raw logit magnitudes.
 
 \begin{center}
