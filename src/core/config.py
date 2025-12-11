@@ -49,8 +49,8 @@ class ExperimentConfig:
     # 实验开关
     enable_hierarchical_masking: bool = True  # 推理时使用 Hierarchical Masking
     enable_feature_gating: bool = True  # 训练时使用 SE Feature Gating
-    enable_energy: bool = True  # 使用 Energy-based OOD 检测 替代 MSP
-    ood_temperature: float = 1.0  # OOD 温度缩放 (适用于 MSP 和 Energy)
+    enable_energy: bool = False  # 使用 Energy-based OOD 检测 替代 MSP
+    ood_temperature: float = 1.2  # OOD 温度缩放 (适用于 MSP 和 Energy)
 
 
 @dataclass

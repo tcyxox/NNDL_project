@@ -77,6 +77,16 @@ class ExperimentConfig:
 
 变化：未知subclass准确率显著提高。
 
+### Temperature Scaling 实验 (v1.2)
+
+| Temperature | Subclass Overall | Subclass Unseen | Subclass AUROC |
+|-------------|------------------|-----------------|----------------|
+| 0.8         | 64.39% ± 2.40%   | 44.90% ± 4.50%  | 0.8587 ± 0.0049|
+| 1.0         | 65.90% ± 2.39%   | 47.29% ± 4.50%  | 0.8649 ± 0.0053|
+| **1.2**     | **66.84% ± 2.71%** | **49.13% ± 5.14%** | **0.8710 ± 0.0055**|
+
+观察：MSP 方法受益于较高温度，T=1.2 时性能最优。
+
 ## v1.3 (+ Energy-based OOD)
 
 ```py
@@ -101,6 +111,16 @@ class ExperimentConfig:
   [Subclass] Unseen        : 45.22% ± 4.21%
   [Superclass] AUROC       : nan ± nan
   [Subclass] AUROC         : 0.8678 ± 0.0089
+
+### Temperature Scaling 实验 (v1.3)
+
+| Temperature | Subclass Overall | Subclass Unseen | Subclass AUROC |
+|-------------|------------------|-----------------|----------------|
+| **0.8**     | **64.84% ± 1.84%** | **45.95% ± 3.69%** | **0.8700 ± 0.0088**|
+| 1.0         | 64.31% ± 2.08%   | 45.22% ± 4.21%  | 0.8678 ± 0.0089|
+| 1.2         | 63.65% ± 2.26%   | 43.98% ± 4.50%  | 0.8647 ± 0.0091|
+
+观察：Energy-based 方法受益于较低温度，T=0.8 时性能最优。与 MSP 相反。
 
 ## CAC v1.0
 
