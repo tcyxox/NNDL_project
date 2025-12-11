@@ -1,6 +1,6 @@
 # Evaluations
 
-## v1.0
+## v1.0 (Baseline)
 
 ```py
 class ExperimentConfig:
@@ -22,8 +22,10 @@ class ExperimentConfig:
   [Subclass] Overall       : 62.17% ± 0.63%
   [Subclass] Seen          : 88.82% ± 0.21%
   [Subclass] Unseen        : 39.43% ± 1.16%
+  [Superclass] AUROC       : nan ± nan
+  [Subclass] AUROC         : 0.8539 ± 0.0016
 
-## v1.1
+## v1.1 (+ Hierarchical Masking)
 
 ```py
 class ExperimentConfig:
@@ -45,8 +47,10 @@ class ExperimentConfig:
   [Subclass] Overall       : 62.17% ± 0.63%
   [Subclass] Seen          : 88.82% ± 0.21%
   [Subclass] Unseen        : 39.43% ± 1.16%
+  [Superclass] AUROC       : nan ± nan
+  [Subclass] AUROC         : 0.8539 ± 0.0016
 
-## v1.2
+## v1.2 (+ Feature Gating)
 
 ```py
 class ExperimentConfig:
@@ -68,10 +72,12 @@ class ExperimentConfig:
   [Subclass] Overall       : 65.90% ± 2.39%
   [Subclass] Seen          : 87.73% ± 0.92%
   [Subclass] Unseen        : 47.29% ± 4.50%
+  [Superclass] AUROC       : nan ± nan
+  [Subclass] AUROC         : 0.8649 ± 0.0053
 
 变化：未知subclass准确率显著提高。
 
-## v1.3
+## v1.3 (+ Energy-based OOD)
 
 ```py
 class ExperimentConfig:
@@ -93,7 +99,8 @@ class ExperimentConfig:
   [Subclass] Overall       : 64.31% ± 2.08%
   [Subclass] Seen          : 86.71% ± 0.67%
   [Subclass] Unseen        : 45.22% ± 4.21%
-  
+  [Superclass] AUROC       : nan ± nan
+  [Subclass] AUROC         : 0.8678 ± 0.0089
 
 ## CAC v1.0
 
@@ -113,4 +120,4 @@ class ExperimentConfig:
   [Subclass] Overall            : 68.63% ± 0.64%
   [Subclass] Seen               : 94.86% ± 0.29%
   [Subclass] Unseen             : 46.25% ± 1.31%
-  AUROC                         : 0.8642 ± 0.0003
+  [Subclass] AUROC              : 0.8642 ± 0.0003
