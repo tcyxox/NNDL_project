@@ -1,6 +1,6 @@
 # Evaluations
 
-## v1.0 (Baseline)
+## Baseline: 独立双头 + MSP
 
 ```py
 class ExperimentConfig:
@@ -25,7 +25,7 @@ class ExperimentConfig:
   [Superclass] AUROC       : nan ± nan
   [Subclass] AUROC         : 0.8539 ± 0.0016
 
-## v1.1 (+ Hierarchical Masking)
+## 独立双头 + MSP + Hierarchical Masking
 
 ```py
 class ExperimentConfig:
@@ -50,7 +50,9 @@ class ExperimentConfig:
   [Superclass] AUROC       : nan ± nan
   [Subclass] AUROC         : 0.8539 ± 0.0016
 
-## v1.2 (+ Feature Gating)
+结论：根据理论，Baseline + Hierarchical Masking >= Baseline（实验结果为取等情况）。
+
+## Feature Gating 联合双头 + MSP + Hierarchical Masking
 
 ```py
 class ExperimentConfig:
@@ -75,7 +77,7 @@ class ExperimentConfig:
   [Superclass] AUROC       : nan ± nan
   [Subclass] AUROC         : 0.8649 ± 0.0053
 
-变化：未知subclass准确率显著提高。
+结论：Feature Gating 联合双头 能使未知subclass准确率显著提高。
 
 ### Temperature Scaling 实验 (v1.2)
 
@@ -91,7 +93,7 @@ class ExperimentConfig:
 
 观察：MSP 方法受益于较高温度，T=2.5 时性能最优。
 
-## v1.3 (+ Energy-based OOD)
+## Feature Gating 联合双头 + Energy-based OOD + Hierarchical Masking
 
 ```py
 class ExperimentConfig:
@@ -132,6 +134,13 @@ class ExperimentConfig:
 | 1.2         | 63.65% ± 2.26%     | 43.98% ± 4.50%     | 0.8647 ± 0.0091    |
 
 观察：Energy-based 方法受益于较低温度，T=0.15 时性能最优。
+
+### 阶段性结论
+
+1. Feature Gating 联合双头 + Hierarchical Masking 是一定要使用的。
+2. MSP 受益于较高温度（T=2.5 时性能最优）：高温时，模型关注相对尖锐度。
+3. Energy-based OOD 受益于较低温度（T=0.15 时性能最优）：低温时，模型关注绝对幅值。
+4. MSP 中 Softmax 的强制归一化导致丢失幅值信息，在理论上并不完备；而基于 Logits 的 Energy-based OOD 则保留了幅值信息。但实际效果上，MSP 的表现略优于 Energy-based OOD，这是因为依然基于 Cross-Entropy Loss 作为损失函数，因此，后面讲其替换为 Binary Cross-Entropy Loss。
 
 ## CAC v1.0
 
