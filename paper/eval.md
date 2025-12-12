@@ -245,8 +245,21 @@ class ExperimentConfig:
 | 4            | 71.84% ± 0.69%    | 94.47% ± 0.19%  | 52.54% ± 1.21%  | 0.8864 ± 0.0011|
 | 8            | 72.08% ± 0.61%    | 94.63% ± 0.53%  | 52.84% ± 1.03%  | 0.8877 ± 0.0013|
 
-7 0 4
-[Subclass] Overall            : 71.28% ± 0.96%
-[Subclass] Seen               : 94.12% ± 0.59%
-[Subclass] Unseen             : 51.81% ± 1.49%
-AUROC                         : 0.8798 ± 0.0020
+# OpenMax
+## v1.0
+```py
+class ExperimentConfig:
+    # 训练参数
+    batch_size: int = 64
+    learning_rate: float = 1e-3
+    epochs: int = 100
+    # 模型参数
+    alpha: int = 3
+    weibull_tail_size: int = 3
+    distance_type = "cosine"
+```
+
+[Subclass] Overall            : 80.05% ± 0.00%
+[Subclass] Seen               : 90.59% ± 0.00%
+[Subclass] Unseen             : 71.07% ± 0.00%
+AUROC                         : 0.9364 ± 0.0000
