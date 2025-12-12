@@ -121,10 +121,11 @@ class ExperimentConfig:
     enable_energy: bool = True  # 使用 Energy-based OOD 检测 替代 MSP
 ```
 
-### Temperature Scaling 实验
+### Temperature 调优
 
 | Temperature | Subclass Overall   | Subclass Unseen    | Subclass AUROC     |
 |-------------|--------------------|--------------------|--------------------|
+| 0.0         | 38.68% ± 1.53%     | 48.09% ± 2.89%     | 0.8726 ± 0.0091    |
 | 0.1         | 65.94% ± 1.32%     | 47.96% ± 2.79%     | 0.8726 ± 0.0091    |
 | 0.2         | 65.85% ± 1.30%     | 47.76% ± 2.77%     | 0.8725 ± 0.0091    |
 | 0.4         | 65.61% ± 1.41%     | 47.22% ± 2.90%     | 0.8722 ± 0.0089    |

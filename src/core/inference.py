@@ -9,11 +9,12 @@ from .models import LinearClassifier, HierarchicalClassifier
 
 def compute_energy(logits, temperature):
     """
-    计算 Energy Score: E(x; T) = -log Σ exp(logit_i / T)
+    计算 Energy Score: E(x; T) = -T × log(Σ exp(logit_i / T))
     
     Args:
         logits: [N, C] - 模型输出的 logits
         temperature: float - 温度缩放参数
+            - T = 0: 使用 -max(logits) (极限情况)
             - T < 1: 锐化（扩大差距）
             - T = 1: 不变
             - T > 1: 软化（缩小差距）
@@ -21,7 +22,10 @@ def compute_energy(logits, temperature):
     Returns:
         energy: [N] - 能量得分，越低越可能是已知类
     """
-    return -torch.logsumexp(logits / temperature, dim=1)
+    if temperature == 0:
+        # 当 T → 0 时，lim_{T→0} -T × log(Σ exp(logit_i / T)) = -max(logits)
+        return -torch.max(logits, dim=1)[0]
+    return -temperature * torch.logsumexp(logits / temperature, dim=1)
 
 
 def calculate_threshold_linear(model, val_features, val_labels, label_map, target_recall, device, use_energy, temperature):
