@@ -92,7 +92,6 @@ def train_cac_classifier(
             train_loss += loss.item()
 
         # scheduler.step()  # 更新学习率
-        optimizer.step()
 
         # =============== 验证阶段 ===============
         model.eval()
@@ -169,11 +168,11 @@ def train_cac_classifier(
     if best_model_state is not None:
         model.load_state_dict(best_model_state)
 
-    if output_dir is not None:
+    if output_dir:
         torch.save(model.state_dict(),
-                   os.path.join(CONFIG["output_dir"], f"best_cac_model_seed_{seed}_alpha_{alpha}_{anchor_mode}.pth"))
+                   os.path.join(output_dir, f"best_cac_model_seed_{seed}_alpha_{alpha}_{anchor_mode}.pth"))
 
-        print(f"已经保存权重：{os.path.join(CONFIG["output_dir"], f"best_cac_model_seed_{seed}_alpha_{alpha}_{anchor_mode}.pth")}")
+        print(f"已经保存权重：{os.path.join(output_dir, f"best_cac_model_seed_{seed}_alpha_{alpha}_{anchor_mode}.pth")}")
 
     return model
 
