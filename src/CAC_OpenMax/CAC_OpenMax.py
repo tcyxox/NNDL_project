@@ -1,27 +1,16 @@
 import torch
 import numpy as np
-import libmr
-import scipy.spatial.distance as spd
 import torch.nn as nn
+import libmr
 
-class LinearClassifier(nn.Module):
-    """线性分类器模型"""
-    def __init__(self, in_features, out_features):
-        super(LinearClassifier, self).__init__()
-        self.layer = nn.Linear(in_features, out_features)
-
-    def forward(self, x):
-        return self.layer(x)
-
-
-class OpenMax:
+class CAC_OpenMax:
     def __init__(self, num_classes, weibul_tail_size=3, alpha=3, distance_type='euclidean'):
         """
         初始化 OpenMax
-        :param num_classes: 已知类别的数量 (N)
-        :param weibul_tail_size: 用于拟合 Weibull 分布的尾部大小
-        :param alpha: 修正 Top-K 个类别的得分
-        :param distance_type: 距离度量方式 ('euclidean', 'cosine', 'euclidean_cosine')
+            :param num_classes: 已知类别的数量 (N)
+            :param weibul_tail_size: 用于拟合 Weibull 分布的尾部大小
+            :param alpha: 修正 Top-K 个类别的得分
+            :param distance_type: 距离度量方式 ('euclidean', 'cosine', 'euclidean_cosine')
         """
         self.num_classes = num_classes
         self.tail_size = weibul_tail_size
@@ -146,11 +135,10 @@ class OpenMax:
         e_x = np.exp(x - np.max(x))
         return e_x / e_x.sum()
 
-
-class OpenMaxSystem(nn.Module):
-    def __init__(self, model, openmax_model, device):
+class CAC_OpenMax_System(nn.Module):
+    def __init__(self, CAC_model, openmax_model, device):
         super().__init__()
-        self.model = model
+        self.CAC_model = CAC_model
         self.openmax_model = openmax_model
         self.device = device
 
@@ -162,11 +150,11 @@ class OpenMaxSystem(nn.Module):
         - 类别 0 代表 "Unknown"
         - 类别 1 代表 "Known Class 0", 类别 2 代表 "Known Class 1"...
         """
-        self.model.eval()
+        self.CAC_model.eval()
         with torch.no_grad():
             features = features.to(self.device)
             # 1. 获取激活向量 (Logits)
-            logits = self.model(features)
+            logits, _ = self.CAC_model(features)
 
             # 2. OpenMax 推理
             # predict 返回的是 N x (num_classes + 1) 的概率
