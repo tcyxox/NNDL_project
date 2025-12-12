@@ -15,12 +15,12 @@ class LinearClassifier(nn.Module):
 
 
 class OpenMax:
-    def __init__(self, num_classes, weibul_tail_size=20, alpha=10, distance_type='euclidean'):
+    def __init__(self, num_classes, weibul_tail_size=3, alpha=3, distance_type='euclidean'):
         """
         初始化 OpenMax
         :param num_classes: 已知类别的数量 (N)
-        :param weibul_tail_size: 用于拟合 Weibull 分布的尾部大小 (论文推荐 20)
-        :param alpha: 修正 Top-K 个类别的得分 (论文推荐 10)
+        :param weibul_tail_size: 用于拟合 Weibull 分布的尾部大小
+        :param alpha: 修正 Top-K 个类别的得分
         :param distance_type: 距离度量方式 ('euclidean', 'cosine', 'euclidean_cosine')
         """
         self.num_classes = num_classes
@@ -148,9 +148,9 @@ class OpenMax:
 
 
 class OpenMaxSystem(nn.Module):
-    def __init__(self, linear_model, openmax_model, device):
+    def __init__(self, model, openmax_model, device):
         super().__init__()
-        self.linear_model = linear_model
+        self.model = model
         self.openmax_model = openmax_model
         self.device = device
 
@@ -162,11 +162,11 @@ class OpenMaxSystem(nn.Module):
         - 类别 0 代表 "Unknown"
         - 类别 1 代表 "Known Class 0", 类别 2 代表 "Known Class 1"...
         """
-        self.linear_model.eval()
+        self.model.eval()
         with torch.no_grad():
             features = features.to(self.device)
             # 1. 获取激活向量 (Logits)
-            logits = self.linear_model(features)
+            logits = self.model(features)
 
             # 2. OpenMax 推理
             # predict 返回的是 N x (num_classes + 1) 的概率

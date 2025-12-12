@@ -178,7 +178,7 @@ def train_openmax_classifier(
             pickle.dump(openmax, f)
         # 保存线性分类器
         torch.save(model.state_dict(),
-                   os.path.join(output_dir, f"best_cac_model_seed_{seed}_alpha_{alpha}_{anchor_mode}.pth"))
+                   os.path.join(output_dir, f"best_{model_name}_seed_{seed}.pth"))
         print(f"  - 模型已保存至 {output_dir}")
 
     return system
