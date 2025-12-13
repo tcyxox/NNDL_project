@@ -10,7 +10,7 @@ from .models import LinearSingleHead, GatedDualHead
 from .config import TrainingLoss
 
 
-def create_label_mapping(labels, label_name, output_dir=None):
+def create_label_mapping(labels, label_name, output_dir=None, verbose=True):
     """
     为标签创建连续ID映射
 
@@ -31,20 +31,22 @@ def create_label_mapping(labels, label_name, output_dir=None):
     # 反向字典: 模型内部ID -> 原始ID (用于推理恢复)
     local_to_global = {local: original for local, original in enumerate(unique_classes)}
 
-    print(f"[{label_name}] 检测到 {num_classes} 个已知类别。")
-    print(f"  > 原始标签示例: {unique_classes[:5]}...")
+    if verbose:
+        print(f"[{label_name}] 检测到 {num_classes} 个已知类别。")
+        print(f"  > 原始标签示例: {unique_classes[:5]}...")
 
     # 保存 local_to_global 映射关系（可选）
     if output_dir:
         mapping_path = os.path.join(output_dir, f"{label_name}_local_to_global_map.json")
         with open(mapping_path, 'w') as f:
             json.dump(local_to_global, f)
-        print(f"  > 映射表已保存至: {mapping_path}")
+        if verbose:
+            print(f"  > 映射表已保存至: {mapping_path}")
 
     return num_classes, global_to_local
 
 
-def create_super_to_sub_mapping(super_labels, sub_labels, output_dir=None):
+def create_super_to_sub_mapping(super_labels, sub_labels, output_dir=None, verbose=True):
     """
     生成超类到子类的映射表
 
@@ -56,26 +58,29 @@ def create_super_to_sub_mapping(super_labels, sub_labels, output_dir=None):
     Returns:
         super_to_sub: 映射字典 {super_id: [sub_ids]}
     """
-    print("\n生成超类到子类映射表...")
+    if verbose:
+        print("\n生成超类到子类映射表...")
     super_to_sub = {}
     unique_super = torch.unique(super_labels).tolist()
     for super_idx in unique_super:
         mask = (super_labels == super_idx)
         sub_indices = torch.unique(sub_labels[mask]).tolist()
         super_to_sub[super_idx] = sub_indices
-        print(f"  > Superclass {super_idx}: {len(sub_indices)} subclasses")
+        if verbose:
+            print(f"  > Superclass {super_idx}: {len(sub_indices)} subclasses")
 
     if output_dir:
         mapping_path = os.path.join(output_dir, "super_to_sub_map.json")
         with open(mapping_path, 'w') as f:
             json.dump(super_to_sub, f)
-        print(f"  > 映射表已保存至: {mapping_path}")
+        if verbose:
+            print(f"  > 映射表已保存至: {mapping_path}")
 
     return super_to_sub
 
 
 def train_linear_single_head(features, labels, label_map, num_classes,
-                             feature_dim, batch_size, learning_rate, epochs, device, training_loss):
+                             feature_dim, batch_size, learning_rate, epochs, device, training_loss, verbose=True):
     """
     Args:
         features: 训练特征
@@ -132,14 +137,14 @@ def train_linear_single_head(features, labels, label_map, num_classes,
 
             running_loss += loss.item()
 
-        if (epoch + 1) % 10 == 0:
+        if verbose and (epoch + 1) % 10 == 0:
             print(f"  Epoch [{epoch + 1}/{epochs}], Loss: {running_loss / len(loader):.4f}")
 
     return model
 
 
 def train_gated_dual_head(features, super_labels, sub_labels, super_map, sub_map, num_super, num_sub,
-                          feature_dim, batch_size, learning_rate, epochs, device, training_loss):
+                          feature_dim, batch_size, learning_rate, epochs, device, training_loss, verbose=True):
     """
     Args:
         features: 训练特征
@@ -203,7 +208,7 @@ def train_gated_dual_head(features, super_labels, sub_labels, super_map, sub_map
 
             running_loss += loss.item()
 
-        if (epoch + 1) % 10 == 0:
+        if verbose and (epoch + 1) % 10 == 0:
             print(f"  Epoch [{epoch + 1}/{epochs}], Loss: {running_loss / len(loader):.4f}")
 
     return model
@@ -211,7 +216,7 @@ def train_gated_dual_head(features, super_labels, sub_labels, super_map, sub_map
 
 def run_training(feature_dim, batch_size, learning_rate, epochs, device,
                  enable_feature_gating, training_loss,
-                 feature_dir, output_dir=None):
+                 feature_dir, output_dir=None, verbose=True):
     """
     训练模型的主函数
 
@@ -232,53 +237,61 @@ def run_training(feature_dim, batch_size, learning_rate, epochs, device,
     """
 
     # 加载训练数据
-    print("正在加载训练数据...")
+    if verbose:
+        print("正在加载训练数据...")
     train_features = torch.load(os.path.join(feature_dir, "train_features.pt"))
     train_super_labels = torch.load(os.path.join(feature_dir, "train_super_labels.pt"))
     train_sub_labels = torch.load(os.path.join(feature_dir, "train_sub_labels.pt"))
-    print(f"  > 训练样本数: {len(train_features)}")
+    if verbose:
+        print(f"  > 训练样本数: {len(train_features)}")
 
     if output_dir:
         os.makedirs(output_dir, exist_ok=True)
 
     # 创建标签映射
-    num_super, super_map = create_label_mapping(train_super_labels, "super", output_dir)
-    num_sub, sub_map = create_label_mapping(train_sub_labels, "sub", output_dir)
+    num_super, super_map = create_label_mapping(train_super_labels, "super", output_dir, verbose)
+    num_sub, sub_map = create_label_mapping(train_sub_labels, "sub", output_dir, verbose)
 
     # 训练模型
     if enable_feature_gating:
-        print(f"\n=== 使用 Feature Gating (联合训练模式) | Loss: {training_loss.value.upper()} ===")
+        if verbose:
+            print(f"\n=== 使用 Feature Gating (联合训练模式) | Loss: {training_loss.value.upper()} ===")
         model = train_gated_dual_head(
             train_features, train_super_labels, train_sub_labels, super_map, sub_map, num_super, num_sub,
-            feature_dim, batch_size, learning_rate, epochs, device, training_loss
+            feature_dim, batch_size, learning_rate, epochs, device, training_loss, verbose
         )
         if output_dir:
             torch.save(model.state_dict(), os.path.join(output_dir, "hierarchical_model.pth"))
-            print("层次模型已保存。")
+            if verbose:
+                print("层次模型已保存。")
     else:
-        print("\n=== 独立训练模式 ===")
-        print(f"开始训练 Superclass Model (Classes: {num_super})...")
+        if verbose:
+            print("\n=== 独立训练模式 ===")
+            print(f"开始训练 Superclass Model (Classes: {num_super})...")
         super_model = train_linear_single_head(
             train_features, train_super_labels, super_map, num_super,
-            feature_dim, batch_size, learning_rate, epochs, device, training_loss
+            feature_dim, batch_size, learning_rate, epochs, device, training_loss, verbose
         )
         if output_dir:
             torch.save(super_model.state_dict(), os.path.join(output_dir, "super_model.pth"))
-            print("超类模型已保存。")
+            if verbose:
+                print("超类模型已保存。")
 
-        print(f"开始训练 Subclass Model (Classes: {num_sub})...")
+        if verbose:
+            print(f"开始训练 Subclass Model (Classes: {num_sub})...")
         sub_model = train_linear_single_head(
             train_features, train_sub_labels, sub_map, num_sub,
-            feature_dim, batch_size, learning_rate, epochs, device, training_loss
+            feature_dim, batch_size, learning_rate, epochs, device, training_loss, verbose
         )
         if output_dir:
             torch.save(sub_model.state_dict(), os.path.join(output_dir, "sub_model.pth"))
-            print("子类模型已保存。")
+            if verbose:
+                print("子类模型已保存。")
     
     # 生成 super_to_sub 映射
-    super_to_sub = create_super_to_sub_mapping(train_super_labels, train_sub_labels, output_dir)
+    super_to_sub = create_super_to_sub_mapping(train_super_labels, train_sub_labels, output_dir, verbose)
     
-    if output_dir:
+    if output_dir and verbose:
         print("\n--- 所有模型训练完毕 ---")
         print(f"请检查 {output_dir} 目录下的模型文件 (.pth) 和 映射文件 (.json)。")
     
@@ -287,5 +300,6 @@ def run_training(feature_dim, batch_size, learning_rate, epochs, device,
         return model, super_map, sub_map, super_to_sub
     else:
         return super_model, sub_model, super_map, sub_map, super_to_sub
+
 
 

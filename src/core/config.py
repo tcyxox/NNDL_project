@@ -65,7 +65,7 @@ class ExperimentConfig:
 
     # 模型选择
     enable_hierarchical_masking: bool = True  # 推理时 Hierarchical Masking 开关
-    enable_feature_gating: bool = False  # 训练时 SE Feature Gating 开关
+    enable_feature_gating: bool = True  # 训练时 SE Feature Gating 开关
 
     # 方法选择
     training_loss: TrainingLoss = TrainingLoss.CE

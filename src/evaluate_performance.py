@@ -51,7 +51,7 @@ def calculate_metrics(y_true, y_pred, novel_label):
     return acc_all, acc_known, acc_novel
 
 
-def run_single_trial(cfg: dict, seed: int):
+def run_single_trial(cfg: dict, seed: int, verbose: bool = True):
     """
     运行单次实验，返回各项指标
     
@@ -63,6 +63,7 @@ def run_single_trial(cfg: dict, seed: int):
             - training_loss, threshold_method, prediction_method
             - threshold_temperature, prediction_temperature
         seed: 随机种子
+        verbose: 是否打印训练进度信息
     
     Returns:
         dict: 包含各项评估指标
@@ -87,7 +88,8 @@ def run_single_trial(cfg: dict, seed: int):
         device=device,
         enable_feature_gating=cfg["enable_feature_gating"],
         training_loss=cfg["training_loss"],
-        feature_dir=cfg["feature_dir"]
+        feature_dir=cfg["feature_dir"],
+        verbose=verbose
     )
     
     if cfg["enable_feature_gating"]:
@@ -152,14 +154,16 @@ def run_single_trial(cfg: dict, seed: int):
     sub_binary_labels = (test_sub_labels.numpy() != cfg["novel_sub_idx"]).astype(int)
     
     # 计算 AUROC（得分越高，越像已知类）
-    try:
+    # 需要检查是否存在两个类别，否则 AUROC 无定义
+    if len(np.unique(super_binary_labels)) > 1:
         super_auroc = roc_auc_score(super_binary_labels, super_scores)
+    else:
+        super_auroc = float('nan')
+    
+    if len(np.unique(sub_binary_labels)) > 1:
         sub_auroc = roc_auc_score(sub_binary_labels, sub_scores)
-    except ValueError as e:
-        # If only one class is present, cannot calculate AUROC
-        print(f"Warning: Cannot calculate AUROC - {e}")
-        super_auroc = 0.0
-        sub_auroc = 0.0
+    else:
+        sub_auroc = float('nan')
     
     return {
         "super_overall": super_all, "super_seen": super_seen, "super_unseen": super_unseen,
@@ -183,9 +187,8 @@ def run_multiple_trials(cfg: dict, seeds: list[int], verbose: bool = True) -> di
     all_results = []
     
     for i, seed in enumerate(seeds):
-        if verbose:
-            print(f"\n>>> Trial {i+1}/{len(seeds)}, Seed={seed}")
-        result = run_single_trial(cfg, seed)
+        print(f"\n>>> Trial {i+1}/{len(seeds)}, Seed={seed}")
+        result = run_single_trial(cfg, seed, verbose=verbose)
         all_results.append(result)
         if verbose:
             print(f"    Subclass Unseen: {result['sub_unseen']*100:.2f}%")
@@ -224,6 +227,6 @@ if __name__ == "__main__":
     print(f"Multi-seed Evaluation | Mode: {mode} | Masking: {masking} | Trials: {len(SEEDS)}")
     print("=" * 60)
     
-    stats = run_multiple_trials(CONFIG, SEEDS)
+    stats = run_multiple_trials(CONFIG, SEEDS, verbose=False)
     print_evaluation_report(stats)
 
