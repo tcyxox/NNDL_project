@@ -28,6 +28,25 @@ def compute_energy(logits, temperature):
     return -temperature * torch.logsumexp(logits / temperature, dim=1)
 
 
+def get_default_threshold(use_energy, use_sigmoid_bce):
+    """
+    获取默认阈值（当验证集中没有已知类样本时使用）
+
+    Args:
+        use_energy: 是否使用 energy score
+        use_sigmoid_bce: 是否使用 sigmoid-based scoring
+
+    Returns:
+        默认阈值
+    """
+    if use_sigmoid_bce:
+        return 0.5
+    elif use_energy:
+        return -5
+    else:
+        return 0.5
+
+
 def calculate_threshold_linear_single_head(
         model, val_features, val_labels, label_map,
         target_recall, device,
@@ -58,7 +77,7 @@ def calculate_threshold_linear_single_head(
 
     if len(X_known) == 0:
         print("警告: 验证集中没有已知类样本，使用默认阈值")
-        return 0.5 if use_sigmoid_bce else (-5 if use_energy else 0.5)
+        return get_default_threshold(use_energy, use_sigmoid_bce)
 
     with torch.no_grad():
         logits = model(X_known)
@@ -134,7 +153,7 @@ def calculate_threshold_gated_dual_head(
                     threshold = torch.quantile(probs.max(dim=1)[0], 1 - target_recall).item()  # [N_known]
         else:
             print(f"Warning: No known samples in validation set, using default threshold")
-            threshold = 0.5 if use_sigmoid_bce else (-5 if use_energy else 0.5)
+            threshold = get_default_threshold(use_energy, use_sigmoid_bce)
 
         return threshold
 
