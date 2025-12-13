@@ -28,7 +28,11 @@ def compute_energy(logits, temperature):
     return -temperature * torch.logsumexp(logits / temperature, dim=1)
 
 
-def calculate_threshold_linear(model, val_features, val_labels, label_map, target_recall, device, use_energy, temperature):
+def calculate_threshold_linear_single_head(
+        model, val_features, val_labels, label_map,
+        target_recall, device,
+        use_energy, temperature
+):
     """
     在验证集上为 LinearSingleHead 计算 OSR 阈值
 
@@ -58,19 +62,21 @@ def calculate_threshold_linear(model, val_features, val_labels, label_map, targe
     with torch.no_grad():
         logits = model(X_known)
         if use_energy:
-            energy = compute_energy(logits, temperature) # 越低越可能是已知类，阈值是能量上限
+            energy = compute_energy(logits, temperature)  # 越低越可能是已知类，阈值是能量上限
             threshold = torch.quantile(energy, target_recall).item()
         else:
-            probs = F.softmax(logits / temperature, dim=1) # MSP with temperature = ODIN
+            probs = F.softmax(logits / temperature, dim=1)  # MSP with temperature = ODIN
             max_probs, _ = torch.max(probs, dim=1)
             threshold = torch.quantile(max_probs, 1 - target_recall).item()
 
     return threshold
 
 
-def calculate_threshold_hierarchical(model, val_features, val_super_labels, val_sub_labels,
-                                      super_map_inv, sub_map_inv, target_recall, device, use_energy, temperature,
-                                      use_sigmoid_bce):
+def calculate_threshold_gated_dual_head(
+        model, val_features, val_super_labels, val_sub_labels,
+        super_map_inv, sub_map_inv, target_recall, device,
+        temperature, use_energy, use_sigmoid_bce
+):
     """
     在验证集上为 GatedDualHead 计算 OSR 阈值
 
@@ -83,8 +89,8 @@ def calculate_threshold_hierarchical(model, val_features, val_super_labels, val_
         sub_map_inv: {local_id: global_id} - 子类映射
         target_recall: float - 目标召回率 (如 0.95)
         device: str - 'cuda' or 'cpu'
-        use_energy: bool - 是否使用 energy score（否则用 MSP）
         temperature: float - OOD 温度缩放参数
+        use_energy: bool - 是否使用 energy score（否则用 MSP）
         use_sigmoid_bce: bool - 是否使用 sigmoid-based scoring
 
     Returns:
@@ -112,7 +118,8 @@ def calculate_threshold_hierarchical(model, val_features, val_super_labels, val_
             else:
                 if use_sigmoid_bce:
                     # Maximum Sigmoid
-                    scores = torch.max(torch.sigmoid(logits[known_mask] / temperature), dim=1)[0]  # [N_known, C] -> [N_known]
+                    scores = torch.max(torch.sigmoid(logits[known_mask] / temperature), dim=1)[
+                        0]  # [N_known, C] -> [N_known]
                     threshold = torch.quantile(scores, 1 - target_recall).item()  # [N_known]
                 else:
                     # MSP with temperature = ODIN
@@ -131,16 +138,18 @@ def calculate_threshold_hierarchical(model, val_features, val_super_labels, val_
 
     # 计算 superclass threshold
     known_super = torch.tensor([l.item() in super_map_inv for l in val_super_labels])  # [N]
-    thresh_super = _calculate_single_threshold(super_logits, known_super, target_recall, temperature, use_energy, use_sigmoid_bce)
+    thresh_super = _calculate_single_threshold(super_logits, known_super, target_recall, temperature, use_energy,
+                                               use_sigmoid_bce)
 
     # 计算 subclass threshold
     known_sub = torch.tensor([l.item() in sub_map_inv for l in val_sub_labels])  # [N]
-    thresh_sub = _calculate_single_threshold(sub_logits, known_sub, target_recall, temperature, use_energy, use_sigmoid_bce)
+    thresh_sub = _calculate_single_threshold(sub_logits, known_sub, target_recall, temperature, use_energy,
+                                             use_sigmoid_bce)
 
     return thresh_super, thresh_sub
 
 
-def load_linear_model(prefix, model_dir, feature_dim, device):
+def load_linear_single_head(prefix, model_dir, feature_dim, device):
     """
     Args:
         prefix: 'super' or 'sub'
@@ -170,11 +179,46 @@ def load_linear_model(prefix, model_dir, feature_dim, device):
     return model, local_to_global
 
 
-def predict_with_linear_model(features, super_model, sub_model,
-                              super_map, sub_map,
-                              thresh_super, thresh_sub,
-                              novel_super_idx, novel_sub_idx, device,
-                              super_to_sub, use_energy, temperature):
+def load_gated_dual_head(model_dir, feature_dim, num_super, num_sub, device):
+    """
+    Args:
+        model_dir: 模型目录
+        feature_dim: 特征维度
+        num_super: 超类数量
+        num_sub: 子类数量
+        device: 'cuda' or 'cpu'
+
+    Returns:
+        model: 加载好的模型
+        super_map: 超类 local_to_global 映射
+        sub_map: 子类 local_to_global 映射
+    """
+
+    # 加载映射表
+    with open(os.path.join(model_dir, "super_local_to_global_map.json"), 'r') as f:
+        super_map = {int(k): v for k, v in json.load(f).items()}
+    with open(os.path.join(model_dir, "sub_local_to_global_map.json"), 'r') as f:
+        sub_map = {int(k): v for k, v in json.load(f).items()}
+
+    print(f"[hierarchical] 加载映射表: {len(super_map)} 超类, {len(sub_map)} 子类")
+
+    # 初始化并加载模型
+    model = GatedDualHead(feature_dim, num_super, num_sub)
+    model_path = os.path.join(model_dir, "hierarchical_model.pth")
+    model.load_state_dict(torch.load(model_path))
+    model.to(device)
+    model.eval()
+
+    return model, super_map, sub_map
+
+
+def predict_with_linear_single_head(
+        features, super_model, sub_model,
+        super_map, sub_map,
+        thresh_super, thresh_sub,
+        novel_super_idx, novel_sub_idx, device,
+        super_to_sub, use_energy, temperature
+):
     """
     Args:
         features: 输入特征 [N, 512]
@@ -200,7 +244,7 @@ def predict_with_linear_model(features, super_model, sub_model,
     super_preds = []
     sub_preds = []
     super_scores = []  # OOD 得分（用于 AUROC）
-    sub_scores = []    # OOD 得分（用于 AUROC）
+    sub_scores = []  # OOD 得分（用于 AUROC）
 
     # 是否启用 hierarchical masking
     use_masking = (super_to_sub is not None)
@@ -288,44 +332,12 @@ def predict_with_linear_model(features, super_model, sub_model,
     return super_preds, sub_preds, super_scores, sub_scores
 
 
-def load_hierarchical_model(model_dir, feature_dim, num_super, num_sub, device):
-    """
-    Args:
-        model_dir: 模型目录
-        feature_dim: 特征维度
-        num_super: 超类数量
-        num_sub: 子类数量
-        device: 'cuda' or 'cpu'
-
-    Returns:
-        model: 加载好的模型
-        super_map: 超类 local_to_global 映射
-        sub_map: 子类 local_to_global 映射
-    """
-
-    # 加载映射表
-    with open(os.path.join(model_dir, "super_local_to_global_map.json"), 'r') as f:
-        super_map = {int(k): v for k, v in json.load(f).items()}
-    with open(os.path.join(model_dir, "sub_local_to_global_map.json"), 'r') as f:
-        sub_map = {int(k): v for k, v in json.load(f).items()}
-
-    print(f"[hierarchical] 加载映射表: {len(super_map)} 超类, {len(sub_map)} 子类")
-
-    # 初始化并加载模型
-    model = GatedDualHead(feature_dim, num_super, num_sub)
-    model_path = os.path.join(model_dir, "hierarchical_model.pth")
-    model.load_state_dict(torch.load(model_path))
-    model.to(device)
-    model.eval()
-
-    return model, super_map, sub_map
-
-
-def predict_with_hierarchical_model(features, model, super_map, sub_map,
-                                    thresh_super, thresh_sub,
-                                    novel_super_idx, novel_sub_idx, device,
-                                    super_to_sub, use_energy, temperature,
-                                    use_sigmoid_bce):
+def predict_with_gated_dual_head(
+        features, model, super_map, sub_map,
+        thresh_super, thresh_sub,
+        novel_super_idx, novel_sub_idx, device,
+        super_to_sub, temperature, use_energy, use_sigmoid_bce
+):
     """
     Args:
         features: [N, D] - 输入特征
@@ -338,8 +350,8 @@ def predict_with_hierarchical_model(features, model, super_map, sub_map,
         novel_sub_idx: int - 未知子类的 ID (87)
         device: str - 'cuda' or 'cpu'
         super_to_sub: dict - 超类到子类的映射（用于 hard masking，可选）
-        use_energy: bool - 是否使用 energy score（否则用 MSP）
         temperature: float - OOD 温度缩放参数
+        use_energy: bool - 是否使用 energy score（否则用 MSP）
         use_sigmoid_bce: bool - 是否使用 sigmoid-based scoring
 
     Returns:
@@ -351,7 +363,7 @@ def predict_with_hierarchical_model(features, model, super_map, sub_map,
     super_preds = []
     sub_preds = []
     super_scores = []  # OOD 得分（用于 AUROC）
-    sub_scores = []    # OOD 得分（用于 AUROC）
+    sub_scores = []  # OOD 得分（用于 AUROC）
 
     use_masking = (super_to_sub is not None)
     num_sub_classes = len(sub_map)
@@ -441,12 +453,12 @@ def predict_with_hierarchical_model(features, model, super_map, sub_map,
                 final_sub = novel_sub_idx
             else:
                 final_sub = sub_map[sub_idx.item()]
-            
+
             # === Hard Constraint: 超类 novel → 子类也 novel ===
             if final_super == novel_super_idx:
                 final_sub = novel_sub_idx
-            
+
             super_preds.append(final_super)
             sub_preds.append(final_sub)
-    
+
     return super_preds, sub_preds, super_scores, sub_scores

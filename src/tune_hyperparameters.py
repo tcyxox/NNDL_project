@@ -4,7 +4,7 @@ import os
 import torch
 
 from core.config import config
-from core.inference import load_linear_model, calculate_threshold_linear, calculate_threshold_hierarchical, load_hierarchical_model
+from core.inference import load_linear_single_head, calculate_threshold_linear_single_head, calculate_threshold_gated_dual_head, load_gated_dual_head
 
 CONFIG = {
     "model_dir": config.paths.dev,
@@ -51,20 +51,20 @@ if __name__ == "__main__":
     
     if CONFIG["enable_feature_gating"]:
         print("  > 使用 Soft Attention 模式")
-        model, _, _ = load_hierarchical_model(
+        model, _, _ = load_gated_dual_head(
             CONFIG["model_dir"], CONFIG["feature_dim"], num_super, num_sub, device
         )
-        thresh_super, thresh_sub = calculate_threshold_hierarchical(
+        thresh_super, thresh_sub = calculate_threshold_gated_dual_head(
             model, val_feat, val_super_lbl, val_sub_lbl, 
-            super_map_inv, sub_map_inv, CONFIG["target_recall"], device, use_energy,
-            temperature=CONFIG["ood_temperature"], use_sigmoid_bce=use_sigmoid_bce
+            super_map_inv, sub_map_inv, CONFIG["target_recall"], device,
+            CONFIG["ood_temperature"], use_energy, use_sigmoid_bce
         )
     else:
         print("  > 使用独立模型模式")
-        super_model, _ = load_linear_model("super", CONFIG["model_dir"], CONFIG["feature_dim"], device)
-        sub_model, _ = load_linear_model("sub", CONFIG["model_dir"], CONFIG["feature_dim"], device)
-        thresh_super = calculate_threshold_linear(super_model, val_feat, val_super_lbl, super_map, CONFIG["target_recall"], device, use_energy, temperature=CONFIG["ood_temperature"])
-        thresh_sub = calculate_threshold_linear(sub_model, val_feat, val_sub_lbl, sub_map, CONFIG["target_recall"], device, use_energy, temperature=CONFIG["ood_temperature"])
+        super_model, _ = load_linear_single_head("super", CONFIG["model_dir"], CONFIG["feature_dim"], device)
+        sub_model, _ = load_linear_single_head("sub", CONFIG["model_dir"], CONFIG["feature_dim"], device)
+        thresh_super = calculate_threshold_linear_single_head(super_model, val_feat, val_super_lbl, super_map, CONFIG["target_recall"], device, use_energy, temperature=CONFIG["ood_temperature"])
+        thresh_sub = calculate_threshold_linear_single_head(sub_model, val_feat, val_sub_lbl, sub_map, CONFIG["target_recall"], device, use_energy, temperature=CONFIG["ood_temperature"])
     
     print(f"  > Superclass 阈值: {thresh_super:.4f}")
     print(f"  > Subclass 阈值:   {thresh_sub:.4f}")

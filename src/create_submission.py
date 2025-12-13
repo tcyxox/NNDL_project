@@ -5,8 +5,8 @@ import pandas as pd
 import torch
 
 from core.config import config
-from core.inference import load_linear_model, predict_with_linear_model, load_hierarchical_model, \
-    predict_with_hierarchical_model
+from core.inference import load_linear_single_head, predict_with_linear_single_head, load_gated_dual_head, \
+    predict_with_gated_dual_head
 
 CONFIG = {
     "hyperparams_file": os.path.join(config.paths.dev, "hyperparameters.json"),
@@ -67,26 +67,25 @@ if __name__ == "__main__":
 
     if CONFIG["enable_feature_gating"]:
         print("  > 使用 Soft Attention 模式")
-        model, super_map, sub_map = load_hierarchical_model(
+        model, super_map, sub_map = load_gated_dual_head(
             CONFIG["model_dir"], CONFIG["feature_dim"], num_super, num_sub, True, device
         )
-        super_preds, sub_preds, _, _ = predict_with_hierarchical_model(
+        super_preds, sub_preds, _, _ = predict_with_gated_dual_head(
             test_features, model, super_map, sub_map,
             thresh_super, thresh_sub,
             CONFIG["novel_super_idx"], CONFIG["novel_sub_idx"], device,
-            super_to_sub, use_energy, temperature=CONFIG["ood_temperature"],
-            use_sigmoid_bce=use_sigmoid_bce
+            super_to_sub, CONFIG["ood_temperature"], use_energy, use_sigmoid_bce
         )
     else:
         print("  > 使用独立模型模式")
-        super_model, super_map = load_linear_model("super", CONFIG["model_dir"], CONFIG["feature_dim"], device)
-        sub_model, sub_map = load_linear_model("sub", CONFIG["model_dir"], CONFIG["feature_dim"], device)
-        super_preds, sub_preds, _, _ = predict_with_linear_model(
+        super_model, super_map = load_linear_single_head("super", CONFIG["model_dir"], CONFIG["feature_dim"], device)
+        sub_model, sub_map = load_linear_single_head("sub", CONFIG["model_dir"], CONFIG["feature_dim"], device)
+        super_preds, sub_preds, _, _ = predict_with_linear_single_head(
             test_features, super_model, sub_model,
             super_map, sub_map,
             thresh_super, thresh_sub,
             CONFIG["novel_super_idx"], CONFIG["novel_sub_idx"], device,
-            super_to_sub, CONFIG["enable_energy"], temperature=CONFIG["ood_temperature"]
+            super_to_sub, CONFIG["enable_energy"], CONFIG["ood_temperature"]
         )
 
     # --- Step 4: 保存提交文件 ---
