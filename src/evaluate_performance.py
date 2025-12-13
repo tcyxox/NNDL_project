@@ -51,32 +51,46 @@ def calculate_metrics(y_true, y_pred, novel_label):
     return acc_all, acc_known, acc_novel
 
 
-def run_single_trial(seed):
-    """运行单次实验，返回各项指标"""
+def run_single_trial(cfg: dict, seed: int):
+    """
+    运行单次实验，返回各项指标
+    
+    Args:
+        cfg: 配置字典，包含以下键：
+            - feature_dir, feature_dim, learning_rate, batch_size, epochs
+            - novel_super_idx, novel_sub_idx, target_recall
+            - enable_feature_gating, enable_hierarchical_masking
+            - training_loss, threshold_method, prediction_method
+            - threshold_temperature, prediction_temperature
+        seed: 随机种子
+    
+    Returns:
+        dict: 包含各项评估指标
+    """
     set_seed(seed)
     
     # 加载验证和测试数据
-    val_features = torch.load(os.path.join(CONFIG["feature_dir"], "val_features.pt"))
-    val_super_labels = torch.load(os.path.join(CONFIG["feature_dir"], "val_super_labels.pt"))
-    val_sub_labels = torch.load(os.path.join(CONFIG["feature_dir"], "val_sub_labels.pt"))
+    val_features = torch.load(os.path.join(cfg["feature_dir"], "val_features.pt"))
+    val_super_labels = torch.load(os.path.join(cfg["feature_dir"], "val_super_labels.pt"))
+    val_sub_labels = torch.load(os.path.join(cfg["feature_dir"], "val_sub_labels.pt"))
     
-    test_features = torch.load(os.path.join(CONFIG["feature_dir"], "test_features.pt")).to(device)
-    test_super_labels = torch.load(os.path.join(CONFIG["feature_dir"], "test_super_labels.pt"))
-    test_sub_labels = torch.load(os.path.join(CONFIG["feature_dir"], "test_sub_labels.pt"))
+    test_features = torch.load(os.path.join(cfg["feature_dir"], "test_features.pt")).to(device)
+    test_super_labels = torch.load(os.path.join(cfg["feature_dir"], "test_super_labels.pt"))
+    test_sub_labels = torch.load(os.path.join(cfg["feature_dir"], "test_sub_labels.pt"))
     
     # 使用 run_training 训练（不保存文件）
     result = run_training(
-        feature_dim=CONFIG["feature_dim"],
-        batch_size=CONFIG["batch_size"],
-        learning_rate=CONFIG["learning_rate"],
-        epochs=CONFIG["epochs"],
+        feature_dim=cfg["feature_dim"],
+        batch_size=cfg["batch_size"],
+        learning_rate=cfg["learning_rate"],
+        epochs=cfg["epochs"],
         device=device,
-        enable_feature_gating=CONFIG["enable_feature_gating"],
-        training_loss=CONFIG["training_loss"],
-        feature_dir=CONFIG["feature_dir"]
+        enable_feature_gating=cfg["enable_feature_gating"],
+        training_loss=cfg["training_loss"],
+        feature_dir=cfg["feature_dir"]
     )
     
-    if CONFIG["enable_feature_gating"]:
+    if cfg["enable_feature_gating"]:
         model, super_map, sub_map, super_to_sub = result
     else:
         super_model, sub_model, super_map, sub_map, super_to_sub = result
@@ -86,56 +100,56 @@ def run_single_trial(seed):
     sub_map_inv = {v: int(k) for k, v in sub_map.items()}
     
     # Hierarchical Masking
-    if not CONFIG["enable_hierarchical_masking"]:
+    if not cfg["enable_hierarchical_masking"]:
         super_to_sub = None
     
-    if CONFIG["enable_feature_gating"]:
+    if cfg["enable_feature_gating"]:
         # 计算阈值
         thresh_super, thresh_sub = calculate_threshold_gated_dual_head(
             model, val_features, val_super_labels, val_sub_labels,
-            super_map_inv, sub_map_inv, CONFIG["target_recall"], device,
-            CONFIG["threshold_temperature"], CONFIG["threshold_method"]
+            super_map_inv, sub_map_inv, cfg["target_recall"], device,
+            cfg["threshold_temperature"], cfg["threshold_method"]
         )
         
         # 推理
         super_preds, sub_preds, super_scores, sub_scores = predict_with_gated_dual_head(
             test_features, model, super_map_inv, sub_map_inv,
-            thresh_super, thresh_sub, CONFIG["novel_super_idx"], CONFIG["novel_sub_idx"], device,
-            super_to_sub, CONFIG["prediction_temperature"], CONFIG["prediction_method"]
+            thresh_super, thresh_sub, cfg["novel_super_idx"], cfg["novel_sub_idx"], device,
+            super_to_sub, cfg["prediction_temperature"], cfg["prediction_method"]
         )
     else:
         # 计算阈值
         thresh_super = calculate_threshold_linear_single_head(
             super_model, val_features, val_super_labels, super_map_inv,
-            CONFIG["target_recall"], device,
-            CONFIG["threshold_temperature"], CONFIG["threshold_method"]
+            cfg["target_recall"], device,
+            cfg["threshold_temperature"], cfg["threshold_method"]
         )
         thresh_sub = calculate_threshold_linear_single_head(
             sub_model, val_features, val_sub_labels, sub_map_inv,
-            CONFIG["target_recall"], device,
-            CONFIG["threshold_temperature"], CONFIG["threshold_method"]
+            cfg["target_recall"], device,
+            cfg["threshold_temperature"], cfg["threshold_method"]
         )
         
         # 推理
         super_preds, sub_preds, super_scores, sub_scores = predict_with_linear_single_head(
             test_features, super_model, sub_model,
             super_map_inv, sub_map_inv,
-            thresh_super, thresh_sub, CONFIG["novel_super_idx"], CONFIG["novel_sub_idx"], device,
-            super_to_sub, CONFIG["prediction_temperature"], CONFIG["prediction_method"]
+            thresh_super, thresh_sub, cfg["novel_super_idx"], cfg["novel_sub_idx"], device,
+            super_to_sub, cfg["prediction_temperature"], cfg["prediction_method"]
         )
     
     # 计算指标
     super_all, super_seen, super_unseen = calculate_metrics(
-        test_super_labels.numpy(), super_preds, CONFIG["novel_super_idx"]
+        test_super_labels.numpy(), super_preds, cfg["novel_super_idx"]
     )
     sub_all, sub_seen, sub_unseen = calculate_metrics(
-        test_sub_labels.numpy(), sub_preds, CONFIG["novel_sub_idx"]
+        test_sub_labels.numpy(), sub_preds, cfg["novel_sub_idx"]
     )
     
     # 计算 AUROC
     # 对于 AUROC，我们需要二分类标签：1=已知类, 0=未知类
-    super_binary_labels = (test_super_labels.numpy() != CONFIG["novel_super_idx"]).astype(int)
-    sub_binary_labels = (test_sub_labels.numpy() != CONFIG["novel_sub_idx"]).astype(int)
+    super_binary_labels = (test_super_labels.numpy() != cfg["novel_super_idx"]).astype(int)
+    sub_binary_labels = (test_sub_labels.numpy() != cfg["novel_sub_idx"]).astype(int)
     
     # 计算 AUROC（得分越高，越像已知类）
     try:
@@ -154,6 +168,55 @@ def run_single_trial(seed):
     }
 
 
+def run_multiple_trials(cfg: dict, seeds: list[int], verbose: bool = True) -> dict:
+    """
+    运行多种子评估，返回聚合统计结果
+    
+    Args:
+        cfg: 配置字典
+        seeds: 随机种子列表
+        verbose: 是否打印进度信息
+    
+    Returns:
+        dict: 包含均值和标准差的聚合统计结果
+    """
+    all_results = []
+    
+    for i, seed in enumerate(seeds):
+        if verbose:
+            print(f"\n>>> Trial {i+1}/{len(seeds)}, Seed={seed}")
+        result = run_single_trial(cfg, seed)
+        all_results.append(result)
+        if verbose:
+            print(f"    Subclass Unseen: {result['sub_unseen']*100:.2f}%")
+    
+    # 聚合统计
+    stats = {}
+    for key in all_results[0].keys():
+        values = [r[key] for r in all_results]
+        stats[f"{key}_mean"] = np.mean(values)
+        stats[f"{key}_std"] = np.std(values)
+    
+    # 保留原始结果
+    stats["raw_results"] = all_results
+    
+    return stats
+
+
+def print_evaluation_report(stats: dict):
+    """打印评估报告"""
+    print("\n" + "=" * 60)
+    print("Evaluation Report")
+    print("=" * 60)
+    print(f"  [Superclass] Overall     : {stats['super_overall_mean']*100:.2f}% ± {stats['super_overall_std']*100:.2f}%")
+    print(f"  [Superclass] Seen        : {stats['super_seen_mean']*100:.2f}% ± {stats['super_seen_std']*100:.2f}%")
+    print(f"  [Superclass] Unseen      : {stats['super_unseen_mean']*100:.2f}% ± {stats['super_unseen_std']*100:.2f}%")
+    print(f"  [Subclass] Overall       : {stats['sub_overall_mean']*100:.2f}% ± {stats['sub_overall_std']*100:.2f}%")
+    print(f"  [Subclass] Seen          : {stats['sub_seen_mean']*100:.2f}% ± {stats['sub_seen_std']*100:.2f}%")
+    print(f"  [Subclass] Unseen        : {stats['sub_unseen_mean']*100:.2f}% ± {stats['sub_unseen_std']*100:.2f}%")
+    print(f"  [Superclass] AUROC       : {stats['super_auroc_mean']:.4f} ± {stats['super_auroc_std']:.4f}")
+    print(f"  [Subclass] AUROC         : {stats['sub_auroc_mean']:.4f} ± {stats['sub_auroc_std']:.4f}")
+
 if __name__ == "__main__":
     mode = "SE Feature Gating" if CONFIG["enable_feature_gating"] else "Independent Training"
     masking = "Enabled" if CONFIG["enable_hierarchical_masking"] else "Disabled"
@@ -161,33 +224,6 @@ if __name__ == "__main__":
     print(f"Multi-seed Evaluation | Mode: {mode} | Masking: {masking} | Trials: {len(SEEDS)}")
     print("=" * 60)
     
-    all_results = []
-    
-    for i, seed in enumerate(SEEDS):
-        print(f"\n>>> Trial {i+1}/{len(SEEDS)}, Seed={seed}")
-        result = run_single_trial(seed)
-        all_results.append(result)
-        print(f"    Subclass Unseen: {result['sub_unseen']*100:.2f}%")
-    
-    # Summary statistics
-    print("\n" + "=" * 60)
-    print("Evaluation Report")
-    print("=" * 60)
-    
-    super_overall_list = [r["super_overall"] for r in all_results]
-    super_seen_list = [r["super_seen"] for r in all_results]
-    super_unseen_list = [r["super_unseen"] for r in all_results]
-    sub_overall_list = [r["sub_overall"] for r in all_results]
-    sub_seen_list = [r["sub_seen"] for r in all_results]
-    sub_unseen_list = [r["sub_unseen"] for r in all_results]
-    super_auroc_list = [r["super_auroc"] for r in all_results]
-    sub_auroc_list = [r["sub_auroc"] for r in all_results]
+    stats = run_multiple_trials(CONFIG, SEEDS)
+    print_evaluation_report(stats)
 
-    print(f"  [Superclass] Overall     : {np.mean(super_overall_list)*100:.2f}% ± {np.std(super_overall_list)*100:.2f}%")
-    print(f"  [Superclass] Seen        : {np.mean(super_seen_list)*100:.2f}% ± {np.std(super_seen_list)*100:.2f}%")
-    print(f"  [Superclass] Unseen      : {np.mean(super_unseen_list)*100:.2f}% ± {np.std(super_unseen_list)*100:.2f}%")
-    print(f"  [Subclass] Overall       : {np.mean(sub_overall_list)*100:.2f}% ± {np.std(sub_overall_list)*100:.2f}%")
-    print(f"  [Subclass] Seen          : {np.mean(sub_seen_list)*100:.2f}% ± {np.std(sub_seen_list)*100:.2f}%")
-    print(f"  [Subclass] Unseen        : {np.mean(sub_unseen_list)*100:.2f}% ± {np.std(sub_unseen_list)*100:.2f}%")
-    print(f"  [Superclass] AUROC       : {np.mean(super_auroc_list):.4f} ± {np.std(super_auroc_list):.4f}")
-    print(f"  [Subclass] AUROC         : {np.mean(sub_auroc_list):.4f} ± {np.std(sub_auroc_list):.4f}")

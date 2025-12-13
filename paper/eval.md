@@ -298,7 +298,34 @@ class ExperimentConfig:
   [Superclass] AUROC       : nan ± nan
   [Subclass] AUROC         : 0.8556 ± 0.0023
 
-结论：使用 Sigmoid + BCE 损失函数，配合不一致的 Energy 阈值计算方法 & MaxSigmoid 预测方法，性能居然出现显著提升，原因未知。
+结论：使用 Sigmoid + BCE 损失函数，配合不一致的 Energy 阈值计算方法 & MaxSigmoid 预测方法，性能居然出现显著提升，原因未知。根据实验启发，后面测试更多不一致的配置。
+
+## ## Gated Dual Head + MSP + Hierarchical Masking (Variant)
+
+```py
+class ExperimentConfig:
+    # 训练参数
+    batch_size: int = 64
+    learning_rate: float = 1e-3
+    epochs: int = 100
+    target_recall: float = 0.95
+    seed: int = 42
+
+    # 模型选择
+    enable_hierarchical_masking: bool = True  # 推理时 Hierarchical Masking 开关
+    enable_feature_gating: bool = True  # 训练时 SE Feature Gating 开关
+
+    # 方法选择
+    training_loss: TrainingLoss = TrainingLoss.CE
+    threshold_method: OODScoreMethod = OODScoreMethod.MSP
+    prediction_method: OODScoreMethod = OODScoreMethod.MSP
+
+    # 温度参数
+    threshold_temperature: float = 0
+    prediction_temperature: float = 0
+```
+
+?
 
 # CAC 
 ## v1.0
