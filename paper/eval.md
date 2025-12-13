@@ -1,6 +1,6 @@
 # Evaluations
 
-## Baseline: 独立双头 + MSP (标准温度)
+## Baseline: Linear Dual Head + MSP (Temperature = 1)
 
 ### 参数配置
 
@@ -12,12 +12,19 @@ class ExperimentConfig:
     epochs: int = 50
     target_recall: float = 0.95
     seed: int = 42
-    # 实验开关
-    enable_hierarchical_masking: bool = False  # 推理时使用 Hierarchical Masking
-    enable_feature_gating: bool = False  # 训练时使用 SE Feature Gating
-    enable_energy: bool = False  # 使用 Energy-based OOD 检测 替代 MSP
-    enable_sigmoid_bce: bool = False  # 使用 Sigmoid + BCE 替代 Softmax + CE
-    ood_temperature: float = 1  # OOD 温度缩放 (适用于 MSP 和 Energy)
+
+    # 模型选择
+    enable_hierarchical_masking: bool = False  # 推理时 Hierarchical Masking 开关
+    enable_feature_gating: bool = False  # 训练时 SE Feature Gating 开关
+
+    # 方法选择
+    training_loss: TrainingLoss = TrainingLoss.CE
+    threshold_method: OODScoreMethod = OODScoreMethod.MSP
+    prediction_method: OODScoreMethod = OODScoreMethod.MSP
+
+    # 温度参数
+    threshold_temperature: float = 1
+    prediction_temperature: float = 1
 ```
 
 ### 评估结果
@@ -31,7 +38,7 @@ class ExperimentConfig:
   [Superclass] AUROC       : nan ± nan
   [Subclass] AUROC         : 0.8539 ± 0.0016
 
-## 独立双头 + MSP
+## Linear Dual Head + MSP
 
 ```py
 class ExperimentConfig:
@@ -41,12 +48,19 @@ class ExperimentConfig:
     epochs: int = 50
     target_recall: float = 0.95
     seed: int = 42
-    # 实验开关
-    enable_hierarchical_masking: bool = False  # 推理时使用 Hierarchical Masking
-    enable_feature_gating: bool = False  # 训练时使用 SE Feature Gating
-    enable_energy: bool = False  # 使用 Energy-based OOD 检测 替代 MSP
-    enable_sigmoid_bce: bool = False  # 使用 Sigmoid + BCE 替代 Softmax + CE
-    ood_temperature: float = 3.5  # OOD 温度缩放 (适用于 MSP 和 Energy)
+
+    # 模型选择
+    enable_hierarchical_masking: bool = False  # 推理时 Hierarchical Masking 开关
+    enable_feature_gating: bool = False  # 训练时 SE Feature Gating 开关
+
+    # 方法选择
+    training_loss: TrainingLoss = TrainingLoss.CE
+    threshold_method: OODScoreMethod = OODScoreMethod.MSP
+    prediction_method: OODScoreMethod = OODScoreMethod.MSP
+
+    # 温度参数
+    threshold_temperature: float = 3.5
+    prediction_temperature: float = 3.5
 ```
 
   [Superclass] Overall     : 95.00% ± 0.22%
@@ -60,7 +74,7 @@ class ExperimentConfig:
 
 观察：MSP 方法受益于较高温度，T=3.5 时性能最优。
 
-## 独立双头 + MSP + Hierarchical Masking
+## Linear Dual Head + MSP + Hierarchical Masking
 
 ```py
 class ExperimentConfig:
@@ -70,12 +84,19 @@ class ExperimentConfig:
     epochs: int = 100
     target_recall: float = 0.95
     seed: int = 42
-    # 实验开关
-    enable_hierarchical_masking: bool = True  # 推理时使用 Hierarchical Masking
-    enable_feature_gating: bool = False  # 训练时使用 SE Feature Gating
-    enable_energy: bool = False  # 使用 Energy-based OOD 检测 替代 MSP
-    enable_sigmoid_bce: bool = False  # 使用 Sigmoid + BCE 替代 Softmax + CE
-    ood_temperature: float = 3.5  # OOD 温度缩放 (适用于 MSP 和 Energy)
+
+    # 模型选择
+    enable_hierarchical_masking: bool = True  # 推理时 Hierarchical Masking 开关
+    enable_feature_gating: bool = False  # 训练时 SE Feature Gating 开关
+
+    # 方法选择
+    training_loss: TrainingLoss = TrainingLoss.CE
+    threshold_method: OODScoreMethod = OODScoreMethod.MSP
+    prediction_method: OODScoreMethod = OODScoreMethod.MSP
+
+    # 温度参数
+    threshold_temperature: float = 3.5
+    prediction_temperature: float = 3.5
 ```
 
   [Superclass] Overall     : 95.04% ± 0.17%       
@@ -89,7 +110,7 @@ class ExperimentConfig:
 
 结论：根据理论，Baseline + Hierarchical Masking >= Baseline 恒成立。
 
-## Feature Gating 联合双头 + MSP + Hierarchical Masking
+## Gated Dual Head + MSP + Hierarchical Masking
 
 ```py
 class ExperimentConfig:
@@ -99,12 +120,19 @@ class ExperimentConfig:
     epochs: int = 100
     target_recall: float = 0.95
     seed: int = 42
-    # 实验开关
-    enable_hierarchical_masking: bool = True  # 推理时使用 Hierarchical Masking
-    enable_feature_gating: bool = True  # 训练时使用 SE Feature Gating
-    enable_energy: bool = False  # 使用 Energy-based OOD 检测 替代 MSP
-    enable_sigmoid_bce: bool = False  # 使用 Sigmoid + BCE 替代 Softmax + CE
-    ood_temperature: float = 3.5  # OOD 温度缩放 (适用于 MSP 和 Energy)
+
+    # 模型选择
+    enable_hierarchical_masking: bool = True  # 推理时 Hierarchical Masking 开关
+    enable_feature_gating: bool = True  # 训练时 SE Feature Gating 开关
+
+    # 方法选择
+    training_loss: TrainingLoss = TrainingLoss.CE
+    threshold_method: OODScoreMethod = OODScoreMethod.MSP
+    prediction_method: OODScoreMethod = OODScoreMethod.MSP
+
+    # 温度参数
+    threshold_temperature: float = 3.5
+    prediction_temperature: float = 3.5
 ```
 
   [Superclass] Overall     : 95.07% ± 0.12%       
@@ -118,9 +146,9 @@ class ExperimentConfig:
 
 观察：开启 Feature Gating 后，需要使用更多 epochs 训练。
 
-结论：Feature Gating 联合双头 能使未知subclass准确率显著提高。
+结论：Gated Dual Head 能使未知subclass准确率显著提高。
 
-## Feature Gating 联合双头 + Energy + Hierarchical Masking
+## Gated Dual Head + Energy + Hierarchical Masking
 
 ```py
 class ExperimentConfig:
@@ -130,12 +158,19 @@ class ExperimentConfig:
     epochs: int = 100
     target_recall: float = 0.95
     seed: int = 42
-    # 实验开关
-    enable_hierarchical_masking: bool = True  # 推理时使用 Hierarchical Masking
-    enable_feature_gating: bool = True  # 训练时使用 SE Feature Gating
-    enable_energy: bool = True  # 使用 Energy-based OOD 检测 替代 MSP
-    enable_sigmoid_bce: bool = False  # 使用 Sigmoid + BCE 替代 Softmax + CE
-    ood_temperature: float = 0.02  # OOD 温度缩放 (适用于 MSP 和 Energy)
+
+    # 模型选择
+    enable_hierarchical_masking: bool = True  # 推理时 Hierarchical Masking 开关
+    enable_feature_gating: bool = True  # 训练时 SE Feature Gating 开关
+
+    # 方法选择
+    training_loss: TrainingLoss = TrainingLoss.CE
+    threshold_method: OODScoreMethod = OODScoreMethod.Energy
+    prediction_method: OODScoreMethod = OODScoreMethod.Energy
+
+    # 温度参数
+    threshold_temperature: float = 0.02
+    prediction_temperature: float = 0.02
 ```
 
 观察：Energy-based 方法受益于较低温度，T=0.02 时性能最优。
@@ -151,13 +186,13 @@ class ExperimentConfig:
 
 ### 阶段性结论
 
-1. Feature Gating 联合双头 + Hierarchical Masking 是一定要使用的。
+1. Gated Dual Head + Hierarchical Masking 是一定要使用的。
 2. MSP 受益于较高温度（T=3.5 时性能最优）：高温时，模型关注相对尖锐度。
 3. Energy-based OOD 受益于较低温度（T=0.02 时性能最优）：低温时，模型关注绝对幅值。
 4. 问题：Softmax 的强制归一化导致丢失了幅值信息；方案：使用基于 Logits 的 Energy-based OOD。
 5. MSP 中使用基于 Softmax 的不保留幅值信息的阈值方法 + 基于 Softmax 的不保留幅值信息的 CE 损失函数，是统一的；而 Energy-based OOD 中使用基于 Logits 的保留幅值信息的阈值方法 + 基于 Softmax 的不保留幅值信息的 CE 损失函数，是不统一的。所以理论上应将 Softmax 替换为保留幅值信息的 Sigmoid。
 
-# Feature Gating 联合双头 + Energy + Hierarchical Masking + Sigmoid & BCE
+## Gated Dual Head + Energy + Hierarchical Masking + Sigmoid & BCE
 
 ```py
 class ExperimentConfig:
@@ -167,12 +202,55 @@ class ExperimentConfig:
     epochs: int = 100
     target_recall: float = 0.95
     seed: int = 42
-    # 实验开关
+
+    # 模型选择
     enable_hierarchical_masking: bool = True  # 推理时使用 Hierarchical Masking
     enable_feature_gating: bool = True  # 训练时使用 SE Feature Gating
-    enable_energy: bool = True  # 使用 Energy-based OOD 检测 替代 MSP
-    enable_sigmoid_bce: bool = True  # 使用 Sigmoid + BCE 替代 Softmax + CE
-    ood_temperature: float = 0.02  # OOD 温度缩放 (适用于 MSP 和 Energy)
+
+    # 方法选择
+    training_loss: TrainingLoss = TrainingLoss.BCE
+    threshold_method: OODScoreMethod = OODScoreMethod.Energy
+    prediction_method: OODScoreMethod = OODScoreMethod.Energy
+
+    # 温度参数
+    threshold_temperature: float = 0.02
+    prediction_temperature: float = 0.02
+```
+
+  [Superclass] Overall     : 95.36% ± 0.23%
+  [Superclass] Seen        : 95.36% ± 0.23%
+  [Superclass] Unseen      : 0.00% ± 0.00%
+  [Subclass] Overall       : 67.02% ± 0.34%
+  [Subclass] Seen          : 88.27% ± 0.62%
+  [Subclass] Unseen        : 48.90% ± 0.86%
+  [Superclass] AUROC       : nan ± nan
+  [Subclass] AUROC         : 0.8556 ± 0.0023
+
+结论：对 Energy 配置使用 Sigmoid + BCE，性能有略微提升。
+
+## Gated Dual Head + Energy + Hierarchical Masking + Sigmoid & BCE (Variant)
+
+```py
+class ExperimentConfig:
+    # 训练参数
+    batch_size: int = 64
+    learning_rate: float = 1e-3
+    epochs: int = 100
+    target_recall: float = 0.95
+    seed: int = 42
+
+    # 模型选择
+    enable_hierarchical_masking: bool = True  # 推理时使用 Hierarchical Masking
+    enable_feature_gating: bool = True  # 训练时使用 SE Feature Gating
+
+    # 方法选择
+    training_loss: TrainingLoss = TrainingLoss.BCE
+    threshold_method: OODScoreMethod = OODScoreMethod.Energy
+    prediction_method: OODScoreMethod = OODScoreMethod.MaxSigmoid
+
+    # 温度参数
+    threshold_temperature: float = 0.02
+    prediction_temperature: float = 0.02
 ```
 
   [Superclass] Overall     : 100.00% ± 0.00%
@@ -183,6 +261,8 @@ class ExperimentConfig:
   [Subclass] Unseen        : 68.73% ± 2.81%
   [Superclass] AUROC       : nan ± nan
   [Subclass] AUROC         : 0.8556 ± 0.0023
+
+结论：不一致的 Energy 阈值计算方法 & MaxSigmoid 预测方法，性能居然出现显著提升，原因未知。
 
 # CAC 
 ## v1.0

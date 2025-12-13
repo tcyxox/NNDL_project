@@ -64,15 +64,15 @@ class ExperimentConfig:
     seed: int = 42
 
     # 模型选择
-    enable_hierarchical_masking: bool = True  # 推理时使用 Hierarchical Masking
-    enable_feature_gating: bool = True  # 训练时使用 SE Feature Gating
+    enable_hierarchical_masking: bool = True  # 推理时 Hierarchical Masking 开关
+    enable_feature_gating: bool = True  # 训练时 SE Feature Gating 开关
 
-    # 方法选择（支持任意组合）
+    # 方法选择
     training_loss: TrainingLoss = TrainingLoss.BCE
     threshold_method: OODScoreMethod = OODScoreMethod.Energy
     prediction_method: OODScoreMethod = OODScoreMethod.MaxSigmoid
 
-    # 温度参数（分开配置）
+    # 温度参数
     threshold_temperature: float = 0.02
     prediction_temperature: float = 0.02
 
