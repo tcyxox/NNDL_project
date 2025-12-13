@@ -1,5 +1,6 @@
 import os
 from dataclasses import dataclass, field
+from enum import Enum
 
 # ================= 路径配置 =================
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -7,6 +8,21 @@ SRC_DIR = os.path.dirname(SCRIPT_DIR)
 PROJECT_ROOT = os.path.dirname(SRC_DIR)
 
 
+# ================= ENUM 定义 =================
+class TrainingLoss(Enum):
+    """训练损失函数类型"""
+    CE = "ce"    # Cross Entropy (Softmax + CE)
+    BCE = "bce"  # Binary Cross Entropy (Sigmoid + BCE)
+
+
+class OODScoreMethod(Enum):
+    """OOD 检测得分计算方法"""
+    Energy = "energy"           # Energy-based score
+    MSP = "msp"                 # Max Softmax Probability
+    MaxSigmoid = "max_sigmoid"  # Max Sigmoid Probability
+
+
+# ================= 配置类 =================
 @dataclass
 class PathsConfig:
     data_raw: str = os.path.join(PROJECT_ROOT, "data/raw")
@@ -46,12 +62,19 @@ class ExperimentConfig:
     epochs: int = 100
     target_recall: float = 0.95
     seed: int = 42
-    # 实验开关
+
+    # 模型选择
     enable_hierarchical_masking: bool = True  # 推理时使用 Hierarchical Masking
     enable_feature_gating: bool = True  # 训练时使用 SE Feature Gating
-    enable_energy: bool = True  # 使用 Energy-based OOD 检测 替代 MSP
-    enable_sigmoid_bce: bool = True  # 使用 Sigmoid + BCE 替代 Softmax + CE
-    ood_temperature: float = 0.02  # OOD 温度缩放 (适用于 MSP 和 Energy)
+
+    # 方法选择（支持任意组合）
+    training_loss: TrainingLoss = TrainingLoss.BCE
+    threshold_method: OODScoreMethod = OODScoreMethod.Energy
+    prediction_method: OODScoreMethod = OODScoreMethod.MaxSigmoid
+
+    # 温度参数（分开配置）
+    threshold_temperature: float = 0.02
+    prediction_temperature: float = 0.02
 
 
 @dataclass

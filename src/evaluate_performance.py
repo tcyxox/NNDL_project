@@ -4,7 +4,7 @@ import numpy as np
 import torch
 from sklearn.metrics import accuracy_score, roc_auc_score
 
-from core.config import config
+from core.config import config, TrainingLoss, OODScoreMethod
 from core.inference import predict_with_linear_single_head, predict_with_gated_dual_head, calculate_threshold_linear_single_head, calculate_threshold_gated_dual_head
 from core.train import run_training
 from core.utils import set_seed
@@ -21,9 +21,12 @@ CONFIG = {
     "target_recall": config.experiment.target_recall,
     "enable_feature_gating": config.experiment.enable_feature_gating,
     "enable_hierarchical_masking": config.experiment.enable_hierarchical_masking,
-    "enable_energy": config.experiment.enable_energy,
-    "enable_sigmoid_bce": config.experiment.enable_sigmoid_bce,
-    "ood_temperature": config.experiment.ood_temperature,
+    # ENUM-based configuration
+    "training_loss": config.experiment.training_loss,
+    "threshold_method": config.experiment.threshold_method,
+    "prediction_method": config.experiment.prediction_method,
+    "threshold_temperature": config.experiment.threshold_temperature,
+    "prediction_temperature": config.experiment.prediction_temperature,
 }
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -69,7 +72,7 @@ def run_single_trial(seed):
         epochs=CONFIG["epochs"],
         device=device,
         enable_feature_gating=CONFIG["enable_feature_gating"],
-        use_sigmoid_bce=CONFIG["enable_sigmoid_bce"],
+        training_loss=CONFIG["training_loss"],
         feature_dir=CONFIG["feature_dir"]
     )
     
@@ -86,34 +89,31 @@ def run_single_trial(seed):
     if not CONFIG["enable_hierarchical_masking"]:
         super_to_sub = None
     
-    use_energy = CONFIG["enable_energy"]
-    use_sigmoid_bce = CONFIG["enable_sigmoid_bce"]
-    
     if CONFIG["enable_feature_gating"]:
         # 计算阈值
         thresh_super, thresh_sub = calculate_threshold_gated_dual_head(
             model, val_features, val_super_labels, val_sub_labels,
             super_map_inv, sub_map_inv, CONFIG["target_recall"], device,
-            CONFIG["ood_temperature"], use_energy, use_sigmoid_bce
+            CONFIG["threshold_temperature"], CONFIG["threshold_method"]
         )
         
         # 推理
         super_preds, sub_preds, super_scores, sub_scores = predict_with_gated_dual_head(
             test_features, model, super_map_inv, sub_map_inv,
             thresh_super, thresh_sub, CONFIG["novel_super_idx"], CONFIG["novel_sub_idx"], device,
-            super_to_sub, CONFIG["ood_temperature"], use_energy, use_sigmoid_bce
+            super_to_sub, CONFIG["prediction_temperature"], CONFIG["prediction_method"]
         )
     else:
         # 计算阈值
         thresh_super = calculate_threshold_linear_single_head(
             super_model, val_features, val_super_labels, super_map_inv,
             CONFIG["target_recall"], device,
-            CONFIG["ood_temperature"], use_energy, use_sigmoid_bce
+            CONFIG["threshold_temperature"], CONFIG["threshold_method"]
         )
         thresh_sub = calculate_threshold_linear_single_head(
             sub_model, val_features, val_sub_labels, sub_map_inv,
             CONFIG["target_recall"], device,
-            CONFIG["ood_temperature"], use_energy, use_sigmoid_bce
+            CONFIG["threshold_temperature"], CONFIG["threshold_method"]
         )
         
         # 推理
@@ -121,7 +121,7 @@ def run_single_trial(seed):
             test_features, super_model, sub_model,
             super_map_inv, sub_map_inv,
             thresh_super, thresh_sub, CONFIG["novel_super_idx"], CONFIG["novel_sub_idx"], device,
-            super_to_sub, CONFIG["ood_temperature"], use_energy, use_sigmoid_bce
+            super_to_sub, CONFIG["prediction_temperature"], CONFIG["prediction_method"]
         )
     
     # 计算指标

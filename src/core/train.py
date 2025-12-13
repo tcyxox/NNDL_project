@@ -7,6 +7,7 @@ import torch.optim as optim
 from torch.utils.data import TensorDataset, DataLoader
 
 from .models import LinearSingleHead, GatedDualHead
+from .config import TrainingLoss
 
 
 def create_label_mapping(labels, label_name, output_dir=None):
@@ -74,7 +75,7 @@ def create_super_to_sub_mapping(super_labels, sub_labels, output_dir=None):
 
 
 def train_linear_single_head(features, labels, label_map, num_classes,
-                             feature_dim, batch_size, learning_rate, epochs, device, use_sigmoid_bce):
+                             feature_dim, batch_size, learning_rate, epochs, device, training_loss):
     """
     Args:
         features: 训练特征
@@ -86,7 +87,7 @@ def train_linear_single_head(features, labels, label_map, num_classes,
         learning_rate: 学习率
         epochs: 训练轮数
         device: 'cuda' or 'cpu'
-        use_sigmoid_bce: 是否使用 Sigmoid + BCE 替代 Softmax + CE
+        training_loss: TrainingLoss ENUM - 训练损失函数类型
 
     Returns:
         model: 训练好的模型
@@ -104,7 +105,7 @@ def train_linear_single_head(features, labels, label_map, num_classes,
     loader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
 
     # 选择损失函数
-    if use_sigmoid_bce:
+    if training_loss == TrainingLoss.BCE:
         criterion = nn.BCEWithLogitsLoss()
     else:
         criterion = nn.CrossEntropyLoss()
@@ -119,7 +120,7 @@ def train_linear_single_head(features, labels, label_map, num_classes,
             optimizer.zero_grad()
             outputs = model(inputs)
 
-            if use_sigmoid_bce:
+            if training_loss == TrainingLoss.BCE:
                 # 将标签转换为 one-hot 格式
                 targets_onehot = torch.nn.functional.one_hot(targets, num_classes=num_classes).float()
                 loss = criterion(outputs, targets_onehot)
@@ -138,7 +139,7 @@ def train_linear_single_head(features, labels, label_map, num_classes,
 
 
 def train_gated_dual_head(features, super_labels, sub_labels, super_map, sub_map, num_super, num_sub,
-                          feature_dim, batch_size, learning_rate, epochs, device, use_sigmoid_bce):
+                          feature_dim, batch_size, learning_rate, epochs, device, training_loss):
     """
     Args:
         features: 训练特征
@@ -153,7 +154,7 @@ def train_gated_dual_head(features, super_labels, sub_labels, super_map, sub_map
         learning_rate: 学习率
         epochs: 训练轮数
         device: 'cuda' or 'cpu'
-        use_sigmoid_bce: 是否使用 Sigmoid + BCE 替代 Softmax + CE
+        training_loss: TrainingLoss ENUM - 训练损失函数类型
 
     Returns:
         model: 训练好的模型
@@ -171,7 +172,7 @@ def train_gated_dual_head(features, super_labels, sub_labels, super_map, sub_map
     loader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
 
     # 选择损失函数
-    if use_sigmoid_bce:
+    if training_loss == TrainingLoss.BCE:
         criterion = nn.BCEWithLogitsLoss()
     else:
         criterion = nn.CrossEntropyLoss()
@@ -189,7 +190,7 @@ def train_gated_dual_head(features, super_labels, sub_labels, super_map, sub_map
             super_logits, sub_logits = model(inputs)
 
             # 联合 Loss
-            if use_sigmoid_bce:
+            if training_loss == TrainingLoss.BCE:
                 # 将标签转换为 one-hot 格式
                 super_onehot = torch.nn.functional.one_hot(super_targets, num_classes=num_super).float()
                 sub_onehot = torch.nn.functional.one_hot(sub_targets, num_classes=num_sub).float()
@@ -209,7 +210,7 @@ def train_gated_dual_head(features, super_labels, sub_labels, super_map, sub_map
 
 
 def run_training(feature_dim, batch_size, learning_rate, epochs, device,
-                 enable_feature_gating, use_sigmoid_bce,
+                 enable_feature_gating, training_loss,
                  feature_dir, output_dir=None):
     """
     训练模型的主函数
@@ -221,7 +222,7 @@ def run_training(feature_dim, batch_size, learning_rate, epochs, device,
         epochs: 训练轮数
         device: 'cuda' or 'cpu'
         enable_feature_gating: 是否启用 SE Feature Gating
-        use_sigmoid_bce: 是否使用 Sigmoid + BCE 替代 Softmax + CE
+        training_loss: TrainingLoss ENUM - 训练损失函数类型
         feature_dir: 特征目录
         output_dir: 输出目录（可选，如果提供则保存模型和映射文件）
 
@@ -246,11 +247,10 @@ def run_training(feature_dim, batch_size, learning_rate, epochs, device,
 
     # 训练模型
     if enable_feature_gating:
-        loss_type = "Sigmoid+BCE" if use_sigmoid_bce else "Softmax+CE"
-        print(f"\n=== 使用 Feature Gating (联合训练模式) | Loss: {loss_type} ===")
+        print(f"\n=== 使用 Feature Gating (联合训练模式) | Loss: {training_loss.value.upper()} ===")
         model = train_gated_dual_head(
             train_features, train_super_labels, train_sub_labels, super_map, sub_map, num_super, num_sub,
-            feature_dim, batch_size, learning_rate, epochs, device, use_sigmoid_bce
+            feature_dim, batch_size, learning_rate, epochs, device, training_loss
         )
         if output_dir:
             torch.save(model.state_dict(), os.path.join(output_dir, "hierarchical_model.pth"))
@@ -260,7 +260,7 @@ def run_training(feature_dim, batch_size, learning_rate, epochs, device,
         print(f"开始训练 Superclass Model (Classes: {num_super})...")
         super_model = train_linear_single_head(
             train_features, train_super_labels, super_map, num_super,
-            feature_dim, batch_size, learning_rate, epochs, device, use_sigmoid_bce
+            feature_dim, batch_size, learning_rate, epochs, device, training_loss
         )
         if output_dir:
             torch.save(super_model.state_dict(), os.path.join(output_dir, "super_model.pth"))
@@ -269,7 +269,7 @@ def run_training(feature_dim, batch_size, learning_rate, epochs, device,
         print(f"开始训练 Subclass Model (Classes: {num_sub})...")
         sub_model = train_linear_single_head(
             train_features, train_sub_labels, sub_map, num_sub,
-            feature_dim, batch_size, learning_rate, epochs, device, use_sigmoid_bce
+            feature_dim, batch_size, learning_rate, epochs, device, training_loss
         )
         if output_dir:
             torch.save(sub_model.state_dict(), os.path.join(output_dir, "sub_model.pth"))

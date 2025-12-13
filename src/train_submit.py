@@ -16,7 +16,7 @@ if __name__ == "__main__":
         epochs=config.experiment.epochs,
         device=device,
         enable_feature_gating=config.experiment.enable_feature_gating,
-        use_sigmoid_bce=config.experiment.enable_sigmoid_bce,
+        training_loss=config.experiment.training_loss,
         feature_dir=config.paths.features,
         output_dir=config.paths.submit
     )

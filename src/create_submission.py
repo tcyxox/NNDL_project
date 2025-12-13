@@ -4,7 +4,7 @@ import os
 import pandas as pd
 import torch
 
-from core.config import config
+from core.config import config, OODScoreMethod
 from core.inference import load_linear_single_head, predict_with_linear_single_head, load_gated_dual_head, \
     predict_with_gated_dual_head
 
@@ -17,11 +17,11 @@ CONFIG = {
     "novel_super_idx": config.osr.novel_super_index,
     "novel_sub_idx": config.osr.novel_sub_index,
     "feature_dim": config.model.feature_dim,
-    "ood_temperature": config.experiment.ood_temperature,
     "enable_hierarchical_masking": config.experiment.enable_hierarchical_masking,
     "enable_feature_gating": config.experiment.enable_feature_gating,
-    "enable_energy": config.experiment.enable_energy,
-    "enable_sigmoid_bce": config.experiment.enable_sigmoid_bce,
+    # ENUM-based configuration
+    "prediction_method": config.experiment.prediction_method,
+    "prediction_temperature": config.experiment.prediction_temperature,
 }
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -62,8 +62,7 @@ if __name__ == "__main__":
     test_features = torch.load(CONFIG["test_feature_path"]).to(device)
     test_image_names = torch.load(CONFIG["test_image_names"])
     
-    use_energy = CONFIG["enable_energy"]
-    use_sigmoid_bce = CONFIG["enable_sigmoid_bce"]
+    print(f"  > 预测方法: {CONFIG['prediction_method'].value}")
 
     if CONFIG["enable_feature_gating"]:
         print("  > 使用 Soft Attention 模式")
@@ -74,7 +73,7 @@ if __name__ == "__main__":
             test_features, model, super_map, sub_map,
             thresh_super, thresh_sub,
             CONFIG["novel_super_idx"], CONFIG["novel_sub_idx"], device,
-            super_to_sub, CONFIG["ood_temperature"], use_energy, use_sigmoid_bce
+            super_to_sub, CONFIG["prediction_temperature"], CONFIG["prediction_method"]
         )
     else:
         print("  > 使用独立模型模式")
@@ -85,7 +84,7 @@ if __name__ == "__main__":
             super_map, sub_map,
             thresh_super, thresh_sub,
             CONFIG["novel_super_idx"], CONFIG["novel_sub_idx"], device,
-            super_to_sub, CONFIG["ood_temperature"], use_energy, use_sigmoid_bce
+            super_to_sub, CONFIG["prediction_temperature"], CONFIG["prediction_method"]
         )
 
     # --- Step 4: 保存提交文件 ---

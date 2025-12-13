@@ -3,7 +3,7 @@ import os
 
 import torch
 
-from core.config import config
+from core.config import config, OODScoreMethod
 from core.inference import load_linear_single_head, calculate_threshold_linear_single_head, calculate_threshold_gated_dual_head, load_gated_dual_head
 
 CONFIG = {
@@ -12,10 +12,10 @@ CONFIG = {
     "hyperparams_file": os.path.join(config.paths.dev, "hyperparameters.json"),
     "target_recall": config.experiment.target_recall,
     "feature_dim": config.model.feature_dim,
-    "ood_temperature": config.experiment.ood_temperature,
     "enable_feature_gating": config.experiment.enable_feature_gating,
-    "enable_energy": config.experiment.enable_energy,
-    "enable_sigmoid_bce": config.experiment.enable_sigmoid_bce,
+    # ENUM-based configuration
+    "threshold_method": config.experiment.threshold_method,
+    "threshold_temperature": config.experiment.threshold_temperature,
 }
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -46,8 +46,7 @@ if __name__ == "__main__":
 
     # --- Step 3: 计算阈值 ---
     print("\n--- Step 3: 计算阈值 ---")
-    use_energy = CONFIG["enable_energy"]
-    use_sigmoid_bce = CONFIG["enable_sigmoid_bce"]
+    print(f"  > 阈值计算方法: {CONFIG['threshold_method'].value}")
     
     if CONFIG["enable_feature_gating"]:
         print("  > 使用 Soft Attention 模式")
@@ -57,7 +56,7 @@ if __name__ == "__main__":
         thresh_super, thresh_sub = calculate_threshold_gated_dual_head(
             model, val_feat, val_super_lbl, val_sub_lbl, 
             super_map_inv, sub_map_inv, CONFIG["target_recall"], device,
-            CONFIG["ood_temperature"], use_energy, use_sigmoid_bce
+            CONFIG["threshold_temperature"], CONFIG["threshold_method"]
         )
     else:
         print("  > 使用独立模型模式")
@@ -66,12 +65,12 @@ if __name__ == "__main__":
         thresh_super = calculate_threshold_linear_single_head(
             super_model, val_feat, val_super_lbl, super_map,
             CONFIG["target_recall"], device,
-            CONFIG["ood_temperature"], use_energy, use_sigmoid_bce
+            CONFIG["threshold_temperature"], CONFIG["threshold_method"]
         )
         thresh_sub = calculate_threshold_linear_single_head(
             sub_model, val_feat, val_sub_lbl, sub_map,
             CONFIG["target_recall"], device,
-            CONFIG["ood_temperature"], use_energy, use_sigmoid_bce
+            CONFIG["threshold_temperature"], CONFIG["threshold_method"]
         )
     
     print(f"  > Superclass 阈值: {thresh_super:.4f}")

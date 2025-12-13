@@ -5,6 +5,7 @@ import torch
 import torch.nn.functional as F
 
 from .models import LinearSingleHead, GatedDualHead
+from .config import OODScoreMethod
 
 
 def compute_energy(logits, temperature):
@@ -28,20 +29,17 @@ def compute_energy(logits, temperature):
     return -temperature * torch.logsumexp(logits / temperature, dim=1)
 
 
-def get_default_threshold(use_energy, use_sigmoid_bce):
+def get_default_threshold(score_method: OODScoreMethod):
     """
     获取默认阈值（当验证集中没有已知类样本时使用）
 
     Args:
-        use_energy: 是否使用 energy score
-        use_sigmoid_bce: 是否使用 sigmoid-based scoring
+        score_method: OODScoreMethod ENUM - 得分计算方法
 
     Returns:
         默认阈值
     """
-    if use_sigmoid_bce:
-        return 0.5
-    elif use_energy:
+    if score_method == OODScoreMethod.Energy:
         return -5
     else:
         return 0.5
@@ -49,8 +47,7 @@ def get_default_threshold(use_energy, use_sigmoid_bce):
 
 def calculate_threshold_linear_single_head(
         model, val_features, val_labels, label_map,
-        target_recall, device,
-        temperature, use_energy, use_sigmoid_bce
+        target_recall, device, temperature, score_method: OODScoreMethod
 ):
     """
     在验证集上为 LinearSingleHead 计算 OSR 阈值
@@ -63,8 +60,7 @@ def calculate_threshold_linear_single_head(
         target_recall: 目标召回率 (如 0.95)
         device: 'cuda' or 'cpu'
         temperature: OOD 温度缩放参数
-        use_energy: 是否使用 energy score（否则用 MSP）
-        use_sigmoid_bce: 是否使用 sigmoid-based scoring
+        score_method: OODScoreMethod ENUM - 得分计算方法
 
     Returns:
         threshold: 计算出的阈值
@@ -77,23 +73,22 @@ def calculate_threshold_linear_single_head(
 
     if len(X_known) == 0:
         print("警告: 验证集中没有已知类样本，使用默认阈值")
-        return get_default_threshold(use_energy, use_sigmoid_bce)
+        return get_default_threshold(score_method)
 
     with torch.no_grad():
         logits = model(X_known)
-        if use_energy:
+        if score_method == OODScoreMethod.Energy:
             energy = compute_energy(logits, temperature)  # 越低越可能是已知类，阈值是能量上限
             threshold = torch.quantile(energy, target_recall).item()
-        else:
-            if use_sigmoid_bce:
-                # Maximum Sigmoid
-                scores = torch.max(torch.sigmoid(logits / temperature), dim=1)[0]
-                threshold = torch.quantile(scores, 1 - target_recall).item()
-            else:
-                # MSP with temperature = ODIN
-                probs = F.softmax(logits / temperature, dim=1)
-                max_probs, _ = torch.max(probs, dim=1)
-                threshold = torch.quantile(max_probs, 1 - target_recall).item()
+        elif score_method == OODScoreMethod.MaxSigmoid:
+            # Maximum Sigmoid
+            scores = torch.max(torch.sigmoid(logits / temperature), dim=1)[0]
+            threshold = torch.quantile(scores, 1 - target_recall).item()
+        else:  # OODScoreMethod.MSP
+            # MSP with temperature = ODIN
+            probs = F.softmax(logits / temperature, dim=1)
+            max_probs, _ = torch.max(probs, dim=1)
+            threshold = torch.quantile(max_probs, 1 - target_recall).item()
 
     return threshold
 
@@ -101,7 +96,7 @@ def calculate_threshold_linear_single_head(
 def calculate_threshold_gated_dual_head(
         model, val_features, val_super_labels, val_sub_labels,
         super_map_inv, sub_map_inv, target_recall, device,
-        temperature, use_energy, use_sigmoid_bce
+        temperature, score_method: OODScoreMethod
 ):
     """
     在验证集上为 GatedDualHead 计算 OSR 阈值
@@ -116,44 +111,40 @@ def calculate_threshold_gated_dual_head(
         target_recall: float - 目标召回率 (如 0.95)
         device: str - 'cuda' or 'cpu'
         temperature: float - OOD 温度缩放参数
-        use_energy: bool - 是否使用 energy score（否则用 MSP）
-        use_sigmoid_bce: bool - 是否使用 sigmoid-based scoring
+        score_method: OODScoreMethod ENUM - 得分计算方法
 
     Returns:
         thresh_super: float - 超类阈值
         thresh_sub: float - 子类阈值
     """
 
-    def _calculate_single_threshold(logits, known_mask, target_recall, temperature, use_energy, use_sigmoid_bce):
+    def _calculate_single_threshold(logits, known_mask, target_recall, temperature, score_method):
         """
         Args:
             logits: [N, C] - 模型输出的 logits
             known_mask: [N] - 布尔掩码，标记已知类样本
             target_recall: float - 目标召回率
             temperature: float - 温度缩放参数
-            use_energy: bool - 是否使用 energy score
-            use_sigmoid_bce: bool - 是否使用 sigmoid-based scoring
+            score_method: OODScoreMethod ENUM - 得分计算方法
 
         Returns:
             threshold: float - 计算出的阈值
         """
         if known_mask.sum() > 0:
-            if use_energy:
-                scores = compute_energy(logits[known_mask], temperature)  # [N_known, C] -> [N_known]
-                threshold = torch.quantile(scores, target_recall).item()  # [N_known]
-            else:
-                if use_sigmoid_bce:
-                    # Maximum Sigmoid
-                    scores = torch.max(torch.sigmoid(logits[known_mask] / temperature), dim=1)[
-                        0]  # [N_known, C] -> [N_known]
-                    threshold = torch.quantile(scores, 1 - target_recall).item()  # [N_known]
-                else:
-                    # MSP with temperature = ODIN
-                    probs = F.softmax(logits[known_mask] / temperature, dim=1)  # [N_known, C] -> [N_known, C]
-                    threshold = torch.quantile(probs.max(dim=1)[0], 1 - target_recall).item()  # [N_known]
+            if score_method == OODScoreMethod.Energy:
+                scores = compute_energy(logits[known_mask], temperature)
+                threshold = torch.quantile(scores, target_recall).item()
+            elif score_method == OODScoreMethod.MaxSigmoid:
+                # Maximum Sigmoid
+                scores = torch.max(torch.sigmoid(logits[known_mask] / temperature), dim=1)[0]
+                threshold = torch.quantile(scores, 1 - target_recall).item()
+            else:  # OODScoreMethod.MSP
+                # MSP with temperature = ODIN
+                probs = F.softmax(logits[known_mask] / temperature, dim=1)
+                threshold = torch.quantile(probs.max(dim=1)[0], 1 - target_recall).item()
         else:
             print(f"Warning: No known samples in validation set, using default threshold")
-            threshold = get_default_threshold(use_energy, use_sigmoid_bce)
+            threshold = get_default_threshold(score_method)
 
         return threshold
 
@@ -164,13 +155,11 @@ def calculate_threshold_gated_dual_head(
 
     # 计算 superclass threshold
     known_super = torch.tensor([l.item() in super_map_inv for l in val_super_labels])  # [N]
-    thresh_super = _calculate_single_threshold(super_logits, known_super, target_recall, temperature, use_energy,
-                                               use_sigmoid_bce)
+    thresh_super = _calculate_single_threshold(super_logits, known_super, target_recall, temperature, score_method)
 
     # 计算 subclass threshold
     known_sub = torch.tensor([l.item() in sub_map_inv for l in val_sub_labels])  # [N]
-    thresh_sub = _calculate_single_threshold(sub_logits, known_sub, target_recall, temperature, use_energy,
-                                             use_sigmoid_bce)
+    thresh_sub = _calculate_single_threshold(sub_logits, known_sub, target_recall, temperature, score_method)
 
     return thresh_super, thresh_sub
 
@@ -243,7 +232,7 @@ def predict_with_linear_single_head(
         super_map, sub_map,
         thresh_super, thresh_sub,
         novel_super_idx, novel_sub_idx, device,
-        super_to_sub, temperature, use_energy, use_sigmoid_bce
+        super_to_sub, temperature, score_method: OODScoreMethod
 ):
     """
     Args:
@@ -259,8 +248,7 @@ def predict_with_linear_single_head(
         device: 'cuda' or 'cpu'
         super_to_sub: 超类到子类的映射 {super_id: [sub_ids]}（可选，用于 masking）
         temperature: OOD 温度缩放参数
-        use_energy: 是否使用 energy score（否则用 MSP）
-        use_sigmoid_bce: 是否使用 sigmoid-based scoring
+        score_method: OODScoreMethod ENUM - 得分计算方法
 
     Returns:
         super_preds: 超类预测列表 [N]
@@ -286,14 +274,14 @@ def predict_with_linear_single_head(
 
             # === 超类预测 ===
             super_logits = super_model(feature)
-            if use_sigmoid_bce:
+            if score_method == OODScoreMethod.MaxSigmoid:
                 super_probs = torch.sigmoid(super_logits)
             else:
                 super_probs = F.softmax(super_logits / temperature, dim=1)
             max_super_prob, super_idx = torch.max(super_probs, dim=1)
 
-            # 计算 OOD 得分 (Energy 优先)
-            if use_energy:
+            # 计算 OOD 得分
+            if score_method == OODScoreMethod.Energy:
                 energy = compute_energy(super_logits, temperature).item()
                 super_score = -energy  # 取负，Energy 越低越像已知类
             else:
@@ -302,7 +290,7 @@ def predict_with_linear_single_head(
             super_scores.append(super_score)
 
             # 判断是否为 novel
-            if use_energy:
+            if score_method == OODScoreMethod.Energy:
                 is_novel_super = energy > thresh_super
             else:
                 is_novel_super = max_super_prob.item() < thresh_super
@@ -316,14 +304,13 @@ def predict_with_linear_single_head(
             sub_logits = sub_model(feature)
 
             # 计算 OOD 得分 （必须在 masking 之前，与阈值计算保持一致）
-            # Energy 优先
-            if use_energy:
+            if score_method == OODScoreMethod.Energy:
                 energy = compute_energy(sub_logits, temperature).item()
                 sub_score = -energy  # 取负，Energy 越低越像已知类
-            elif use_sigmoid_bce:
+            elif score_method == OODScoreMethod.MaxSigmoid:
                 sub_probs_unmasked = torch.sigmoid(sub_logits)
                 sub_score = sub_probs_unmasked.max(dim=1)[0].item()
-            else:
+            else:  # OODScoreMethod.MSP
                 # MSP with temperature = ODIN
                 sub_probs_unmasked = F.softmax(sub_logits / temperature, dim=1)
                 sub_score = sub_probs_unmasked.max(dim=1)[0].item()
@@ -341,14 +328,14 @@ def predict_with_linear_single_head(
                 sub_logits = sub_logits + mask
 
             # 对 masked logits 计算最终预测
-            if use_sigmoid_bce:
+            if score_method == OODScoreMethod.MaxSigmoid:
                 sub_probs = torch.sigmoid(sub_logits)
             else:
                 sub_probs = F.softmax(sub_logits, dim=1)
             _, sub_idx = torch.max(sub_probs, dim=1)
 
             # 判断是否为 novel（使用 masking 前计算的分数）
-            if use_energy:
+            if score_method == OODScoreMethod.Energy:
                 is_novel_sub = energy > thresh_sub
             else:
                 is_novel_sub = sub_score < thresh_sub
@@ -372,7 +359,7 @@ def predict_with_gated_dual_head(
         features, model, super_map, sub_map,
         thresh_super, thresh_sub,
         novel_super_idx, novel_sub_idx, device,
-        super_to_sub, temperature, use_energy, use_sigmoid_bce
+        super_to_sub, temperature, score_method: OODScoreMethod
 ):
     """
     Args:
@@ -387,8 +374,7 @@ def predict_with_gated_dual_head(
         device: str - 'cuda' or 'cpu'
         super_to_sub: dict - 超类到子类的映射（用于 hard masking，可选）
         temperature: float - OOD 温度缩放参数
-        use_energy: bool - 是否使用 energy score（否则用 MSP）
-        use_sigmoid_bce: bool - 是否使用 sigmoid-based scoring
+        score_method: OODScoreMethod ENUM - 得分计算方法
 
     Returns:
         super_preds: list[int] - 超类预测列表 [N]
@@ -414,27 +400,23 @@ def predict_with_gated_dual_head(
 
             # === 超类预测 ===
             # Step 1: 计算概率分布
-            if use_sigmoid_bce:
+            if score_method == OODScoreMethod.MaxSigmoid:
                 super_probs = torch.sigmoid(super_logits)
             else:
                 super_probs = F.softmax(super_logits / temperature, dim=1)
             max_super_prob, super_idx = torch.max(super_probs, dim=1)
 
             # Step 2: 计算 OOD 得分
-            if use_sigmoid_bce:
-                super_score = max_super_prob.item()
-            elif use_energy:
+            if score_method == OODScoreMethod.Energy:
                 energy = compute_energy(super_logits, temperature).item()
                 super_score = -energy  # 取负，Energy 越低越像已知类
             else:
-                super_score = max_super_prob.item()  # MSP 越高越像已知类
+                super_score = max_super_prob.item()  # MaxSigmoid 或 MSP
 
             super_scores.append(super_score)
 
             # Step 3: 判断是否为 novel
-            if use_sigmoid_bce:
-                is_novel_super = max_super_prob.item() < thresh_super
-            elif use_energy:
+            if score_method == OODScoreMethod.Energy:
                 is_novel_super = energy > thresh_super
             else:
                 is_novel_super = max_super_prob.item() < thresh_super
@@ -448,22 +430,20 @@ def predict_with_gated_dual_head(
             # === 子类预测（带 Hierarchical Masking）===
 
             # Step 1: 计算 OOD 得分（必须在 masking 之前，与阈值计算保持一致）
-            if use_sigmoid_bce:
-                sub_probs_unmasked = torch.sigmoid(sub_logits)
-                sub_score = sub_probs_unmasked.max(dim=1)[0].item()
-            elif use_energy:
+            if score_method == OODScoreMethod.Energy:
                 energy = compute_energy(sub_logits, temperature).item()
                 sub_score = -energy  # 取负，Energy 越低越像已知类
-            else:
+            elif score_method == OODScoreMethod.MaxSigmoid:
+                sub_probs_unmasked = torch.sigmoid(sub_logits)
+                sub_score = sub_probs_unmasked.max(dim=1)[0].item()
+            else:  # OODScoreMethod.MSP
                 sub_probs_unmasked = F.softmax(sub_logits / temperature, dim=1)
-                sub_score = sub_probs_unmasked.max(dim=1)[0].item()  # MSP 越高越像已知类
+                sub_score = sub_probs_unmasked.max(dim=1)[0].item()
 
             sub_scores.append(sub_score)
 
             # Step 2: 判断是否为 novel（使用 masking 前计算的分数）
-            if use_sigmoid_bce:
-                is_novel_sub = sub_score < thresh_sub
-            elif use_energy:
+            if score_method == OODScoreMethod.Energy:
                 is_novel_sub = energy > thresh_sub
             else:
                 is_novel_sub = sub_score < thresh_sub
@@ -479,7 +459,7 @@ def predict_with_gated_dual_head(
                 sub_logits = sub_logits + mask
 
             # Step 4: 对 masked logits 计算最终预测
-            if use_sigmoid_bce:
+            if score_method == OODScoreMethod.MaxSigmoid:
                 sub_probs = torch.sigmoid(sub_logits)
             else:
                 sub_probs = F.softmax(sub_logits, dim=1)
