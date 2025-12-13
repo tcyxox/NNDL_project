@@ -175,12 +175,12 @@ class ExperimentConfig:
     ood_temperature: float = 0.02  # OOD 温度缩放 (适用于 MSP 和 Energy)
 ```
 
-  [Superclass] Overall     : 100.00% ± 0.00%
-  [Superclass] Seen        : 100.00% ± 0.00%
+  [Superclass] Overall     : 95.36% ± 0.23%
+  [Superclass] Seen        : 95.36% ± 0.23%
   [Superclass] Unseen      : 0.00% ± 0.00%
-  [Subclass] Overall       : 74.68% ± 0.46%
-  [Subclass] Seen          : 81.65% ± 2.33%
-  [Subclass] Unseen        : 68.73% ± 2.81%
+  [Subclass] Overall       : 67.02% ± 0.34%
+  [Subclass] Seen          : 88.27% ± 0.62%
+  [Subclass] Unseen        : 48.90% ± 0.86%
   [Superclass] AUROC       : nan ± nan
   [Subclass] AUROC         : 0.8556 ± 0.0023
 

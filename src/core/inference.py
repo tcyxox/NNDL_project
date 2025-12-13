@@ -374,20 +374,16 @@ def predict_with_hierarchical_model(features, model, super_map, sub_map,
             max_super_prob, super_idx = torch.max(super_probs, dim=1)
             
             # Step 2: 计算 OOD 得分
-            if use_sigmoid_bce:
-                super_score = max_super_prob.item()
-            elif use_energy:
+            if use_energy:
                 energy = compute_energy(super_logits, temperature).item()
                 super_score = -energy  # 取负，Energy 越低越像已知类
             else:
-                super_score = max_super_prob.item()  # MSP 越高越像已知类
+                super_score = max_super_prob.item()  # Max Sigmoid Probability 或 MSP
             
             super_scores.append(super_score)
             
             # Step 3: 判断是否为 novel
-            if use_sigmoid_bce:
-                is_novel_super = max_super_prob.item() < thresh_super
-            elif use_energy:
+            if use_energy:
                 is_novel_super = energy > thresh_super
             else:
                 is_novel_super = max_super_prob.item() < thresh_super
@@ -399,24 +395,25 @@ def predict_with_hierarchical_model(features, model, super_map, sub_map,
                 final_super = super_map[super_idx.item()]
             
             # === 子类预测（带 Hierarchical Masking）===
-            
+
+            # 因为后面预测用的是 mask 后的 sub_probs，这里先不计算该值
+
             # Step 1: 计算 OOD 得分（必须在 masking 之前，与阈值计算保持一致）
-            if use_sigmoid_bce:
-                sub_probs_unmasked = torch.sigmoid(sub_logits)
-                sub_score = sub_probs_unmasked.max(dim=1)[0].item()
-            elif use_energy:
+
+            if use_energy:
                 energy = compute_energy(sub_logits, temperature).item()
                 sub_score = -energy  # 取负，Energy 越低越像已知类
             else:
-                sub_probs_unmasked = F.softmax(sub_logits / temperature, dim=1)
-                sub_score = sub_probs_unmasked.max(dim=1)[0].item()  # MSP 越高越像已知类
+                if use_sigmoid_bce:
+                    sub_probs_unmasked = torch.sigmoid(super_logits)
+                else:
+                    sub_probs_unmasked = F.softmax(super_logits / temperature, dim=1)
+                sub_score = sub_probs_unmasked.max(dim=1)[0].item()
             
             sub_scores.append(sub_score)
             
             # Step 2: 判断是否为 novel（使用 masking 前计算的分数）
-            if use_sigmoid_bce:
-                is_novel_sub = sub_score < thresh_sub
-            elif use_energy:
+            if use_energy:
                 is_novel_sub = energy > thresh_sub
             else:
                 is_novel_sub = sub_score < thresh_sub
@@ -431,13 +428,14 @@ def predict_with_hierarchical_model(features, model, super_map, sub_map,
                         mask[0, local_id] = 0
                 sub_logits = sub_logits + mask
             
-            # Step 4: 对 masked logits 计算最终预测
+            # Step 4: 计算 Masked 的概率分布
             if use_sigmoid_bce:
                 sub_probs = torch.sigmoid(sub_logits)
             else:
                 sub_probs = F.softmax(sub_logits, dim=1)
             _, sub_idx = torch.max(sub_probs, dim=1)
-            
+
+            # Step 5: 确定最终预测
             if is_novel_sub:
                 final_sub = novel_sub_idx
             else:
