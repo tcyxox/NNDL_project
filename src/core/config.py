@@ -50,8 +50,8 @@ class ExperimentConfig:
     enable_hierarchical_masking: bool = True  # 推理时使用 Hierarchical Masking
     enable_feature_gating: bool = True  # 训练时使用 SE Feature Gating
     enable_energy: bool = True  # 使用 Energy-based OOD 检测 替代 MSP
-    enable_sigmoid_bce: bool = False  # 使用 Sigmoid + BCE 替代 Softmax + CE
-    ood_temperature: float = 0.2  # OOD 温度缩放 (适用于 MSP 和 Energy)
+    enable_sigmoid_bce: bool = True  # 使用 Sigmoid + BCE 替代 Softmax + CE
+    ood_temperature: float = 0.02  # OOD 温度缩放 (适用于 MSP 和 Energy)
 
 
 @dataclass

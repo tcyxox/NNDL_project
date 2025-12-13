@@ -83,7 +83,7 @@ def run_single_trial(seed):
     super_map_inv = {v: int(k) for k, v in super_map.items()}
     sub_map_inv = {v: int(k) for k, v in sub_map.items()}
     
-    # hierarchical masking
+    # Hierarchical Masking
     if not CONFIG["enable_hierarchical_masking"]:
         super_to_sub = None
     

@@ -149,17 +149,6 @@ class ExperimentConfig:
   [Superclass] AUROC       : nan ± nan
   [Subclass] AUROC         : 0.8780 ± 0.0083
 
-?
-
-  [Superclass] Overall     : 95.11% ± 0.11%
-  [Superclass] Seen        : 95.11% ± 0.11%
-  [Superclass] Unseen      : 0.00% ± 0.00%
-  [Subclass] Overall       : 65.92% ± 1.57%
-  [Subclass] Seen          : 87.02% ± 1.06%
-  [Subclass] Unseen        : 47.93% ± 3.23%
-  [Superclass] AUROC       : nan ± nan
-  [Subclass] AUROC         : 0.8779 ± 0.0083
-
 ### 阶段性结论
 
 1. Feature Gating 联合双头 + Hierarchical Masking 是一定要使用的。
