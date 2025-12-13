@@ -173,7 +173,7 @@ class ExperimentConfig:
     prediction_temperature: float = 0.02
 ```
 
-观察：Energy-based 方法受益于较低温度，T=0.02 时性能最优。
+观察：Energy 方法受益于较低温度，T=0.02 时性能最优。
 
   [Superclass] Overall     : 95.11% ± 0.11%       
   [Superclass] Seen        : 95.11% ± 0.11%       
@@ -188,9 +188,9 @@ class ExperimentConfig:
 
 1. Gated Dual Head + Hierarchical Masking 是一定要使用的。
 2. MSP 受益于较高温度（T=3.5 时性能最优）：高温时，模型关注相对尖锐度。
-3. Energy-based OOD 受益于较低温度（T=0.02 时性能最优）：低温时，模型关注绝对幅值。
-4. 问题：Softmax 的强制归一化导致丢失了幅值信息；方案：使用基于 Logits 的 Energy-based OOD。
-5. MSP 中使用基于 Softmax 的不保留幅值信息的阈值方法 + 基于 Softmax 的不保留幅值信息的 CE 损失函数，是统一的；而 Energy-based OOD 中使用基于 Logits 的保留幅值信息的阈值方法 + 基于 Softmax 的不保留幅值信息的 CE 损失函数，是不统一的。所以理论上应将 Softmax 替换为保留幅值信息的 Sigmoid。
+3. Energy 方法受益于较低温度（T=0.02 时性能最优）：低温时，模型关注绝对幅值。
+4. 问题：Softmax 的强制归一化导致丢失了幅值信息；方案：使用基于 Logits 的 Energy 方法。
+5. MSP 中使用基于 Softmax 的不保留幅值信息的阈值方法 + 基于 Softmax 的不保留幅值信息的 CE 损失函数，是统一的；而 Energy 方法 中使用基于 Logits 的保留幅值信息的阈值方法 + 基于 Softmax 的不保留幅值信息的 CE 损失函数，是不统一的。所以理论上应将 Softmax 替换为保留幅值信息的 Sigmoid。
 
 ## Gated Dual Head + Energy + Hierarchical Masking + Sigmoid & BCE
 
@@ -226,7 +226,43 @@ class ExperimentConfig:
   [Superclass] AUROC       : nan ± nan
   [Subclass] AUROC         : 0.8556 ± 0.0023
 
-结论：对 Energy 配置使用 Sigmoid + BCE，性能有略微提升。
+结论：对 Energy 配置，将损失函数从 Softmax + CE 替换为 Sigmoid + BCE，性能有略微提升。
+
+## Gated Dual Head + MaxSigmoid + Hierarchical Masking + Sigmoid & BCE
+
+```py
+class ExperimentConfig:
+    # 训练参数
+    batch_size: int = 64
+    learning_rate: float = 1e-3
+    epochs: int = 100
+    target_recall: float = 0.95
+    seed: int = 42
+
+    # 模型选择
+    enable_hierarchical_masking: bool = True  # 推理时 Hierarchical Masking 开关
+    enable_feature_gating: bool = True  # 训练时 SE Feature Gating 开关
+
+    # 方法选择
+    training_loss: TrainingLoss = TrainingLoss.BCE
+    threshold_method: OODScoreMethod = OODScoreMethod.MaxSigmoid
+    prediction_method: OODScoreMethod = OODScoreMethod.MaxSigmoid
+
+    # 温度参数
+    threshold_temperature: float = 3.5
+    prediction_temperature: float = 3.5
+```
+
+  [Superclass] Overall     : 99.91% ± 0.00%
+  [Superclass] Seen        : 99.91% ± 0.00%
+  [Superclass] Unseen      : 0.00% ± 0.00%
+  [Subclass] Overall       : 70.42% ± 0.32%
+  [Subclass] Seen          : 88.43% ± 0.21%
+  [Subclass] Unseen        : 55.05% ± 0.54%
+  [Superclass] AUROC       : nan ± nan
+  [Subclass] AUROC         : 0.8556 ± 0.0023
+
+结论：使用 Sigmoid + BCE 损失函数，配合 MaxSigmoid 阈值和预测方法，性能有显著提升。
 
 ## Gated Dual Head + Energy + Hierarchical Masking + Sigmoid & BCE (Variant)
 
@@ -262,7 +298,7 @@ class ExperimentConfig:
   [Superclass] AUROC       : nan ± nan
   [Subclass] AUROC         : 0.8556 ± 0.0023
 
-结论：不一致的 Energy 阈值计算方法 & MaxSigmoid 预测方法，性能居然出现显著提升，原因未知。
+结论：使用 Sigmoid + BCE 损失函数，配合不一致的 Energy 阈值计算方法 & MaxSigmoid 预测方法，性能居然出现显著提升，原因未知。
 
 # CAC 
 ## v1.0
