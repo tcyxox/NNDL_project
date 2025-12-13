@@ -20,6 +20,7 @@ CONFIG = {
     "feature_dim": config.model.feature_dim,
     "enable_feature_gating": config.experiment.enable_feature_gating,
     "enable_energy": config.experiment.enable_energy,
+    "enable_sigmoid_bce": config.experiment.enable_sigmoid_bce,
     "ood_temperature": config.experiment.ood_temperature,
 }
 
@@ -60,6 +61,9 @@ if __name__ == "__main__":
     print("\n--- Step 3: 测试集推理 ---")
     test_features = torch.load(CONFIG["test_feature_path"]).to(device)
     test_image_names = torch.load(CONFIG["test_image_names"])
+    
+    use_energy = CONFIG["enable_energy"]
+    use_sigmoid_bce = CONFIG["enable_sigmoid_bce"]
 
     if CONFIG["enable_feature_gating"]:
         print("  > 使用 Soft Attention 模式")
@@ -70,7 +74,8 @@ if __name__ == "__main__":
             test_features, model, super_map, sub_map,
             thresh_super, thresh_sub,
             CONFIG["novel_super_idx"], CONFIG["novel_sub_idx"], device,
-            super_to_sub, CONFIG["enable_energy"], temperature=CONFIG["ood_temperature"]
+            super_to_sub, use_energy, temperature=CONFIG["ood_temperature"],
+            use_sigmoid_bce=use_sigmoid_bce
         )
     else:
         print("  > 使用独立模型模式")

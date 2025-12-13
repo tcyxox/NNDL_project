@@ -14,9 +14,9 @@ if __name__ == "__main__":
         batch_size=config.experiment.batch_size,
         learning_rate=config.experiment.learning_rate,
         epochs=config.experiment.epochs,
+        device=device,
         enable_feature_gating=config.experiment.enable_feature_gating,
         use_sigmoid_bce=config.experiment.enable_sigmoid_bce,
-        device=device,
         feature_dir=config.paths.features,
         output_dir=config.paths.submit
     )
