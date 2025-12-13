@@ -16,6 +16,7 @@ class ExperimentConfig:
     enable_hierarchical_masking: bool = False  # 推理时使用 Hierarchical Masking
     enable_feature_gating: bool = False  # 训练时使用 SE Feature Gating
     enable_energy: bool = False  # 使用 Energy-based OOD 检测 替代 MSP
+    enable_sigmoid_bce: bool = False  # 使用 Sigmoid + BCE 替代 Softmax + CE
     ood_temperature: float = 1  # OOD 温度缩放 (适用于 MSP 和 Energy)
 ```
 
@@ -44,17 +45,18 @@ class ExperimentConfig:
     enable_hierarchical_masking: bool = False  # 推理时使用 Hierarchical Masking
     enable_feature_gating: bool = False  # 训练时使用 SE Feature Gating
     enable_energy: bool = False  # 使用 Energy-based OOD 检测 替代 MSP
+    enable_sigmoid_bce: bool = False  # 使用 Sigmoid + BCE 替代 Softmax + CE
     ood_temperature: float = 3.5  # OOD 温度缩放 (适用于 MSP 和 Energy)
 ```
 
-  [Superclass] Overall     : 95.04% ± 0.17%       
-  [Superclass] Seen        : 95.04% ± 0.17%       
-  [Superclass] Unseen      : 0.00% ± 0.00%        
-  [Subclass] Overall       : 65.23% ± 0.43%       
-  [Subclass] Seen          : 89.33% ± 0.52%       
-  [Subclass] Unseen        : 44.68% ± 1.13%       
+  [Superclass] Overall     : 95.00% ± 0.22%
+  [Superclass] Seen        : 95.00% ± 0.22%
+  [Superclass] Unseen      : 0.00% ± 0.00%
+  [Subclass] Overall       : 64.46% ± 0.54%
+  [Subclass] Seen          : 88.82% ± 0.37%
+  [Subclass] Unseen        : 43.68% ± 0.88%
   [Superclass] AUROC       : nan ± nan
-  [Subclass] AUROC         : 0.8760 ± 0.0010
+  [Subclass] AUROC         : 0.8719 ± 0.0008
 
 观察：MSP 方法受益于较高温度，T=3.5 时性能最优。
 
@@ -72,6 +74,7 @@ class ExperimentConfig:
     enable_hierarchical_masking: bool = True  # 推理时使用 Hierarchical Masking
     enable_feature_gating: bool = False  # 训练时使用 SE Feature Gating
     enable_energy: bool = False  # 使用 Energy-based OOD 检测 替代 MSP
+    enable_sigmoid_bce: bool = False  # 使用 Sigmoid + BCE 替代 Softmax + CE
     ood_temperature: float = 3.5  # OOD 温度缩放 (适用于 MSP 和 Energy)
 ```
 
@@ -84,7 +87,7 @@ class ExperimentConfig:
   [Superclass] AUROC       : nan ± nan
   [Subclass] AUROC         : 0.8760 ± 0.0010
 
-结论：根据理论，Baseline + Hierarchical Masking >= Baseline（实验结果为取等情况）。
+结论：根据理论，Baseline + Hierarchical Masking >= Baseline 恒成立。
 
 ## Feature Gating 联合双头 + MSP + Hierarchical Masking
 
@@ -100,6 +103,7 @@ class ExperimentConfig:
     enable_hierarchical_masking: bool = True  # 推理时使用 Hierarchical Masking
     enable_feature_gating: bool = True  # 训练时使用 SE Feature Gating
     enable_energy: bool = False  # 使用 Energy-based OOD 检测 替代 MSP
+    enable_sigmoid_bce: bool = False  # 使用 Sigmoid + BCE 替代 Softmax + CE
     ood_temperature: float = 3.5  # OOD 温度缩放 (适用于 MSP 和 Energy)
 ```
 
@@ -116,7 +120,7 @@ class ExperimentConfig:
 
 结论：Feature Gating 联合双头 能使未知subclass准确率显著提高。
 
-## Feature Gating 联合双头 + Energy-based OOD + Hierarchical Masking
+## Feature Gating 联合双头 + Energy + Hierarchical Masking
 
 ```py
 class ExperimentConfig:
@@ -130,7 +134,8 @@ class ExperimentConfig:
     enable_hierarchical_masking: bool = True  # 推理时使用 Hierarchical Masking
     enable_feature_gating: bool = True  # 训练时使用 SE Feature Gating
     enable_energy: bool = True  # 使用 Energy-based OOD 检测 替代 MSP
-    ood_temperature: float = 3.5  # OOD 温度缩放 (适用于 MSP 和 Energy)
+    enable_sigmoid_bce: bool = False  # 使用 Sigmoid + BCE 替代 Softmax + CE
+    ood_temperature: float = 0.02  # OOD 温度缩放 (适用于 MSP 和 Energy)
 ```
 
 观察：Energy-based 方法受益于较低温度，T=0.02 时性能最优。
@@ -144,6 +149,17 @@ class ExperimentConfig:
   [Superclass] AUROC       : nan ± nan
   [Subclass] AUROC         : 0.8780 ± 0.0083
 
+?
+
+  [Superclass] Overall     : 95.11% ± 0.11%
+  [Superclass] Seen        : 95.11% ± 0.11%
+  [Superclass] Unseen      : 0.00% ± 0.00%
+  [Subclass] Overall       : 65.92% ± 1.57%
+  [Subclass] Seen          : 87.02% ± 1.06%
+  [Subclass] Unseen        : 47.93% ± 3.23%
+  [Superclass] AUROC       : nan ± nan
+  [Subclass] AUROC         : 0.8779 ± 0.0083
+
 ### 阶段性结论
 
 1. Feature Gating 联合双头 + Hierarchical Masking 是一定要使用的。
@@ -151,6 +167,33 @@ class ExperimentConfig:
 3. Energy-based OOD 受益于较低温度（T=0.02 时性能最优）：低温时，模型关注绝对幅值。
 4. 问题：Softmax 的强制归一化导致丢失了幅值信息；方案：使用基于 Logits 的 Energy-based OOD。
 5. MSP 中使用基于 Softmax 的不保留幅值信息的阈值方法 + 基于 Softmax 的不保留幅值信息的 CE 损失函数，是统一的；而 Energy-based OOD 中使用基于 Logits 的保留幅值信息的阈值方法 + 基于 Softmax 的不保留幅值信息的 CE 损失函数，是不统一的。所以理论上应将 Softmax 替换为保留幅值信息的 Sigmoid。
+
+# Feature Gating 联合双头 + Energy + Hierarchical Masking + Sigmoid & BCE
+
+```py
+class ExperimentConfig:
+    # 训练参数
+    batch_size: int = 64
+    learning_rate: float = 1e-3
+    epochs: int = 100
+    target_recall: float = 0.95
+    seed: int = 42
+    # 实验开关
+    enable_hierarchical_masking: bool = True  # 推理时使用 Hierarchical Masking
+    enable_feature_gating: bool = True  # 训练时使用 SE Feature Gating
+    enable_energy: bool = True  # 使用 Energy-based OOD 检测 替代 MSP
+    enable_sigmoid_bce: bool = True  # 使用 Sigmoid + BCE 替代 Softmax + CE
+    ood_temperature: float = 0.02  # OOD 温度缩放 (适用于 MSP 和 Energy)
+```
+
+  [Superclass] Overall     : 95.36% ± 0.23%
+  [Superclass] Seen        : 95.36% ± 0.23%
+  [Superclass] Unseen      : 0.00% ± 0.00%
+  [Subclass] Overall       : 67.02% ± 0.34%
+  [Subclass] Seen          : 88.27% ± 0.62%
+  [Subclass] Unseen        : 48.90% ± 0.86%
+  [Superclass] AUROC       : nan ± nan
+  [Subclass] AUROC         : 0.8556 ± 0.0023
 
 # CAC 
 ## v1.0

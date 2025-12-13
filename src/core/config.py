@@ -43,14 +43,15 @@ class ExperimentConfig:
     # 训练参数
     batch_size: int = 64
     learning_rate: float = 1e-3
-    epochs: int = 50
+    epochs: int = 100
     target_recall: float = 0.95
     seed: int = 42
     # 实验开关
     enable_hierarchical_masking: bool = True  # 推理时使用 Hierarchical Masking
     enable_feature_gating: bool = True  # 训练时使用 SE Feature Gating
-    enable_energy: bool = False  # 使用 Energy-based OOD 检测 替代 MSP
-    ood_temperature: float = 2.5  # OOD 温度缩放 (适用于 MSP 和 Energy)
+    enable_energy: bool = True  # 使用 Energy-based OOD 检测 替代 MSP
+    enable_sigmoid_bce: bool = False  # 使用 Sigmoid + BCE 替代 Softmax + CE
+    ood_temperature: float = 0.2  # OOD 温度缩放 (适用于 MSP 和 Energy)
 
 
 @dataclass

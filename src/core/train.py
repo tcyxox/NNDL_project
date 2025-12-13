@@ -125,7 +125,7 @@ def train_linear_model(features, labels, label_map, num_classes,
 
 
 def train_hierarchical_model(features, super_labels, sub_labels, super_map, sub_map, num_super, num_sub,
-                             feature_dim, batch_size, learning_rate, epochs, device):
+                             feature_dim, batch_size, learning_rate, epochs, device, use_sigmoid_bce):
     """
     Args:
         features: 训练特征
@@ -140,6 +140,7 @@ def train_hierarchical_model(features, super_labels, sub_labels, super_map, sub_
         learning_rate: 学习率
         epochs: 训练轮数
         device: 'cuda' or 'cpu'
+        use_sigmoid_bce: 是否使用 Sigmoid + BCE 替代 Softmax + CE
 
     Returns:
         model: 训练好的模型
@@ -156,7 +157,12 @@ def train_hierarchical_model(features, super_labels, sub_labels, super_map, sub_
     dataset = TensorDataset(features, mapped_super, mapped_sub)
     loader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
 
-    criterion = nn.CrossEntropyLoss()
+    # 选择损失函数
+    if use_sigmoid_bce:
+        criterion = nn.BCEWithLogitsLoss()
+    else:
+        criterion = nn.CrossEntropyLoss()
+    
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
 
     for epoch in range(epochs):
@@ -170,7 +176,14 @@ def train_hierarchical_model(features, super_labels, sub_labels, super_map, sub_
             super_logits, sub_logits = model(inputs)
             
             # 联合 Loss
-            loss = criterion(super_logits, super_targets) + criterion(sub_logits, sub_targets)
+            if use_sigmoid_bce:
+                # 将标签转换为 one-hot 格式
+                super_onehot = torch.nn.functional.one_hot(super_targets, num_classes=num_super).float()
+                sub_onehot = torch.nn.functional.one_hot(sub_targets, num_classes=num_sub).float()
+                loss = criterion(super_logits, super_onehot) + criterion(sub_logits, sub_onehot)
+            else:
+                loss = criterion(super_logits, super_targets) + criterion(sub_logits, sub_targets)
+            
             loss.backward()
             optimizer.step()
 
@@ -182,7 +195,8 @@ def train_hierarchical_model(features, super_labels, sub_labels, super_map, sub_
     return model
 
 
-def run_training(feature_dim, batch_size, learning_rate, epochs, enable_feature_gating, device,
+def run_training(feature_dim, batch_size, learning_rate, epochs, device,
+                 enable_feature_gating, use_sigmoid_bce,
                  feature_dir, output_dir=None):
     """
     训练模型的主函数
@@ -192,8 +206,9 @@ def run_training(feature_dim, batch_size, learning_rate, epochs, enable_feature_
         batch_size: 批大小
         learning_rate: 学习率
         epochs: 训练轮数
-        enable_feature_gating: 是否启用 SE Feature Gating
         device: 'cuda' or 'cpu'
+        enable_feature_gating: 是否启用 SE Feature Gating
+        use_sigmoid_bce: 是否使用 Sigmoid + BCE 替代 Softmax + CE
         feature_dir: 特征目录
         output_dir: 输出目录（可选，如果提供则保存模型和映射文件）
         
@@ -218,10 +233,11 @@ def run_training(feature_dim, batch_size, learning_rate, epochs, enable_feature_
     
     # 训练模型
     if enable_feature_gating:
-        print("\n=== 使用 Feature Gating (联合训练模式) ===")
+        loss_type = "Sigmoid+BCE" if use_sigmoid_bce else "Softmax+CE"
+        print(f"\n=== 使用 Feature Gating (联合训练模式) | Loss: {loss_type} ===")
         model = train_hierarchical_model(
             train_features, train_super_labels, train_sub_labels, super_map, sub_map, num_super, num_sub,
-            feature_dim, batch_size, learning_rate, epochs, device
+            feature_dim, batch_size, learning_rate, epochs, device, use_sigmoid_bce
         )
         if output_dir:
             torch.save(model.state_dict(), os.path.join(output_dir, "hierarchical_model.pth"))

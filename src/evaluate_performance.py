@@ -23,6 +23,7 @@ CONFIG = {
     "enable_feature_gating": config.experiment.enable_feature_gating,
     "enable_hierarchical_masking": config.experiment.enable_hierarchical_masking,
     "enable_energy": config.experiment.enable_energy,
+    "enable_sigmoid_bce": config.experiment.enable_sigmoid_bce,
     "ood_temperature": config.experiment.ood_temperature,
 }
 
@@ -67,8 +68,9 @@ def run_single_trial(seed):
         batch_size=CONFIG["batch_size"],
         learning_rate=CONFIG["learning_rate"],
         epochs=CONFIG["epochs"],
-        enable_feature_gating=CONFIG["enable_feature_gating"],
         device=device,
+        enable_feature_gating=CONFIG["enable_feature_gating"],
+        use_sigmoid_bce=CONFIG["enable_sigmoid_bce"],
         feature_dir=CONFIG["feature_dir"]
     )
     
@@ -86,20 +88,22 @@ def run_single_trial(seed):
         super_to_sub = None
     
     use_energy = CONFIG["enable_energy"]
+    use_sigmoid_bce = CONFIG["enable_sigmoid_bce"]
     
     if CONFIG["enable_feature_gating"]:
         # 计算阈值
         thresh_super, thresh_sub = calculate_threshold_hierarchical(
             model, val_features, val_super_labels, val_sub_labels,
             super_map_inv, sub_map_inv, CONFIG["target_recall"], device, use_energy,
-            temperature=CONFIG["ood_temperature"]
+            temperature=CONFIG["ood_temperature"], use_sigmoid_bce=use_sigmoid_bce
         )
         
         # 推理
         super_preds, sub_preds, super_scores, sub_scores = predict_with_hierarchical_model(
             test_features, model, super_map_inv, sub_map_inv,
             thresh_super, thresh_sub, CONFIG["novel_super_idx"], CONFIG["novel_sub_idx"], device,
-            super_to_sub, use_energy, temperature=CONFIG["ood_temperature"]
+            super_to_sub, use_energy, temperature=CONFIG["ood_temperature"],
+            use_sigmoid_bce=use_sigmoid_bce
         )
     else:
         # 计算阈值

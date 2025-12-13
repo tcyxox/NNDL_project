@@ -14,6 +14,7 @@ CONFIG = {
     "hyperparams_file": os.path.join(config.paths.dev, "hyperparameters.json"),
     "enable_feature_gating": config.experiment.enable_feature_gating,
     "enable_energy": config.experiment.enable_energy,
+    "enable_sigmoid_bce": config.experiment.enable_sigmoid_bce,
     "ood_temperature": config.experiment.ood_temperature,
 }
 
@@ -46,6 +47,7 @@ if __name__ == "__main__":
     # --- Step 3: 计算阈值 ---
     print("\n--- Step 3: 计算阈值 ---")
     use_energy = CONFIG["enable_energy"]
+    use_sigmoid_bce = CONFIG["enable_sigmoid_bce"]
     
     if CONFIG["enable_feature_gating"]:
         print("  > 使用 Soft Attention 模式")
@@ -54,7 +56,8 @@ if __name__ == "__main__":
         )
         thresh_super, thresh_sub = calculate_threshold_hierarchical(
             model, val_feat, val_super_lbl, val_sub_lbl, 
-            super_map_inv, sub_map_inv, CONFIG["target_recall"], device, use_energy, temperature=CONFIG["ood_temperature"]
+            super_map_inv, sub_map_inv, CONFIG["target_recall"], device, use_energy,
+            temperature=CONFIG["ood_temperature"], use_sigmoid_bce=use_sigmoid_bce
         )
     else:
         print("  > 使用独立模型模式")
