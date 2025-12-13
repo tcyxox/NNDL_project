@@ -105,15 +105,23 @@ def run_single_trial(seed):
         )
     else:
         # 计算阈值
-        thresh_super = calculate_threshold_linear_single_head(super_model, val_features, val_super_labels, super_map_inv, CONFIG["target_recall"], device, use_energy, temperature=CONFIG["ood_temperature"])
-        thresh_sub = calculate_threshold_linear_single_head(sub_model, val_features, val_sub_labels, sub_map_inv, CONFIG["target_recall"], device, use_energy, temperature=CONFIG["ood_temperature"])
+        thresh_super = calculate_threshold_linear_single_head(
+            super_model, val_features, val_super_labels, super_map_inv,
+            CONFIG["target_recall"], device,
+            CONFIG["ood_temperature"], use_energy, use_sigmoid_bce
+        )
+        thresh_sub = calculate_threshold_linear_single_head(
+            sub_model, val_features, val_sub_labels, sub_map_inv,
+            CONFIG["target_recall"], device,
+            CONFIG["ood_temperature"], use_energy, use_sigmoid_bce
+        )
         
         # 推理
         super_preds, sub_preds, super_scores, sub_scores = predict_with_linear_single_head(
             test_features, super_model, sub_model,
             super_map_inv, sub_map_inv,
             thresh_super, thresh_sub, CONFIG["novel_super_idx"], CONFIG["novel_sub_idx"], device,
-            super_to_sub, use_energy, CONFIG["ood_temperature"]
+            super_to_sub, CONFIG["ood_temperature"], use_energy, use_sigmoid_bce
         )
     
     # 计算指标

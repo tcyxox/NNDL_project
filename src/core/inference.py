@@ -31,7 +31,7 @@ def compute_energy(logits, temperature):
 def calculate_threshold_linear_single_head(
         model, val_features, val_labels, label_map,
         target_recall, device,
-        use_energy, temperature
+        temperature, use_energy, use_sigmoid_bce
 ):
     """
     在验证集上为 LinearSingleHead 计算 OSR 阈值
@@ -43,8 +43,9 @@ def calculate_threshold_linear_single_head(
         label_map: local_to_global 映射
         target_recall: 目标召回率 (如 0.95)
         device: 'cuda' or 'cpu'
-        use_energy: 是否使用 energy score（否则用 MSP）
         temperature: OOD 温度缩放参数
+        use_energy: 是否使用 energy score（否则用 MSP）
+        use_sigmoid_bce: 是否使用 sigmoid-based scoring
 
     Returns:
         threshold: 计算出的阈值
@@ -57,7 +58,7 @@ def calculate_threshold_linear_single_head(
 
     if len(X_known) == 0:
         print("警告: 验证集中没有已知类样本，使用默认阈值")
-        return -5 if use_energy else 0.5
+        return 0.5 if use_sigmoid_bce else (-5 if use_energy else 0.5)
 
     with torch.no_grad():
         logits = model(X_known)
@@ -65,9 +66,15 @@ def calculate_threshold_linear_single_head(
             energy = compute_energy(logits, temperature)  # 越低越可能是已知类，阈值是能量上限
             threshold = torch.quantile(energy, target_recall).item()
         else:
-            probs = F.softmax(logits / temperature, dim=1)  # MSP with temperature = ODIN
-            max_probs, _ = torch.max(probs, dim=1)
-            threshold = torch.quantile(max_probs, 1 - target_recall).item()
+            if use_sigmoid_bce:
+                # Maximum Sigmoid
+                scores = torch.max(torch.sigmoid(logits / temperature), dim=1)[0]
+                threshold = torch.quantile(scores, 1 - target_recall).item()
+            else:
+                # MSP with temperature = ODIN
+                probs = F.softmax(logits / temperature, dim=1)
+                max_probs, _ = torch.max(probs, dim=1)
+                threshold = torch.quantile(max_probs, 1 - target_recall).item()
 
     return threshold
 
@@ -217,7 +224,7 @@ def predict_with_linear_single_head(
         super_map, sub_map,
         thresh_super, thresh_sub,
         novel_super_idx, novel_sub_idx, device,
-        super_to_sub, use_energy, temperature
+        super_to_sub, temperature, use_energy, use_sigmoid_bce
 ):
     """
     Args:
@@ -232,8 +239,9 @@ def predict_with_linear_single_head(
         novel_sub_idx: 未知子类的 ID (87)
         device: 'cuda' or 'cpu'
         super_to_sub: 超类到子类的映射 {super_id: [sub_ids]}（可选，用于 masking）
-        use_energy: 是否使用 energy score（否则用 MSP）
         temperature: OOD 温度缩放参数
+        use_energy: 是否使用 energy score（否则用 MSP）
+        use_sigmoid_bce: 是否使用 sigmoid-based scoring
 
     Returns:
         super_preds: 超类预测列表 [N]
@@ -259,16 +267,18 @@ def predict_with_linear_single_head(
 
             # === 超类预测 ===
             super_logits = super_model(feature)
-            super_probs = F.softmax(super_logits / temperature, dim=1)
+            if use_sigmoid_bce:
+                super_probs = torch.sigmoid(super_logits)
+            else:
+                super_probs = F.softmax(super_logits / temperature, dim=1)
             max_super_prob, super_idx = torch.max(super_probs, dim=1)
 
-            # 计算 OOD 得分
+            # 计算 OOD 得分 (Energy 优先)
             if use_energy:
                 energy = compute_energy(super_logits, temperature).item()
-                super_score = -energy  # 取负，Energy 越高越像已知类
+                super_score = -energy  # 取负，Energy 越低越像已知类
             else:
-                msp = max_super_prob.item()
-                super_score = msp  # MSP 越高越像已知类
+                super_score = max_super_prob.item()  # max sigmoid 或 MSP
 
             super_scores.append(super_score)
 
@@ -276,7 +286,7 @@ def predict_with_linear_single_head(
             if use_energy:
                 is_novel_super = energy > thresh_super
             else:
-                is_novel_super = msp < thresh_super
+                is_novel_super = max_super_prob.item() < thresh_super
 
             if is_novel_super:
                 final_super = novel_super_idx
@@ -287,14 +297,17 @@ def predict_with_linear_single_head(
             sub_logits = sub_model(feature)
 
             # 计算 OOD 得分 （必须在 masking 之前，与阈值计算保持一致）
+            # Energy 优先
             if use_energy:
                 energy = compute_energy(sub_logits, temperature).item()
-                sub_score = -energy  # 取负，Energy 越高越像已知类
+                sub_score = -energy  # 取负，Energy 越低越像已知类
+            elif use_sigmoid_bce:
+                sub_probs_unmasked = torch.sigmoid(sub_logits)
+                sub_score = sub_probs_unmasked.max(dim=1)[0].item()
             else:
                 # MSP with temperature = ODIN
                 sub_probs_unmasked = F.softmax(sub_logits / temperature, dim=1)
-                msp = sub_probs_unmasked.max(dim=1)[0].item()
-                sub_score = msp  # MSP 越高越像已知类
+                sub_score = sub_probs_unmasked.max(dim=1)[0].item()
 
             sub_scores.append(sub_score)
 
@@ -308,14 +321,18 @@ def predict_with_linear_single_head(
                         mask[0, local_id] = 0
                 sub_logits = sub_logits + mask
 
-            sub_probs = F.softmax(sub_logits, dim=1)
+            # 对 masked logits 计算最终预测
+            if use_sigmoid_bce:
+                sub_probs = torch.sigmoid(sub_logits)
+            else:
+                sub_probs = F.softmax(sub_logits, dim=1)
             _, sub_idx = torch.max(sub_probs, dim=1)
 
             # 判断是否为 novel（使用 masking 前计算的分数）
             if use_energy:
                 is_novel_sub = energy > thresh_sub
             else:
-                is_novel_sub = msp < thresh_sub
+                is_novel_sub = sub_score < thresh_sub
 
             if is_novel_sub:
                 final_sub = novel_sub_idx

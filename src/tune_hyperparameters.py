@@ -9,13 +9,13 @@ from core.inference import load_linear_single_head, calculate_threshold_linear_s
 CONFIG = {
     "model_dir": config.paths.dev,
     "val_data_dir": config.paths.split_features,
+    "hyperparams_file": os.path.join(config.paths.dev, "hyperparameters.json"),
     "target_recall": config.experiment.target_recall,
     "feature_dim": config.model.feature_dim,
-    "hyperparams_file": os.path.join(config.paths.dev, "hyperparameters.json"),
+    "ood_temperature": config.experiment.ood_temperature,
     "enable_feature_gating": config.experiment.enable_feature_gating,
     "enable_energy": config.experiment.enable_energy,
     "enable_sigmoid_bce": config.experiment.enable_sigmoid_bce,
-    "ood_temperature": config.experiment.ood_temperature,
 }
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -63,8 +63,16 @@ if __name__ == "__main__":
         print("  > 使用独立模型模式")
         super_model, _ = load_linear_single_head("super", CONFIG["model_dir"], CONFIG["feature_dim"], device)
         sub_model, _ = load_linear_single_head("sub", CONFIG["model_dir"], CONFIG["feature_dim"], device)
-        thresh_super = calculate_threshold_linear_single_head(super_model, val_feat, val_super_lbl, super_map, CONFIG["target_recall"], device, use_energy, temperature=CONFIG["ood_temperature"])
-        thresh_sub = calculate_threshold_linear_single_head(sub_model, val_feat, val_sub_lbl, sub_map, CONFIG["target_recall"], device, use_energy, temperature=CONFIG["ood_temperature"])
+        thresh_super = calculate_threshold_linear_single_head(
+            super_model, val_feat, val_super_lbl, super_map,
+            CONFIG["target_recall"], device,
+            CONFIG["ood_temperature"], use_energy, use_sigmoid_bce
+        )
+        thresh_sub = calculate_threshold_linear_single_head(
+            sub_model, val_feat, val_sub_lbl, sub_map,
+            CONFIG["target_recall"], device,
+            CONFIG["ood_temperature"], use_energy, use_sigmoid_bce
+        )
     
     print(f"  > Superclass 阈值: {thresh_super:.4f}")
     print(f"  > Subclass 阈值:   {thresh_sub:.4f}")

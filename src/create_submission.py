@@ -16,12 +16,12 @@ CONFIG = {
     "output_csv": os.path.join(config.paths.outputs, "submission_osr.csv"),
     "novel_super_idx": config.osr.novel_super_index,
     "novel_sub_idx": config.osr.novel_sub_index,
-    "enable_hierarchical_masking": config.experiment.enable_hierarchical_masking,
     "feature_dim": config.model.feature_dim,
+    "ood_temperature": config.experiment.ood_temperature,
+    "enable_hierarchical_masking": config.experiment.enable_hierarchical_masking,
     "enable_feature_gating": config.experiment.enable_feature_gating,
     "enable_energy": config.experiment.enable_energy,
     "enable_sigmoid_bce": config.experiment.enable_sigmoid_bce,
-    "ood_temperature": config.experiment.ood_temperature,
 }
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -68,7 +68,7 @@ if __name__ == "__main__":
     if CONFIG["enable_feature_gating"]:
         print("  > 使用 Soft Attention 模式")
         model, super_map, sub_map = load_gated_dual_head(
-            CONFIG["model_dir"], CONFIG["feature_dim"], num_super, num_sub, True, device
+            CONFIG["model_dir"], CONFIG["feature_dim"], num_super, num_sub, device
         )
         super_preds, sub_preds, _, _ = predict_with_gated_dual_head(
             test_features, model, super_map, sub_map,
@@ -85,7 +85,7 @@ if __name__ == "__main__":
             super_map, sub_map,
             thresh_super, thresh_sub,
             CONFIG["novel_super_idx"], CONFIG["novel_sub_idx"], device,
-            super_to_sub, CONFIG["enable_energy"], CONFIG["ood_temperature"]
+            super_to_sub, CONFIG["ood_temperature"], use_energy, use_sigmoid_bce
         )
 
     # --- Step 4: 保存提交文件 ---
