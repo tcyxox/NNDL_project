@@ -250,7 +250,7 @@ class ExperimentConfig:
 
     # 温度参数
     threshold_temperature: float = 3.5
-    prediction_temperature: float = 3.5
+    prediction_temperature: float = 1
 ```
 
   [Superclass] Overall     : 99.91% ± 0.00%
@@ -286,7 +286,7 @@ class ExperimentConfig:
 
     # 温度参数
     threshold_temperature: float = 0.02
-    prediction_temperature: float = 0.02
+    prediction_temperature: float = 1
 ```
 
   [Superclass] Overall     : 100.00% ± 0.00%

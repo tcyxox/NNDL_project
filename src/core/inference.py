@@ -85,7 +85,7 @@ def calculate_threshold_linear_single_head(
             scores = torch.max(torch.sigmoid(logits / temperature), dim=1)[0]
             threshold = torch.quantile(scores, 1 - target_recall).item()
         else:  # OODScoreMethod.MSP
-            # MSP with temperature = ODIN
+            # MSP
             probs = F.softmax(logits / temperature, dim=1)
             max_probs, _ = torch.max(probs, dim=1)
             threshold = torch.quantile(max_probs, 1 - target_recall).item()
@@ -139,7 +139,7 @@ def calculate_threshold_gated_dual_head(
                 scores = torch.max(torch.sigmoid(logits[known_mask] / temperature), dim=1)[0]
                 threshold = torch.quantile(scores, 1 - target_recall).item()
             else:  # OODScoreMethod.MSP
-                # MSP with temperature = ODIN
+                # MSP
                 probs = F.softmax(logits[known_mask] / temperature, dim=1)
                 threshold = torch.quantile(probs.max(dim=1)[0], 1 - target_recall).item()
         else:
@@ -275,7 +275,7 @@ def predict_with_linear_single_head(
             # === 超类预测 ===
             super_logits = super_model(feature)
             if score_method == OODScoreMethod.MaxSigmoid:
-                super_probs = torch.sigmoid(super_logits)
+                super_probs = torch.sigmoid(super_logits / temperature)
             else:
                 super_probs = F.softmax(super_logits / temperature, dim=1)
             max_super_prob, super_idx = torch.max(super_probs, dim=1)
@@ -285,7 +285,7 @@ def predict_with_linear_single_head(
                 energy = compute_energy(super_logits, temperature).item()
                 super_score = -energy  # 取负，Energy 越低越像已知类
             else:
-                super_score = max_super_prob.item()  # max sigmoid 或 MSP
+                super_score = max_super_prob.item()  # Max Sigmoid 或 MSP
 
             super_scores.append(super_score)
 
@@ -308,7 +308,7 @@ def predict_with_linear_single_head(
                 energy = compute_energy(sub_logits, temperature).item()
                 sub_score = -energy  # 取负，Energy 越低越像已知类
             elif score_method == OODScoreMethod.MaxSigmoid:
-                sub_probs_unmasked = torch.sigmoid(sub_logits)
+                sub_probs_unmasked = torch.sigmoid(sub_logits / temperature)
                 sub_score = sub_probs_unmasked.max(dim=1)[0].item()
             else:  # OODScoreMethod.MSP
                 # MSP with temperature = ODIN
@@ -329,7 +329,7 @@ def predict_with_linear_single_head(
 
             # 对 masked logits 计算最终预测
             if score_method == OODScoreMethod.MaxSigmoid:
-                sub_probs = torch.sigmoid(sub_logits)
+                sub_probs = torch.sigmoid(sub_logits / temperature)
             else:
                 sub_probs = F.softmax(sub_logits, dim=1)
             _, sub_idx = torch.max(sub_probs, dim=1)
@@ -401,7 +401,7 @@ def predict_with_gated_dual_head(
             # === 超类预测 ===
             # Step 1: 计算概率分布
             if score_method == OODScoreMethod.MaxSigmoid:
-                super_probs = torch.sigmoid(super_logits)
+                super_probs = torch.sigmoid(super_logits / temperature)
             else:
                 super_probs = F.softmax(super_logits / temperature, dim=1)
             max_super_prob, super_idx = torch.max(super_probs, dim=1)
@@ -434,7 +434,7 @@ def predict_with_gated_dual_head(
                 energy = compute_energy(sub_logits, temperature).item()
                 sub_score = -energy  # 取负，Energy 越低越像已知类
             elif score_method == OODScoreMethod.MaxSigmoid:
-                sub_probs_unmasked = torch.sigmoid(sub_logits)
+                sub_probs_unmasked = torch.sigmoid(sub_logits / temperature)
                 sub_score = sub_probs_unmasked.max(dim=1)[0].item()
             else:  # OODScoreMethod.MSP
                 sub_probs_unmasked = F.softmax(sub_logits / temperature, dim=1)
@@ -460,7 +460,7 @@ def predict_with_gated_dual_head(
 
             # Step 4: 对 masked logits 计算最终预测
             if score_method == OODScoreMethod.MaxSigmoid:
-                sub_probs = torch.sigmoid(sub_logits)
+                sub_probs = torch.sigmoid(sub_logits / temperature)
             else:
                 sub_probs = F.softmax(sub_logits, dim=1)
             _, sub_idx = torch.max(sub_probs, dim=1)
