@@ -6,7 +6,7 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import TensorDataset, DataLoader
 
-from .models import LinearClassifier, HierarchicalClassifier
+from .models import LinearSingleHead, GatedDualHead
 
 
 def create_label_mapping(labels, label_name, output_dir=None):
@@ -73,8 +73,8 @@ def create_super_to_sub_mapping(super_labels, sub_labels, output_dir=None):
     return super_to_sub
 
 
-def train_linear_model(features, labels, label_map, num_classes,
-                       feature_dim, batch_size, learning_rate, epochs, device):
+def train_linear_single_head(features, labels, label_map, num_classes,
+                             feature_dim, batch_size, learning_rate, epochs, device):
     """
     Args:
         features: 训练特征
@@ -91,7 +91,7 @@ def train_linear_model(features, labels, label_map, num_classes,
         model: 训练好的模型
     """
     # 初始化模型
-    model = LinearClassifier(feature_dim, num_classes)
+    model = LinearSingleHead(feature_dim, num_classes)
     model.to(device)
     model.train()
 
@@ -124,8 +124,8 @@ def train_linear_model(features, labels, label_map, num_classes,
     return model
 
 
-def train_hierarchical_model(features, super_labels, sub_labels, super_map, sub_map, num_super, num_sub,
-                             feature_dim, batch_size, learning_rate, epochs, device, use_sigmoid_bce):
+def train_gated_dual_head(features, super_labels, sub_labels, super_map, sub_map, num_super, num_sub,
+                          feature_dim, batch_size, learning_rate, epochs, device, use_sigmoid_bce):
     """
     Args:
         features: 训练特征
@@ -145,7 +145,7 @@ def train_hierarchical_model(features, super_labels, sub_labels, super_map, sub_
     Returns:
         model: 训练好的模型
     """
-    model = HierarchicalClassifier(feature_dim, num_super, num_sub)
+    model = GatedDualHead(feature_dim, num_super, num_sub)
     model.to(device)
     model.train()
 
@@ -162,7 +162,7 @@ def train_hierarchical_model(features, super_labels, sub_labels, super_map, sub_
         criterion = nn.BCEWithLogitsLoss()
     else:
         criterion = nn.CrossEntropyLoss()
-    
+
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
 
     for epoch in range(epochs):
@@ -174,7 +174,7 @@ def train_hierarchical_model(features, super_labels, sub_labels, super_map, sub_
 
             optimizer.zero_grad()
             super_logits, sub_logits = model(inputs)
-            
+
             # 联合 Loss
             if use_sigmoid_bce:
                 # 将标签转换为 one-hot 格式
@@ -183,7 +183,7 @@ def train_hierarchical_model(features, super_labels, sub_labels, super_map, sub_
                 loss = criterion(super_logits, super_onehot) + criterion(sub_logits, sub_onehot)
             else:
                 loss = criterion(super_logits, super_targets) + criterion(sub_logits, sub_targets)
-            
+
             loss.backward()
             optimizer.step()
 
@@ -200,7 +200,7 @@ def run_training(feature_dim, batch_size, learning_rate, epochs, device,
                  feature_dir, output_dir=None):
     """
     训练模型的主函数
-    
+
     Args:
         feature_dim: 特征维度
         batch_size: 批大小
@@ -211,7 +211,7 @@ def run_training(feature_dim, batch_size, learning_rate, epochs, device,
         use_sigmoid_bce: 是否使用 Sigmoid + BCE 替代 Softmax + CE
         feature_dir: 特征目录
         output_dir: 输出目录（可选，如果提供则保存模型和映射文件）
-        
+
     Returns:
         如果 enable_feature_gating=True: (model, super_map, sub_map, super_to_sub)
         如果 enable_feature_gating=False: (super_model, sub_model, super_map, sub_map, super_to_sub)
@@ -223,19 +223,19 @@ def run_training(feature_dim, batch_size, learning_rate, epochs, device,
     train_super_labels = torch.load(os.path.join(feature_dir, "train_super_labels.pt"))
     train_sub_labels = torch.load(os.path.join(feature_dir, "train_sub_labels.pt"))
     print(f"  > 训练样本数: {len(train_features)}")
-    
+
     if output_dir:
         os.makedirs(output_dir, exist_ok=True)
-    
+
     # 创建标签映射
     num_super, super_map = create_label_mapping(train_super_labels, "super", output_dir)
     num_sub, sub_map = create_label_mapping(train_sub_labels, "sub", output_dir)
-    
+
     # 训练模型
     if enable_feature_gating:
         loss_type = "Sigmoid+BCE" if use_sigmoid_bce else "Softmax+CE"
         print(f"\n=== 使用 Feature Gating (联合训练模式) | Loss: {loss_type} ===")
-        model = train_hierarchical_model(
+        model = train_gated_dual_head(
             train_features, train_super_labels, train_sub_labels, super_map, sub_map, num_super, num_sub,
             feature_dim, batch_size, learning_rate, epochs, device, use_sigmoid_bce
         )
@@ -245,16 +245,16 @@ def run_training(feature_dim, batch_size, learning_rate, epochs, device,
     else:
         print("\n=== 独立训练模式 ===")
         print(f"开始训练 Superclass Model (Classes: {num_super})...")
-        super_model = train_linear_model(
+        super_model = train_linear_single_head(
             train_features, train_super_labels, super_map, num_super,
             feature_dim, batch_size, learning_rate, epochs, device
         )
         if output_dir:
             torch.save(super_model.state_dict(), os.path.join(output_dir, "super_model.pth"))
             print("超类模型已保存。")
-        
+
         print(f"开始训练 Subclass Model (Classes: {num_sub})...")
-        sub_model = train_linear_model(
+        sub_model = train_linear_single_head(
             train_features, train_sub_labels, sub_map, num_sub,
             feature_dim, batch_size, learning_rate, epochs, device
         )

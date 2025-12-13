@@ -4,13 +4,13 @@ import os
 import torch
 import torch.nn.functional as F
 
-from .models import LinearClassifier, HierarchicalClassifier
+from .models import LinearSingleHead, GatedDualHead
 
 
 def compute_energy(logits, temperature):
     """
     计算 Energy Score: E(x; T) = -T × log(Σ exp(logit_i / T))
-    
+
     Args:
         logits: [N, C] - 模型输出的 logits
         temperature: float - 温度缩放参数
@@ -18,7 +18,7 @@ def compute_energy(logits, temperature):
             - T < 1: 锐化（扩大差距）
             - T = 1: 不变
             - T > 1: 软化（缩小差距）
-    
+
     Returns:
         energy: [N] - 能量得分，越低越可能是已知类
     """
@@ -30,10 +30,10 @@ def compute_energy(logits, temperature):
 
 def calculate_threshold_linear(model, val_features, val_labels, label_map, target_recall, device, use_energy, temperature):
     """
-    在验证集上为 LinearClassifier 计算 OSR 阈值
+    在验证集上为 LinearSingleHead 计算 OSR 阈值
 
     Args:
-        model: LinearClassifier 模型
+        model: LinearSingleHead 模型
         val_features: 验证集特征
         val_labels: 验证集标签
         label_map: local_to_global 映射
@@ -68,14 +68,14 @@ def calculate_threshold_linear(model, val_features, val_labels, label_map, targe
     return threshold
 
 
-def calculate_threshold_hierarchical(model, val_features, val_super_labels, val_sub_labels, 
+def calculate_threshold_hierarchical(model, val_features, val_super_labels, val_sub_labels,
                                       super_map_inv, sub_map_inv, target_recall, device, use_energy, temperature,
                                       use_sigmoid_bce):
     """
-    在验证集上为 HierarchicalClassifier 计算 OSR 阈值
+    在验证集上为 GatedDualHead 计算 OSR 阈值
 
     Args:
-        model: HierarchicalClassifier 模型
+        model: GatedDualHead 模型
         val_features: [N, D] - 验证集特征
         val_super_labels: [N] - 验证集超类标签
         val_sub_labels: [N] - 验证集子类标签
@@ -91,18 +91,17 @@ def calculate_threshold_hierarchical(model, val_features, val_super_labels, val_
         thresh_super: float - 超类阈值
         thresh_sub: float - 子类阈值
     """
-    
+
     def _calculate_single_threshold(logits, known_mask, target_recall, temperature, use_energy, use_sigmoid_bce):
         """
         Args:
             logits: [N, C] - 模型输出的 logits
             known_mask: [N] - 布尔掩码，标记已知类样本
-            class_name: str - 类别名称（用于日志）
             target_recall: float - 目标召回率
             temperature: float - 温度缩放参数
             use_energy: bool - 是否使用 energy score
             use_sigmoid_bce: bool - 是否使用 sigmoid-based scoring
-            
+
         Returns:
             threshold: float - 计算出的阈值
         """
@@ -122,22 +121,22 @@ def calculate_threshold_hierarchical(model, val_features, val_super_labels, val_
         else:
             print(f"Warning: No known samples in validation set, using default threshold")
             threshold = 0.5 if use_sigmoid_bce else (-5 if use_energy else 0.5)
-        
+
         return threshold
-    
+
     model.eval()
-    
+
     with torch.no_grad():
         super_logits, sub_logits = model(val_features.to(device))  # [N, D] -> [N, 3], [N, 70]
-    
+
     # 计算 superclass threshold
     known_super = torch.tensor([l.item() in super_map_inv for l in val_super_labels])  # [N]
     thresh_super = _calculate_single_threshold(super_logits, known_super, target_recall, temperature, use_energy, use_sigmoid_bce)
-    
+
     # 计算 subclass threshold
     known_sub = torch.tensor([l.item() in sub_map_inv for l in val_sub_labels])  # [N]
     thresh_sub = _calculate_single_threshold(sub_logits, known_sub, target_recall, temperature, use_energy, use_sigmoid_bce)
-    
+
     return thresh_super, thresh_sub
 
 
@@ -148,7 +147,7 @@ def load_linear_model(prefix, model_dir, feature_dim, device):
         model_dir: 模型目录
         feature_dim: 特征维度
         device: 'cuda' or 'cpu'
-    
+
     Returns:
         model: 加载好的模型
         local_to_global: 映射字典 (模型内部ID -> 原始ID)
@@ -162,7 +161,7 @@ def load_linear_model(prefix, model_dir, feature_dim, device):
     print(f"[{prefix}] 加载映射表: 检测到 {num_classes} 个已知类")
 
     # 2. 初始化模型
-    model = LinearClassifier(feature_dim, num_classes)
+    model = LinearSingleHead(feature_dim, num_classes)
     model_path = os.path.join(model_dir, f"{prefix}_model.pth")
     model.load_state_dict(torch.load(model_path))
     model.to(device)
@@ -202,11 +201,11 @@ def predict_with_linear_model(features, super_model, sub_model,
     sub_preds = []
     super_scores = []  # OOD 得分（用于 AUROC）
     sub_scores = []    # OOD 得分（用于 AUROC）
-    
+
     # 是否启用 hierarchical masking
     use_masking = (super_to_sub is not None)
     num_sub_classes = sub_model.layer.out_features
-    
+
     # 如果启用 masking，从 sub_map 反转计算 global_to_local
     sub_global_to_local = {v: int(k) for k, v in sub_map.items()} if use_masking else None
 
@@ -218,7 +217,7 @@ def predict_with_linear_model(features, super_model, sub_model,
             super_logits = super_model(feature)
             super_probs = F.softmax(super_logits / temperature, dim=1)
             max_super_prob, super_idx = torch.max(super_probs, dim=1)
-            
+
             # 计算 OOD 得分
             if use_energy:
                 energy = compute_energy(super_logits, temperature).item()
@@ -242,7 +241,7 @@ def predict_with_linear_model(features, super_model, sub_model,
 
             # === 子类预测（带 Hierarchical Masking）===
             sub_logits = sub_model(feature)
-            
+
             # 计算 OOD 得分 （必须在 masking 之前，与阈值计算保持一致）
             if use_energy:
                 energy = compute_energy(sub_logits, temperature).item()
@@ -252,9 +251,9 @@ def predict_with_linear_model(features, super_model, sub_model,
                 sub_probs_unmasked = F.softmax(sub_logits / temperature, dim=1)
                 msp = sub_probs_unmasked.max(dim=1)[0].item()
                 sub_score = msp  # MSP 越高越像已知类
-            
+
             sub_scores.append(sub_score)
-            
+
             # 如果超类不是 novel 且启用了 masking，则 mask 掉不属于该超类的子类
             if use_masking and final_super != novel_super_idx and final_super in super_to_sub:
                 valid_subs = super_to_sub[final_super]
@@ -264,10 +263,10 @@ def predict_with_linear_model(features, super_model, sub_model,
                         local_id = sub_global_to_local[sub_id]
                         mask[0, local_id] = 0
                 sub_logits = sub_logits + mask
-            
+
             sub_probs = F.softmax(sub_logits, dim=1)
             _, sub_idx = torch.max(sub_probs, dim=1)
-            
+
             # 判断是否为 novel（使用 masking 前计算的分数）
             if use_energy:
                 is_novel_sub = energy > thresh_sub
@@ -297,7 +296,7 @@ def load_hierarchical_model(model_dir, feature_dim, num_super, num_sub, device):
         num_super: 超类数量
         num_sub: 子类数量
         device: 'cuda' or 'cpu'
-    
+
     Returns:
         model: 加载好的模型
         super_map: 超类 local_to_global 映射
@@ -309,16 +308,16 @@ def load_hierarchical_model(model_dir, feature_dim, num_super, num_sub, device):
         super_map = {int(k): v for k, v in json.load(f).items()}
     with open(os.path.join(model_dir, "sub_local_to_global_map.json"), 'r') as f:
         sub_map = {int(k): v for k, v in json.load(f).items()}
-    
+
     print(f"[hierarchical] 加载映射表: {len(super_map)} 超类, {len(sub_map)} 子类")
-    
+
     # 初始化并加载模型
-    model = HierarchicalClassifier(feature_dim, num_super, num_sub)
+    model = GatedDualHead(feature_dim, num_super, num_sub)
     model_path = os.path.join(model_dir, "hierarchical_model.pth")
     model.load_state_dict(torch.load(model_path))
     model.to(device)
     model.eval()
-    
+
     return model, super_map, sub_map
 
 
@@ -330,7 +329,7 @@ def predict_with_hierarchical_model(features, model, super_map, sub_map,
     """
     Args:
         features: [N, D] - 输入特征
-        model: HierarchicalClassifier 模型
+        model: GatedDualHead 模型
         super_map: {local_id: global_id} - 超类映射
         sub_map: {local_id: global_id} - 子类映射
         thresh_super: float - 超类阈值
@@ -342,7 +341,7 @@ def predict_with_hierarchical_model(features, model, super_map, sub_map,
         use_energy: bool - 是否使用 energy score（否则用 MSP）
         temperature: float - OOD 温度缩放参数
         use_sigmoid_bce: bool - 是否使用 sigmoid-based scoring
-    
+
     Returns:
         super_preds: list[int] - 超类预测列表 [N]
         sub_preds: list[int] - 子类预测列表 [N]
@@ -353,18 +352,18 @@ def predict_with_hierarchical_model(features, model, super_map, sub_map,
     sub_preds = []
     super_scores = []  # OOD 得分（用于 AUROC）
     sub_scores = []    # OOD 得分（用于 AUROC）
-    
+
     use_masking = (super_to_sub is not None)
     num_sub_classes = len(sub_map)
     sub_global_to_local = {v: int(k) for k, v in sub_map.items()} if use_masking else None
-    
+
     with torch.no_grad():
         for i in range(len(features)):
             feature = features[i].unsqueeze(0)
-            
+
             # 模型同时输出 super 和 sub logits
             super_logits, sub_logits = model(feature)
-            
+
             # === 超类预测 ===
             # Step 1: 计算概率分布
             if use_sigmoid_bce:
@@ -372,52 +371,55 @@ def predict_with_hierarchical_model(features, model, super_map, sub_map,
             else:
                 super_probs = F.softmax(super_logits / temperature, dim=1)
             max_super_prob, super_idx = torch.max(super_probs, dim=1)
-            
+
             # Step 2: 计算 OOD 得分
-            if use_energy:
+            if use_sigmoid_bce:
+                super_score = max_super_prob.item()
+            elif use_energy:
                 energy = compute_energy(super_logits, temperature).item()
                 super_score = -energy  # 取负，Energy 越低越像已知类
             else:
-                super_score = max_super_prob.item()  # Max Sigmoid Probability 或 MSP
-            
+                super_score = max_super_prob.item()  # MSP 越高越像已知类
+
             super_scores.append(super_score)
-            
+
             # Step 3: 判断是否为 novel
-            if use_energy:
+            if use_sigmoid_bce:
+                is_novel_super = max_super_prob.item() < thresh_super
+            elif use_energy:
                 is_novel_super = energy > thresh_super
             else:
                 is_novel_super = max_super_prob.item() < thresh_super
-            
+
             # Step 4: 确定最终预测
             if is_novel_super:
                 final_super = novel_super_idx
             else:
                 final_super = super_map[super_idx.item()]
-            
+
             # === 子类预测（带 Hierarchical Masking）===
 
-            # 因为后面预测用的是 mask 后的 sub_probs，这里先不计算该值
-
             # Step 1: 计算 OOD 得分（必须在 masking 之前，与阈值计算保持一致）
-
-            if use_energy:
+            if use_sigmoid_bce:
+                sub_probs_unmasked = torch.sigmoid(sub_logits)
+                sub_score = sub_probs_unmasked.max(dim=1)[0].item()
+            elif use_energy:
                 energy = compute_energy(sub_logits, temperature).item()
                 sub_score = -energy  # 取负，Energy 越低越像已知类
             else:
-                if use_sigmoid_bce:
-                    sub_probs_unmasked = torch.sigmoid(super_logits)
-                else:
-                    sub_probs_unmasked = F.softmax(super_logits / temperature, dim=1)
-                sub_score = sub_probs_unmasked.max(dim=1)[0].item()
-            
+                sub_probs_unmasked = F.softmax(sub_logits / temperature, dim=1)
+                sub_score = sub_probs_unmasked.max(dim=1)[0].item()  # MSP 越高越像已知类
+
             sub_scores.append(sub_score)
-            
+
             # Step 2: 判断是否为 novel（使用 masking 前计算的分数）
-            if use_energy:
+            if use_sigmoid_bce:
+                is_novel_sub = sub_score < thresh_sub
+            elif use_energy:
                 is_novel_sub = energy > thresh_sub
             else:
                 is_novel_sub = sub_score < thresh_sub
-            
+
             # Step 3: 如果超类不是 novel 且启用了 masking，则 mask 掉不属于该超类的子类
             if use_masking and final_super != novel_super_idx and final_super in super_to_sub:
                 valid_subs = super_to_sub[final_super]
@@ -427,15 +429,14 @@ def predict_with_hierarchical_model(features, model, super_map, sub_map,
                         local_id = sub_global_to_local[sub_id]
                         mask[0, local_id] = 0
                 sub_logits = sub_logits + mask
-            
-            # Step 4: 计算 Masked 的概率分布
+
+            # Step 4: 对 masked logits 计算最终预测
             if use_sigmoid_bce:
                 sub_probs = torch.sigmoid(sub_logits)
             else:
                 sub_probs = F.softmax(sub_logits, dim=1)
             _, sub_idx = torch.max(sub_probs, dim=1)
 
-            # Step 5: 确定最终预测
             if is_novel_sub:
                 final_sub = novel_sub_idx
             else:
