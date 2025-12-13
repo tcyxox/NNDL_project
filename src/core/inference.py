@@ -28,20 +28,6 @@ def compute_energy(logits, temperature):
     return -temperature * torch.logsumexp(logits / temperature, dim=1)
 
 
-def compute_sigmoid_score(logits):
-    """
-    计算 Sigmoid-based OOD Score (用于 BCE 训练的模型)
-    
-    Args:
-        logits: [N, C] - 模型输出的 logits
-    
-    Returns:
-        score: [N] - 最大 sigmoid 概率，越高越可能是已知类
-    """
-    probs = torch.sigmoid(logits)
-    return torch.max(probs, dim=1)[0]
-
-
 def calculate_threshold_linear(model, val_features, val_labels, label_map, target_recall, device, use_energy, temperature):
     """
     在验证集上为 LinearClassifier 计算 OSR 阈值
@@ -72,12 +58,10 @@ def calculate_threshold_linear(model, val_features, val_labels, label_map, targe
     with torch.no_grad():
         logits = model(X_known)
         if use_energy:
-            # Energy: 越低越可能是已知类，阈值是能量上限
-            scores = compute_energy(logits, temperature=temperature)
-            threshold = torch.quantile(scores, target_recall).item()
+            energy = compute_energy(logits, temperature) # 越低越可能是已知类，阈值是能量上限
+            threshold = torch.quantile(energy, target_recall).item()
         else:
-            # MSP with temperature = ODIN
-            probs = F.softmax(logits / temperature, dim=1)
+            probs = F.softmax(logits / temperature, dim=1) # MSP with temperature = ODIN
             max_probs, _ = torch.max(probs, dim=1)
             threshold = torch.quantile(max_probs, 1 - target_recall).item()
 
@@ -108,34 +92,35 @@ def calculate_threshold_hierarchical(model, val_features, val_super_labels, val_
         thresh_sub: float - 子类阈值
     """
     
-    def _calculate_single_threshold(logits, known_mask, class_name, use_energy, target_recall, temperature, use_sigmoid_bce):
+    def _calculate_single_threshold(logits, known_mask, target_recall, temperature, use_energy, use_sigmoid_bce):
         """
         Args:
             logits: [N, C] - 模型输出的 logits
             known_mask: [N] - 布尔掩码，标记已知类样本
             class_name: str - 类别名称（用于日志）
-            use_energy: bool - 是否使用 energy score
             target_recall: float - 目标召回率
             temperature: float - 温度缩放参数
+            use_energy: bool - 是否使用 energy score
             use_sigmoid_bce: bool - 是否使用 sigmoid-based scoring
             
         Returns:
             threshold: float - 计算出的阈值
         """
         if known_mask.sum() > 0:
-            if use_sigmoid_bce:
-                # Sigmoid-based scoring (用于 BCE 训练的模型)
-                scores = compute_sigmoid_score(logits[known_mask])  # [N_known]
-                threshold = torch.quantile(scores, 1 - target_recall).item()
-            elif use_energy:
-                scores = compute_energy(logits[known_mask], temperature=temperature)  # [N_known, C] -> [N_known]
-                threshold = torch.quantile(scores, target_recall).item()
+            if use_energy:
+                scores = compute_energy(logits[known_mask], temperature)  # [N_known, C] -> [N_known]
+                threshold = torch.quantile(scores, target_recall).item()  # [N_known]
             else:
-                # MSP with temperature = ODIN
-                probs = F.softmax(logits[known_mask] / temperature, dim=1)  # [N_known, C] -> [N_known, C]
-                threshold = torch.quantile(probs.max(dim=1)[0], 1 - target_recall).item()  # [N_known]
+                if use_sigmoid_bce:
+                    # Maximum Sigmoid
+                    scores = torch.max(torch.sigmoid(logits[known_mask] / temperature), dim=1)[0]  # [N_known, C] -> [N_known]
+                    threshold = torch.quantile(scores, 1 - target_recall).item()  # [N_known]
+                else:
+                    # MSP with temperature = ODIN
+                    probs = F.softmax(logits[known_mask] / temperature, dim=1)  # [N_known, C] -> [N_known, C]
+                    threshold = torch.quantile(probs.max(dim=1)[0], 1 - target_recall).item()  # [N_known]
         else:
-            print(f"Warning: No known {class_name} samples in validation set, using default threshold")
+            print(f"Warning: No known samples in validation set, using default threshold")
             threshold = 0.5 if use_sigmoid_bce else (-5 if use_energy else 0.5)
         
         return threshold
@@ -147,11 +132,11 @@ def calculate_threshold_hierarchical(model, val_features, val_super_labels, val_
     
     # 计算 superclass threshold
     known_super = torch.tensor([l.item() in super_map_inv for l in val_super_labels])  # [N]
-    thresh_super = _calculate_single_threshold(super_logits, known_super, "superclass", use_energy, target_recall, temperature, use_sigmoid_bce)
+    thresh_super = _calculate_single_threshold(super_logits, known_super, target_recall, temperature, use_energy, use_sigmoid_bce)
     
     # 计算 subclass threshold
     known_sub = torch.tensor([l.item() in sub_map_inv for l in val_sub_labels])  # [N]
-    thresh_sub = _calculate_single_threshold(sub_logits, known_sub, "subclass", use_energy, target_recall, temperature, use_sigmoid_bce)
+    thresh_sub = _calculate_single_threshold(sub_logits, known_sub, target_recall, temperature, use_energy, use_sigmoid_bce)
     
     return thresh_super, thresh_sub
 
@@ -236,7 +221,7 @@ def predict_with_linear_model(features, super_model, sub_model,
             
             # 计算 OOD 得分
             if use_energy:
-                energy = compute_energy(super_logits, temperature=temperature).item()
+                energy = compute_energy(super_logits, temperature).item()
                 super_score = -energy  # 取负，Energy 越高越像已知类
             else:
                 msp = max_super_prob.item()
@@ -260,7 +245,7 @@ def predict_with_linear_model(features, super_model, sub_model,
             
             # 计算 OOD 得分 （必须在 masking 之前，与阈值计算保持一致）
             if use_energy:
-                energy = compute_energy(sub_logits, temperature=temperature).item()
+                energy = compute_energy(sub_logits, temperature).item()
                 sub_score = -energy  # 取负，Energy 越高越像已知类
             else:
                 # MSP with temperature = ODIN
@@ -392,7 +377,7 @@ def predict_with_hierarchical_model(features, model, super_map, sub_map,
             if use_sigmoid_bce:
                 super_score = max_super_prob.item()
             elif use_energy:
-                energy = compute_energy(super_logits, temperature=temperature).item()
+                energy = compute_energy(super_logits, temperature).item()
                 super_score = -energy  # 取负，Energy 越低越像已知类
             else:
                 super_score = max_super_prob.item()  # MSP 越高越像已知类
@@ -420,7 +405,7 @@ def predict_with_hierarchical_model(features, model, super_map, sub_map,
                 sub_probs_unmasked = torch.sigmoid(sub_logits)
                 sub_score = sub_probs_unmasked.max(dim=1)[0].item()
             elif use_energy:
-                energy = compute_energy(sub_logits, temperature=temperature).item()
+                energy = compute_energy(sub_logits, temperature).item()
                 sub_score = -energy  # 取负，Energy 越低越像已知类
             else:
                 sub_probs_unmasked = F.softmax(sub_logits / temperature, dim=1)
