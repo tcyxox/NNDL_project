@@ -3,7 +3,7 @@ import numpy as np
 import os
 
 from src.CAC_OpenMax.train_CAC_OpenMax import train_cac_openmax_classifier
-from src.CAC_OpenMax.test_CAC_OpenMax import test_CAC_OpenMax_openset
+from src.OpenMax.test_OpenMax import test_OpenMax_openset
 from src.core.config import *
 from src.core.training import create_label_mapping
 
@@ -101,7 +101,7 @@ if __name__ == "__main__":
         )
 
         # === 测试 ===
-        metrics = test_CAC_OpenMax_openset(
+        metrics = test_OpenMax_openset(
             system=system,
             test_features=test_features,
             test_labels=test_sub_labels,
