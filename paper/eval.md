@@ -225,9 +225,9 @@ class ExperimentConfig:
 1. MSP 受益于较高温度（T=3.5 时性能最优）：高温时，模型关注相对尖锐度。
 2. Energy 方法受益于较低温度（T=0.02 时性能最优）：低温时，模型关注绝对幅值。
 3. 问题：Softmax 的强制归一化导致丢失了幅值信息；方案：使用基于 Logits 的 Energy 方法。
-4. MSP 中使用基于 Softmax 的不保留幅值信息的阈值方法 + 基于 Softmax 的不保留幅值信息的 CE 损失函数，是统一的；而 Energy 方法 中使用基于 Logits 的保留幅值信息的阈值方法 + 基于 Softmax 的不保留幅值信息的 CE 损失函数，是不统一的。所以理论上应将 Softmax 替换为保留幅值信息的 Sigmoid。
+4. MSP 中使用基于 Softmax 的不保留幅值信息的阈值方法 + 基于 Softmax 的不保留幅值信息的 CE 损失函数，是统一的；而 Energy 方法 中使用基于 Logits 的保留幅值信息的阈值方法 + 基于 Softmax 的不保留幅值信息的 CE 损失函数，是不统一的。所以理论上应将 Softmax 替换为保留幅值信息的 Sigmoid，并使用 BCE 损失函数。
 
-### Sigmoid BCE + Energy
+### BCE + Energy
 
 ```py
 class ExperimentConfig:
@@ -263,7 +263,7 @@ class ExperimentConfig:
 
 结论：对 Energy 配置，将损失函数从 Softmax + CE 替换为 Sigmoid + BCE，性能有略微提升。
 
-### Sigmoid BCE + MaxSigmoid
+### BCE + MaxSigmoid
 
 ```py
 class ExperimentConfig:
@@ -297,15 +297,15 @@ class ExperimentConfig:
   [Superclass] AUROC       : nan ± nan
   [Subclass] AUROC         : 0.8556 ± 0.0023
 
-结论：对于 Sigmoid + BCE 损失函数，使用 MaxSigmoid 或 Energy阈值和预测方法，性能不变。只要 Tt = Tp，结果都保持一致。
+结论：对于 Sigmoid + BCE 损失函数，使用 MaxSigmoid 或 Energy 阈值和预测方法，性能不变。只要 Tt = Tp，结果都保持一致。
 
 ## Variant 探索
 
 目前三个baseline分别是：
 
-1. CE + MSP (T=3.5):               71.57% ± 1.76%, 87.65% ± 0.97%, 57.86% ± 3.20%
-2. Sigmoid BCE + Energy (T=0.02):  67.02% ± 0.34%, 88.27% ± 0.62%, 48.90% ± 0.86%
-3. Sigmoid BCE + MaxSigmoid (T=1): 67.02% ± 0.34%, 88.27% ± 0.62%, 48.90% ± 0.86%
+1. CE + MSP (T=3.5):       71.57% ± 1.76%, 87.65% ± 0.97%, 57.86% ± 3.20%
+2. BCE + Energy (T=0.02):  67.02% ± 0.34%, 88.27% ± 0.62%, 48.90% ± 0.86%
+3. BCE + MaxSigmoid (T=1): 67.02% ± 0.34%, 88.27% ± 0.62%, 48.90% ± 0.86%
 
 变种可以为
 
@@ -331,7 +331,7 @@ class ExperimentConfig:
 
 对于 BCE + Energy，经过测试，若要维持 88% + 的 seen 分类准确率，原配置最佳。
 
-### Sigmoid BCE + MaxSigmoid
+### BCE + MaxSigmoid
 
 ```py
 class ExperimentConfig:
@@ -367,7 +367,7 @@ class ExperimentConfig:
 
 结论：对于 BCE + 双 MaxSigmoid 方法，Tt = 3.5, Tp = 1，性能有显著提升。
 
-### Sigmoid BCE + Energy & MaxSigmoid
+### BCE + Energy & MaxSigmoid
 
 ```py
 class ExperimentConfig:
