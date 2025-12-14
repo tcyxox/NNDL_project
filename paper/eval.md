@@ -249,20 +249,20 @@ class ExperimentConfig:
     prediction_method: OODScoreMethod = OODScoreMethod.MaxSigmoid
 
     # 温度参数
-    threshold_temperature: float = 3.5
+    threshold_temperature: float = 1
     prediction_temperature: float = 1
 ```
 
-  [Superclass] Overall     : 99.91% ± 0.00%
-  [Superclass] Seen        : 99.91% ± 0.00%
+  [Superclass] Overall     : 95.36% ± 0.23%
+  [Superclass] Seen        : 95.36% ± 0.23%
   [Superclass] Unseen      : 0.00% ± 0.00%
-  [Subclass] Overall       : 70.42% ± 0.32%
-  [Subclass] Seen          : 88.43% ± 0.21%
-  [Subclass] Unseen        : 55.05% ± 0.54%
+  [Subclass] Overall       : 67.02% ± 0.34%
+  [Subclass] Seen          : 88.27% ± 0.62%
+  [Subclass] Unseen        : 48.90% ± 0.86%
   [Superclass] AUROC       : nan ± nan
   [Subclass] AUROC         : 0.8556 ± 0.0023
 
-结论：使用 Sigmoid + BCE 损失函数，配合 MaxSigmoid 阈值和预测方法，性能有显著提升。
+结论：对于 Sigmoid + BCE 损失函数，使用 MaxSigmoid 或 Energy阈值和预测方法，性能不变。只要 Tt = Tp，结果都保持一致。
 
 ## Gated Dual Head + Energy + Hierarchical Masking + Sigmoid & BCE (Variant)
 
@@ -299,6 +299,42 @@ class ExperimentConfig:
   [Subclass] AUROC         : 0.8556 ± 0.0023
 
 结论：使用 Sigmoid + BCE 损失函数，配合不一致的 Energy 阈值计算方法 & MaxSigmoid 预测方法，性能居然出现显著提升，原因未知。根据实验启发，后面测试更多不一致的配置。
+
+## Gated Dual Head + MaxSigmoid + Hierarchical Masking + Sigmoid & BCE (Variant)
+
+```py
+class ExperimentConfig:
+    # 训练参数
+    batch_size: int = 64
+    learning_rate: float = 1e-3
+    epochs: int = 100
+    target_recall: float = 0.95
+    seed: int = 42
+
+    # 模型选择
+    enable_hierarchical_masking: bool = True  # 推理时 Hierarchical Masking 开关
+    enable_feature_gating: bool = True  # 训练时 SE Feature Gating 开关
+
+    # 方法选择
+    training_loss: TrainingLoss = TrainingLoss.BCE
+    threshold_method: OODScoreMethod = OODScoreMethod.MaxSigmoid
+    prediction_method: OODScoreMethod = OODScoreMethod.MaxSigmoid
+
+    # 温度参数
+    threshold_temperature: float = 3.5
+    prediction_temperature: float = 1
+```
+
+  [Superclass] Overall     : 99.91% ± 0.00%
+  [Superclass] Seen        : 99.91% ± 0.00%
+  [Superclass] Unseen      : 0.00% ± 0.00%
+  [Subclass] Overall       : 70.42% ± 0.32%
+  [Subclass] Seen          : 88.43% ± 0.21%
+  [Subclass] Unseen        : 55.05% ± 0.54%
+  [Superclass] AUROC       : nan ± nan
+  [Subclass] AUROC         : 0.8556 ± 0.0023
+
+结论：对于 BCE + 双 MaxSigmoid 方法，Tt = 3.5, Tp = 1，性能有显著提升。
 
 ## ## Gated Dual Head + MSP + Hierarchical Masking (Variant)
 
