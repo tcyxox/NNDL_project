@@ -68,13 +68,13 @@ class ExperimentConfig:
     enable_feature_gating: bool = True  # 训练时 SE Feature Gating 开关
 
     # 方法选择
-    training_loss: TrainingLoss = TrainingLoss.CE
-    threshold_method: OODScoreMethod = OODScoreMethod.MSP
-    prediction_method: OODScoreMethod = OODScoreMethod.MSP
+    training_loss: TrainingLoss = TrainingLoss.BCE
+    threshold_method: OODScoreMethod = OODScoreMethod.MaxSigmoid
+    prediction_method: OODScoreMethod = OODScoreMethod.MaxSigmoid
 
     # 温度参数
-    threshold_temperature: float = 3.5
-    prediction_temperature: float = 3.5
+    threshold_temperature: float = 3
+    prediction_temperature: float = 3
 
 
 @dataclass

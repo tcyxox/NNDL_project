@@ -227,7 +227,7 @@ class ExperimentConfig:
 3. 问题：Softmax 的强制归一化导致丢失了幅值信息；方案：使用基于 Logits 的 Energy 方法。
 4. MSP 中使用基于 Softmax 的不保留幅值信息的阈值方法 + 基于 Softmax 的不保留幅值信息的 CE 损失函数，是统一的；而 Energy 方法 中使用基于 Logits 的保留幅值信息的阈值方法 + 基于 Softmax 的不保留幅值信息的 CE 损失函数，是不统一的。所以理论上应将 Softmax 替换为保留幅值信息的 Sigmoid。
 
-### Sigmoid & BCE + Energy
+### Sigmoid BCE + Energy
 
 ```py
 class ExperimentConfig:
@@ -263,7 +263,7 @@ class ExperimentConfig:
 
 结论：对 Energy 配置，将损失函数从 Softmax + CE 替换为 Sigmoid + BCE，性能有略微提升。
 
-### Sigmoid & BCE + MaxSigmoid
+### Sigmoid BCE + MaxSigmoid
 
 ```py
 class ExperimentConfig:
@@ -301,43 +301,37 @@ class ExperimentConfig:
 
 ## Variant 探索
 
-### Sigmoid & BCE + Energy & MaxSigmoid
+目前三个baseline分别是：
 
-```py
-class ExperimentConfig:
-    # 训练参数
-    batch_size: int = 64
-    learning_rate: float = 1e-3
-    epochs: int = 100
-    target_recall: float = 0.95
-    seed: int = 42
+1. CE + MSP (T=3.5):               71.57% ± 1.76%, 87.65% ± 0.97%, 57.86% ± 3.20%
+2. Sigmoid BCE + Energy (T=0.02):  67.02% ± 0.34%, 88.27% ± 0.62%, 48.90% ± 0.86%
+3. Sigmoid BCE + MaxSigmoid (T=1): 67.02% ± 0.34%, 88.27% ± 0.62%, 48.90% ± 0.86%
 
-    # 模型选择
-    enable_hierarchical_masking: bool = True  # 推理时使用 Hierarchical Masking
-    enable_feature_gating: bool = True  # 训练时使用 SE Feature Gating
+变种可以为
 
-    # 方法选择
-    training_loss: TrainingLoss = TrainingLoss.BCE
-    threshold_method: OODScoreMethod = OODScoreMethod.Energy
-    prediction_method: OODScoreMethod = OODScoreMethod.MaxSigmoid
+1. 在 Threshold & Prediction 混合使用 Energy & MaxSigmoid
+2. 使用不一致的温度
 
-    # 温度参数
-    threshold_temperature: float = 0.02
-    prediction_temperature: float = 1
-```
+### CE + MSP
 
-  [Superclass] Overall     : 100.00% ± 0.00%
-  [Superclass] Seen        : 100.00% ± 0.00%
+对于 CE + MSP，经过测试，若要维持 88% + 的 seen 分类准确率，原配置最佳。
+
+若要使 overall 分类准确率提升，最佳配置为 Th = 3.5, Tp = 4，提升幅度为 6%。
+
+  [Superclass] Overall     : 88.47% ± 0.28%
+  [Superclass] Seen        : 88.47% ± 0.28%
   [Superclass] Unseen      : 0.00% ± 0.00%
-  [Subclass] Overall       : 74.68% ± 0.46%
-  [Subclass] Seen          : 81.65% ± 2.33%
-  [Subclass] Unseen        : 68.73% ± 2.81%
+  [Subclass] Overall       : 77.80% ± 1.18%
+  [Subclass] Seen          : 77.65% ± 1.39%
+  [Subclass] Unseen        : 77.93% ± 2.62%
   [Superclass] AUROC       : nan ± nan
-  [Subclass] AUROC         : 0.8556 ± 0.0023
+  [Subclass] AUROC         : 0.8930 ± 0.0079
 
-结论：使用 Sigmoid + BCE 损失函数，配合不一致的 Energy 阈值计算方法 & MaxSigmoid 预测方法，性能居然出现显著提升，原因未知。根据实验启发，后面测试更多不一致的配置。
+### BCE + Energy
 
-### Sigmoid & BCE + MaxSigmoid
+对于 BCE + Energy，经过测试，若要维持 88% + 的 seen 分类准确率，原配置最佳。
+
+### Sigmoid BCE + MaxSigmoid
 
 ```py
 class ExperimentConfig:
@@ -373,7 +367,7 @@ class ExperimentConfig:
 
 结论：对于 BCE + 双 MaxSigmoid 方法，Tt = 3.5, Tp = 1，性能有显著提升。
 
-### CE + MSP (Variant)
+### Sigmoid BCE + Energy & MaxSigmoid
 
 ```py
 class ExperimentConfig:
@@ -385,18 +379,27 @@ class ExperimentConfig:
     seed: int = 42
 
     # 模型选择
-    enable_hierarchical_masking: bool = True  # 推理时 Hierarchical Masking 开关
-    enable_feature_gating: bool = True  # 训练时 SE Feature Gating 开关
+    enable_hierarchical_masking: bool = True  # 推理时使用 Hierarchical Masking
+    enable_feature_gating: bool = True  # 训练时使用 SE Feature Gating
 
     # 方法选择
-    training_loss: TrainingLoss = TrainingLoss.CE
-    threshold_method: OODScoreMethod = OODScoreMethod.MSP
-    prediction_method: OODScoreMethod = OODScoreMethod.MSP
+    training_loss: TrainingLoss = TrainingLoss.BCE
+    threshold_method: OODScoreMethod = OODScoreMethod.Energy
+    prediction_method: OODScoreMethod = OODScoreMethod.MaxSigmoid
 
     # 温度参数
-    threshold_temperature: float = 0
-    prediction_temperature: float = 0
+    threshold_temperature: float = 0.02
+    prediction_temperature: float = 1
 ```
+
+  [Superclass] Overall     : 100.00% ± 0.00%
+  [Superclass] Seen        : 100.00% ± 0.00%
+  [Superclass] Unseen      : 0.00% ± 0.00%
+  [Subclass] Overall       : 74.68% ± 0.46%
+  [Subclass] Seen          : 81.65% ± 2.33%
+  [Subclass] Unseen        : 68.73% ± 2.81%
+  [Superclass] AUROC       : nan ± nan
+  [Subclass] AUROC         : 0.8556 ± 0.0023
 
 # CAC 
 ## v1.0

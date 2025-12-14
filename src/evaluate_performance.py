@@ -187,7 +187,7 @@ def run_multiple_trials(cfg: dict, seeds: list[int], verbose: bool = True) -> di
     all_results = []
     
     for i, seed in enumerate(seeds):
-        print(f"\n>>> Trial {i+1}/{len(seeds)}, Seed={seed}")
+        print(f">>> Trial {i+1}/{len(seeds)}, Seed={seed}")
         result = run_single_trial(cfg, seed, verbose=verbose)
         all_results.append(result)
         if verbose:
@@ -223,10 +223,13 @@ def print_evaluation_report(stats: dict):
 if __name__ == "__main__":
     mode = "SE Feature Gating" if CONFIG["enable_feature_gating"] else "Independent Training"
     masking = "Enabled" if CONFIG["enable_hierarchical_masking"] else "Disabled"
-    print("=" * 60)
+    print("=" * 75)
     print(f"Multi-seed Evaluation | Mode: {mode} | Masking: {masking} | Trials: {len(SEEDS)}")
-    print("=" * 60)
+    print("=" * 75)
+    print(f"Training Loss: {CONFIG['training_loss'].value}")
+    print(f"Threshold Method: {CONFIG['threshold_method'].value} (T={CONFIG['threshold_temperature']})")
+    print(f"Prediction Method: {CONFIG['prediction_method'].value} (T={CONFIG['prediction_temperature']})")
+    print("=" * 75)
     
     stats = run_multiple_trials(CONFIG, SEEDS, verbose=False)
     print_evaluation_report(stats)
-
