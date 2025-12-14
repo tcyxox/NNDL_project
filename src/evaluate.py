@@ -262,7 +262,7 @@ if __name__ == "__main__":
     print(f"Multi-seed Evaluation | Mode: {mode} | Masking: {masking} | Trials: {len(SEEDS)}")
     print("=" * 75)
     print(f"Evaluation Set: {eval_set}")
-    print(f"Training Loss: {CONFIG['training_loss'].value}")
+    print(f"Training Loss: {CONFIG['training_loss'].value} | Epochs: {CONFIG['epochs']}")
     # 阈值设定方法
     if CONFIG["threshold_method"] == ThresholdMethod.ZScore:
         print(f"Threshold: {CONFIG['threshold_method'].value} (std_multiplier={CONFIG['std_multiplier']})")
