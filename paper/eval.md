@@ -2,7 +2,7 @@
 
 ## 基础架构探索
 
-### Baseline: Linear Dual Head + MSP (Temperature = 1)
+### Baseline: Linear Dual Head + MSP (Temperature = 1) + Quantile (Recall = 95%)
 
 ```py
     # 训练参数
@@ -36,7 +36,7 @@
   [Superclass] AUROC       : nan ± nan
   [Subclass] AUROC         : 0.8423 ± 0.0140
 
-### Linear Dual Head + MSP
+### Baseline: Linear Dual Head + MSP (Temperature = 1) + Z-Score (k = 1.645)
 
 ```py
     # 训练参数
@@ -45,7 +45,7 @@
     epochs: int = 50
 
     # 阈值设定
-    threshold_method: ThresholdMethod = ThresholdMethod.Quantile  # 阈值设定方法
+    threshold_method: ThresholdMethod = ThresholdMethod.ZScore  # 阈值设定方法
     target_recall: float = 0.95  # Quantile 方法: target recall
     std_multiplier: float = 1.645  # ZScore 方法: 标准差乘数
 
@@ -57,22 +57,22 @@
     training_loss: TrainingLoss = TrainingLoss.CE
     validation_score_method: OODScoreMethod = OODScoreMethod.MSP
     prediction_score_method: OODScoreMethod = OODScoreMethod.MSP
-    validation_score_temperature: float = 3.5
-    prediction_score_temperature: float = 3.5
+    validation_score_temperature: float = 1
+    prediction_score_temperature: float = 1
 ```
 
-  [Superclass] Overall     : 95.55% ± 0.55%
-  [Superclass] Seen        : 95.55% ± 0.55%
+  [Superclass] Overall     : 98.97% ± 0.39%
+  [Superclass] Seen        : 98.97% ± 0.39%
   [Superclass] Unseen      : 0.00% ± 0.00%
-  [Subclass] Overall       : 66.48% ± 3.35%
-  [Subclass] Seen          : 88.73% ± 1.73%
-  [Subclass] Unseen        : 48.29% ± 6.23%
+  [Subclass] Overall       : 67.75% ± 1.94%
+  [Subclass] Seen          : 88.25% ± 0.91%
+  [Subclass] Unseen        : 51.02% ± 3.45%
   [Superclass] AUROC       : nan ± nan
-  [Subclass] AUROC         : 0.8667 ± 0.0195
-  
-观察：MSP 方法受益于较高温度，T=3.5 时性能最优。
+  [Subclass] AUROC         : 0.8423 ± 0.0140
 
-### Linear Dual Head + MSP + Hierarchical Masking
+结论：使用 ZScore 设定阈值，是基于分布的统计方法，性能相较于 Baseline 有显著提升。
+
+### Linear Dual Head + MSP + Z-Score (k = 1.645)
 
 ```py
     # 训练参数
@@ -81,7 +81,43 @@
     epochs: int = 50
 
     # 阈值设定
-    threshold_method: ThresholdMethod = ThresholdMethod.Quantile  # 阈值设定方法
+    threshold_method: ThresholdMethod = ThresholdMethod.ZScore  # 阈值设定方法
+    target_recall: float = 0.95  # Quantile 方法: target recall
+    std_multiplier: float = 1.645  # ZScore 方法: 标准差乘数
+
+    # 模型选择
+    enable_hierarchical_masking: bool = False  # 推理时 Hierarchical Masking 开关
+    enable_feature_gating: bool = False  # 训练时 SE Feature Gating 开关
+
+    # 方法选择
+    training_loss: TrainingLoss = TrainingLoss.CE
+    validation_score_method: OODScoreMethod = OODScoreMethod.MSP
+    prediction_score_method: OODScoreMethod = OODScoreMethod.MSP
+    validation_score_temperature: float = 1.5
+    prediction_score_temperature: float = 1.5
+```
+
+  [Superclass] Overall     : 98.17% ± 0.32%
+  [Superclass] Seen        : 98.17% ± 0.32%
+  [Superclass] Unseen      : 0.00% ± 0.00%
+  [Subclass] Overall       : 71.02% ± 1.98%
+  [Subclass] Seen          : 87.31% ± 1.28%
+  [Subclass] Unseen        : 57.76% ± 3.71%
+  [Superclass] AUROC       : nan ± nan
+  [Subclass] AUROC         : 0.8572 ± 0.0158
+  
+观察：MSP 方法受益于较高温度，T=1.5 时性能最优。高温时，模型关注相对尖锐度
+
+### Linear Dual Head + MSP + Hierarchical Masking + Z-Score (k = 1.645)
+
+```py
+    # 训练参数
+    batch_size: int = 64
+    learning_rate: float = 1e-3
+    epochs: int = 50
+
+    # 阈值设定
+    threshold_method: ThresholdMethod = ThresholdMethod.ZScore  # 阈值设定方法
     target_recall: float = 0.95  # Quantile 方法: target recall
     std_multiplier: float = 1.645  # ZScore 方法: 标准差乘数
 
@@ -93,31 +129,31 @@
     training_loss: TrainingLoss = TrainingLoss.CE
     validation_score_method: OODScoreMethod = OODScoreMethod.MSP
     prediction_score_method: OODScoreMethod = OODScoreMethod.MSP
-    validation_score_temperature: float = 3.5
-    prediction_score_temperature: float = 3.5
+    validation_score_temperature: float = 1.5
+    prediction_score_temperature: float = 1.5
 ```
 
-  [Superclass] Overall     : 95.55% ± 0.55%
-  [Superclass] Seen        : 95.55% ± 0.55%
+  [Superclass] Overall     : 98.17% ± 0.32%
+  [Superclass] Seen        : 98.17% ± 0.32%
   [Superclass] Unseen      : 0.00% ± 0.00%
-  [Subclass] Overall       : 66.48% ± 3.35%
-  [Subclass] Seen          : 88.73% ± 1.73%
-  [Subclass] Unseen        : 48.29% ± 6.23%
+  [Subclass] Overall       : 71.02% ± 1.98%
+  [Subclass] Seen          : 87.31% ± 1.28%
+  [Subclass] Unseen        : 57.76% ± 3.71%
   [Superclass] AUROC       : nan ± nan
-  [Subclass] AUROC         : 0.8667 ± 0.0195
+  [Subclass] AUROC         : 0.8572 ± 0.0158
 
 结论：根据理论，Baseline + Hierarchical Masking >= Baseline 恒成立。
 
-### Gated Dual Head + MSP + Hierarchical Masking
+### Gated Dual Head + MSP + Hierarchical Masking + Z-Score (k = 1.645)
 
 ```py
     # 训练参数
     batch_size: int = 64
     learning_rate: float = 1e-3
-    epochs: int = 50
+    epochs: int = 75
 
     # 阈值设定
-    threshold_method: ThresholdMethod = ThresholdMethod.Quantile  # 阈值设定方法
+    threshold_method: ThresholdMethod = ThresholdMethod.ZScore  # 阈值设定方法
     target_recall: float = 0.95  # Quantile 方法: target recall
     std_multiplier: float = 1.645  # ZScore 方法: 标准差乘数
 
@@ -129,35 +165,35 @@
     training_loss: TrainingLoss = TrainingLoss.CE
     validation_score_method: OODScoreMethod = OODScoreMethod.MSP
     prediction_score_method: OODScoreMethod = OODScoreMethod.MSP
-    validation_score_temperature: float = 3.5
-    prediction_score_temperature: float = 3.5
+    validation_score_temperature: float = 1.5
+    prediction_score_temperature: float = 1.5
 ```
 
-  [Superclass] Overall     : 95.39% ± 0.38%
-  [Superclass] Seen        : 95.39% ± 0.38%
+  [Superclass] Overall     : 98.56% ± 0.35%
+  [Superclass] Seen        : 98.56% ± 0.35%
   [Superclass] Unseen      : 0.00% ± 0.00%
-  [Subclass] Overall       : 68.59% ± 1.21%
-  [Subclass] Seen          : 89.01% ± 2.32%
-  [Subclass] Unseen        : 51.90% ± 3.52%
+  [Subclass] Overall       : 71.35% ± 2.12%
+  [Subclass] Seen          : 87.30% ± 1.66%
+  [Subclass] Unseen        : 58.33% ± 3.90%
   [Superclass] AUROC       : nan ± nan
-  [Subclass] AUROC         : 0.8808 ± 0.0171
+  [Subclass] AUROC         : 0.8663 ± 0.0113
 
 观察：开启 Feature Gating 后，需要使用更多 epochs 训练。
 
-结论：Gated Dual Head 能使未知subclass准确率显著提高。
+结论：Gated Dual Head 能使未知 subclass 性能略微提高。
 
 ## 具体方法和参数探索
 
-此后全部使用 Linear Dual Head + Hierarchical Masking
+此后全部使用 Linear Dual Head + Hierarchical Masking + Z-Score (k = 1.645)
 
 ```py
     # 训练参数
     batch_size: int = 64
     learning_rate: float = 1e-3
-    epochs: int = 50
+    epochs: int = 75
 
     # 阈值设定
-    threshold_method: ThresholdMethod = ThresholdMethod.Quantile  # 阈值设定方法
+    threshold_method: ThresholdMethod = ThresholdMethod.ZScore  # 阈值设定方法
     target_recall: float = 0.95  # Quantile 方法: target recall
     std_multiplier: float = 1.645  # ZScore 方法: 标准差乘数
 
@@ -177,65 +213,13 @@
     prediction_score_temperature: float = 3.5
 ```
 
-  [Superclass] Overall     : 95.39% ± 0.38%
-  [Superclass] Seen        : 95.39% ± 0.38%
-  [Superclass] Unseen      : 0.00% ± 0.00%
-  [Subclass] Overall       : 68.59% ± 1.21%
-  [Subclass] Seen          : 89.01% ± 2.32%
-  [Subclass] Unseen        : 51.90% ± 3.52%
-  [Superclass] AUROC       : nan ± nan
-  [Subclass] AUROC         : 0.8808 ± 0.0171
+98.56% ± 0.35%, 71.35% ± 2.12%, 87.30% ± 1.66%, 58.33% ± 3.90%, 0.8663 ± 0.0113
 
-### CE + Energy
+### 引出 BCE, MaxSigmoid, Energy
 
-```py
-    # 方法选择
-    training_loss: TrainingLoss = TrainingLoss.CE
-    validation_score_method: OODScoreMethod = OODScoreMethod.Energy
-    prediction_score_method: OODScoreMethod = OODScoreMethod.Energy
-    validation_score_temperature: float = 0.02
-    prediction_score_temperature: float = 0.02
-```
+1. 问题：MSP 阈值打分法中用到的 Softmax 的强制归一化导致丢失了幅值信息。方案：使用 Logit-based 的 MaxSigmoid 或 Energy 阈值打分法。
 
-观察：Energy 方法受益于较低温度，T=0.02 时性能最优。
-
-  [Superclass] Overall     : 95.43% ± 0.62%
-  [Superclass] Seen        : 95.43% ± 0.62%
-  [Superclass] Unseen      : 0.00% ± 0.00%
-  [Subclass] Overall       : 64.08% ± 1.29%
-  [Subclass] Seen          : 88.22% ± 2.65%
-  [Subclass] Unseen        : 44.38% ± 4.09%
-  [Superclass] AUROC       : nan ± nan
-  [Subclass] AUROC         : 0.8590 ± 0.0191
-
-### 阶段性结论
-
-1. MSP 受益于较高温度（T=3.5 时性能最优）：高温时，模型关注相对尖锐度。
-2. Energy 方法受益于较低温度（T=0.02 时性能最优）：低温时，模型关注绝对幅值。
-3. 问题：Softmax 的强制归一化导致丢失了幅值信息；方案：使用基于 Logits 的 Energy 方法。
-4. MSP 中使用基于 Softmax 的不保留幅值信息的阈值打分方法 + 基于 Softmax 的不保留幅值信息的 CE 损失函数，是统一的；而 Energy 方法 中使用基于 Logits 的保留幅值信息的阈值打分方法 + 基于 Softmax 的不保留幅值信息的 CE 损失函数，是不统一的。所以理论上应将 Softmax 替换为保留幅值信息的 Sigmoid，并使用 BCE 损失函数。
-
-### BCE + Energy
-
-```py
-    # 方法选择
-    training_loss: TrainingLoss = TrainingLoss.BCE
-    validation_score_method: OODScoreMethod = OODScoreMethod.Energy
-    prediction_score_method: OODScoreMethod = OODScoreMethod.Energy
-    validation_score_temperature: float = 0.02
-    prediction_score_temperature: float = 0.02
-```
-
-  [Superclass] Overall     : 95.34% ± 0.33%
-  [Superclass] Seen        : 95.34% ± 0.33%
-  [Superclass] Unseen      : 0.00% ± 0.00%
-  [Subclass] Overall       : 68.01% ± 2.82%
-  [Subclass] Seen          : 89.01% ± 1.82%
-  [Subclass] Unseen        : 50.86% ± 4.91%
-  [Superclass] AUROC       : nan ± nan
-  [Subclass] AUROC         : 0.8593 ± 0.0251
-
-结论：对 Energy 配置，将损失函数从 Softmax + CE 替换为 Sigmoid + BCE，性能有显著提升。
+2. 问题：MSP 中使用基于 Softmax 的不保留幅值信息的阈值打分法 + 基于 Softmax 的不保留幅值信息的 CE 损失函数，是统一的；而使用 Logit-based 的保留幅值信息的阈值打分法 + 基于 Softmax 的不保留幅值信息的 CE 损失函数，是不统一的。方案：将 Softmax 替换为保留幅值信息的 Sigmoid，并使用 BCE 损失函数。
 
 ### BCE + MaxSigmoid
 
@@ -244,10 +228,44 @@
     training_loss: TrainingLoss = TrainingLoss.BCE
     validation_score_method: OODScoreMethod = OODScoreMethod.MaxSigmoid
     prediction_score_method: OODScoreMethod = OODScoreMethod.MaxSigmoid
-    validation_score_temperature: float = 1
-    prediction_score_temperature: float = 1
+    validation_score_temperature: float = 0.2
+    prediction_score_temperature: float = 0.2
 ```
 
+  [Superclass] Overall     : 99.72% ± 0.24%
+  [Superclass] Seen        : 99.72% ± 0.24%
+  [Superclass] Unseen      : 0.00% ± 0.00%
+  [Subclass] Overall       : 71.26% ± 3.40%
+  [Subclass] Seen          : 87.35% ± 1.12%
+  [Subclass] Unseen        : 58.14% ± 6.58%
+  [Superclass] AUROC       : nan ± nan
+  [Subclass] AUROC         : 0.8524 ± 0.0270
+
+观察：MaxSigmoid 受益于较低温度，T=0.2 时综合性能最优，但与标准温度结果相差不大。温度越低，seen 性能越好，unseen 性能越差。
+
+结论：MaxSigmoid 方法可以使 super 准确率提高到几乎满分。
+
+### BCE + Energy
+
+```py
+    # 方法选择
+    training_loss: TrainingLoss = TrainingLoss.BCE
+    validation_score_method: OODScoreMethod = OODScoreMethod.Energy
+    prediction_score_method: OODScoreMethod = OODScoreMethod.Energy
+    validation_score_temperature: float = 0.05
+    prediction_score_temperature: float = 0.05
+```
+T=0.05
+  [Superclass] Overall     : 94.06% ± 0.55%
+  [Superclass] Seen        : 94.06% ± 0.55%
+  [Superclass] Unseen      : 0.00% ± 0.00%
+  [Subclass] Overall       : 67.01% ± 3.28%
+  [Subclass] Seen          : 88.11% ± 2.44%
+  [Subclass] Unseen        : 49.82% ± 5.27%
+  [Superclass] AUROC       : nan ± nan
+  [Subclass] AUROC         : 0.8566 ± 0.0259
+
+Quantile: T=0.02
   [Superclass] Overall     : 95.34% ± 0.33%
   [Superclass] Seen        : 95.34% ± 0.33%
   [Superclass] Unseen      : 0.00% ± 0.00%
@@ -257,9 +275,7 @@
   [Superclass] AUROC       : nan ± nan
   [Subclass] AUROC         : 0.8593 ± 0.0251
 
-观察：只要 T >= 1，结果将完全保持一致。
-
-结论：对于 Sigmoid + BCE 损失函数，使用 MaxSigmoid 或 Energy 阈值打分方法，性能相同。
+观察：Energy 方法受益于较低温度，T<=0.05 时性能最优。低温时，模型关注绝对幅值。
 
 ## Variant 探索
 

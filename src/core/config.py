@@ -69,10 +69,10 @@ class ExperimentConfig:
     # 训练参数
     batch_size: int = 64
     learning_rate: float = 1e-3
-    epochs: int = 100
+    epochs: int = 75
 
     # 阈值设定
-    threshold_method: ThresholdMethod = ThresholdMethod.Quantile  # 阈值设定方法
+    threshold_method: ThresholdMethod = ThresholdMethod.ZScore  # 阈值设定方法
     target_recall: float = 0.95  # Quantile 方法: target recall
     std_multiplier: float = 1.645  # ZScore 方法: 标准差乘数
 
@@ -84,8 +84,8 @@ class ExperimentConfig:
     training_loss: TrainingLoss = TrainingLoss.BCE
     validation_score_method: OODScoreMethod = OODScoreMethod.Energy
     prediction_score_method: OODScoreMethod = OODScoreMethod.Energy
-    validation_score_temperature: float = 0.02
-    prediction_score_temperature: float = 0.02
+    validation_score_temperature: float = 0
+    prediction_score_temperature: float = 0
 
 
 @dataclass
