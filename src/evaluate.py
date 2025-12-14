@@ -5,12 +5,13 @@ import torch
 from sklearn.metrics import accuracy_score, roc_auc_score
 
 from core.config import config, TrainingLoss, OODScoreMethod
+from core.data_split import split_features
 from core.inference import predict_with_linear_single_head, predict_with_gated_dual_head, calculate_threshold_linear_single_head, calculate_threshold_gated_dual_head
 from core.train import run_training
 from core.utils import set_seed
 
 CONFIG = {
-    "feature_dir": config.paths.split_features,
+    "feature_dir": config.paths.features,  # 原始特征目录（用于 split_features）
     "output_dir": config.paths.dev,
     "feature_dim": config.model.feature_dim,
     "learning_rate": config.experiment.learning_rate,
@@ -27,6 +28,10 @@ CONFIG = {
     "prediction_method": config.experiment.prediction_method,
     "threshold_temperature": config.experiment.threshold_temperature,
     "prediction_temperature": config.experiment.prediction_temperature,
+    # 数据划分参数
+    "novel_ratio": config.split.novel_ratio,
+    "train_ratio": config.split.train_ratio,
+    "val_test_ratio": config.split.val_test_ratio,
 }
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -56,37 +61,48 @@ def run_single_trial(cfg: dict, seed: int, verbose: bool, use_val_as_test: bool)
     运行单次实验，返回各项指标
     
     Args:
-        cfg: 配置字典，包含以下键：
-            - feature_dir, feature_dim, learning_rate, batch_size, epochs
-            - novel_super_idx, novel_sub_idx, target_recall
-            - enable_feature_gating, enable_hierarchical_masking
-            - training_loss, threshold_method, prediction_method
-            - threshold_temperature, prediction_temperature
-        seed: 随机种子
+        cfg: 配置字典
+        seed: 随机种子（控制数据划分、模型初始化和训练）
         verbose: 是否打印训练进度信息
-        use_val_as_test: 如果为 True，则在验证集上评估而不是测试集
+        use_val_as_test: 如果为 True，则在验证集上评估
     
     Returns:
         dict: 包含各项评估指标
     """
+    # 1. 数据划分
     set_seed(seed)
     
-    # 加载验证和测试数据
-    val_features = torch.load(os.path.join(cfg["feature_dir"], "val_features.pt"))
-    val_super_labels = torch.load(os.path.join(cfg["feature_dir"], "val_super_labels.pt"))
-    val_sub_labels = torch.load(os.path.join(cfg["feature_dir"], "val_sub_labels.pt"))
+    data = split_features(
+        feature_dir=cfg["feature_dir"],
+        novel_ratio=cfg["novel_ratio"],
+        train_ratio=cfg["train_ratio"],
+        val_test_ratio=cfg["val_test_ratio"],
+        novel_sub_index=cfg["novel_sub_idx"],
+        output_dir=None,  # 不保存
+        verbose=False
+    )
     
-    # 根据参数决定评估集
+    # 2. 设置训练种子
+    set_seed(seed)
+    
+    # 获取数据
+    train_features = data.train_features
+    train_super_labels = data.train_super_labels
+    train_sub_labels = data.train_sub_labels
+    val_features = data.val_features
+    val_super_labels = data.val_super_labels
+    val_sub_labels = data.val_sub_labels
+    
     if use_val_as_test:
         test_features = val_features.to(device)
         test_super_labels = val_super_labels
         test_sub_labels = val_sub_labels
     else:
-        test_features = torch.load(os.path.join(cfg["feature_dir"], "test_features.pt")).to(device)
-        test_super_labels = torch.load(os.path.join(cfg["feature_dir"], "test_super_labels.pt"))
-        test_sub_labels = torch.load(os.path.join(cfg["feature_dir"], "test_sub_labels.pt"))
+        test_features = data.test_features.to(device)
+        test_super_labels = data.test_super_labels
+        test_sub_labels = data.test_sub_labels
     
-    # 使用 run_training 训练（不保存文件）
+    # 3. 训练模型（使用 train 数据）
     result = run_training(
         feature_dim=cfg["feature_dim"],
         batch_size=cfg["batch_size"],
@@ -95,7 +111,9 @@ def run_single_trial(cfg: dict, seed: int, verbose: bool, use_val_as_test: bool)
         device=device,
         enable_feature_gating=cfg["enable_feature_gating"],
         training_loss=cfg["training_loss"],
-        feature_dir=cfg["feature_dir"],
+        train_features=train_features,
+        train_super_labels=train_super_labels,
+        train_sub_labels=train_sub_labels,
         verbose=verbose
     )
     
@@ -187,7 +205,7 @@ def run_multiple_trials(cfg: dict, seeds: list[int], verbose: bool, use_val_as_t
         cfg: 配置字典
         seeds: 随机种子列表
         verbose: 是否打印进度信息
-        use_val_as_test: 如果为 True，则在验证集上评估而不是测试集
+        use_val_as_test: 如果为 True，则在验证集上评估
     
     Returns:
         dict: 包含均值和标准差的聚合统计结果

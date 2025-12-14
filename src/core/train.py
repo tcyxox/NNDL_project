@@ -216,7 +216,8 @@ def train_gated_dual_head(features, super_labels, sub_labels, super_map, sub_map
 
 def run_training(feature_dim, batch_size, learning_rate, epochs, device,
                  enable_feature_gating, training_loss,
-                 feature_dir, output_dir=None, verbose=True):
+                 train_features=None, train_super_labels=None, train_sub_labels=None,
+                 feature_dir=None, output_dir=None, verbose=True):
     """
     训练模型的主函数
 
@@ -228,7 +229,10 @@ def run_training(feature_dim, batch_size, learning_rate, epochs, device,
         device: 'cuda' or 'cpu'
         enable_feature_gating: 是否启用 SE Feature Gating
         training_loss: TrainingLoss ENUM - 训练损失函数类型
-        feature_dir: 特征目录
+        train_features: 训练特征（可选，若提供则直接使用）
+        train_super_labels: 训练超类标签（可选）
+        train_sub_labels: 训练子类标签（可选）
+        feature_dir: 特征目录（可选，若未提供 train_features 则从此加载）
         output_dir: 输出目录（可选，如果提供则保存模型和映射文件）
 
     Returns:
@@ -236,12 +240,16 @@ def run_training(feature_dim, batch_size, learning_rate, epochs, device,
         如果 enable_feature_gating=False: (super_model, sub_model, super_map, sub_map, super_to_sub)
     """
 
-    # 加载训练数据
-    if verbose:
-        print("正在加载训练数据...")
-    train_features = torch.load(os.path.join(feature_dir, "train_features.pt"))
-    train_super_labels = torch.load(os.path.join(feature_dir, "train_super_labels.pt"))
-    train_sub_labels = torch.load(os.path.join(feature_dir, "train_sub_labels.pt"))
+    # 加载或使用传入的训练数据
+    if train_features is None:
+        if feature_dir is None:
+            raise ValueError("必须提供 train_features 或 feature_dir")
+        if verbose:
+            print("正在加载训练数据...")
+        train_features = torch.load(os.path.join(feature_dir, "train_features.pt"))
+        train_super_labels = torch.load(os.path.join(feature_dir, "train_super_labels.pt"))
+        train_sub_labels = torch.load(os.path.join(feature_dir, "train_sub_labels.pt"))
+    
     if verbose:
         print(f"  > 训练样本数: {len(train_features)}")
 

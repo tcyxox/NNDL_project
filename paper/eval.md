@@ -27,14 +27,14 @@ class ExperimentConfig:
     prediction_temperature: float = 1
 ```
 
-  [Superclass] Overall     : 95.40% ± 0.16%
-  [Superclass] Seen        : 95.40% ± 0.16%
-  [Superclass] Unseen      :  0.00% ± 0.00%
-  [Subclass] Overall       : 62.17% ± 0.63%
-  [Subclass] Seen          : 88.82% ± 0.21%
-  [Subclass] Unseen        : 39.43% ± 1.16%
+  [Superclass] Overall     : 95.54% ± 0.46%
+  [Superclass] Seen        : 95.54% ± 0.46%
+  [Superclass] Unseen      : 0.00% ± 0.00%
+  [Subclass] Overall       : 62.99% ± 1.83%
+  [Subclass] Seen          : 89.33% ± 2.39%
+  [Subclass] Unseen        : 41.50% ± 3.69%
   [Superclass] AUROC       : nan ± nan
-  [Subclass] AUROC         : 0.8539 ± 0.0016
+  [Subclass] AUROC         : 0.8423 ± 0.0140
 
 ### Linear Dual Head + MSP
 
@@ -61,15 +61,15 @@ class ExperimentConfig:
     prediction_temperature: float = 3.5
 ```
 
-  [Superclass] Overall     : 95.00% ± 0.22%
-  [Superclass] Seen        : 95.00% ± 0.22%
+  [Superclass] Overall     : 95.55% ± 0.55%
+  [Superclass] Seen        : 95.55% ± 0.55%
   [Superclass] Unseen      : 0.00% ± 0.00%
-  [Subclass] Overall       : 64.46% ± 0.54%
-  [Subclass] Seen          : 88.82% ± 0.37%
-  [Subclass] Unseen        : 43.68% ± 0.88%
+  [Subclass] Overall       : 66.48% ± 3.35%
+  [Subclass] Seen          : 88.73% ± 1.73%
+  [Subclass] Unseen        : 48.29% ± 6.23%
   [Superclass] AUROC       : nan ± nan
-  [Subclass] AUROC         : 0.8719 ± 0.0008
-
+  [Subclass] AUROC         : 0.8667 ± 0.0195
+  
 观察：MSP 方法受益于较高温度，T=3.5 时性能最优。
 
 ### Linear Dual Head + MSP + Hierarchical Masking
@@ -97,14 +97,14 @@ class ExperimentConfig:
     prediction_temperature: float = 3.5
 ```
 
-  [Superclass] Overall     : 95.04% ± 0.17%       
-  [Superclass] Seen        : 95.04% ± 0.17%       
-  [Superclass] Unseen      : 0.00% ± 0.00%        
-  [Subclass] Overall       : 65.23% ± 0.43%       
-  [Subclass] Seen          : 89.33% ± 0.52%       
-  [Subclass] Unseen        : 44.68% ± 1.13%       
+  [Superclass] Overall     : 95.44% ± 0.39%
+  [Superclass] Seen        : 95.44% ± 0.39%
+  [Superclass] Unseen      : 0.00% ± 0.00%
+  [Subclass] Overall       : 66.53% ± 2.10%
+  [Subclass] Seen          : 89.56% ± 1.86%
+  [Subclass] Unseen        : 47.70% ± 4.21%
   [Superclass] AUROC       : nan ± nan
-  [Subclass] AUROC         : 0.8760 ± 0.0010
+  [Subclass] AUROC         : 0.8657 ± 0.0176
 
 结论：根据理论，Baseline + Hierarchical Masking >= Baseline 恒成立。
 
@@ -133,14 +133,14 @@ class ExperimentConfig:
     prediction_temperature: float = 3.5
 ```
 
-  [Superclass] Overall     : 95.07% ± 0.12%       
-  [Superclass] Seen        : 95.07% ± 0.12%       
-  [Superclass] Unseen      : 0.00% ± 0.00%        
-  [Subclass] Overall       : 71.57% ± 1.76%       
-  [Subclass] Seen          : 87.65% ± 0.97%       
-  [Subclass] Unseen        : 57.86% ± 3.20%       
+  [Superclass] Overall     : 95.39% ± 0.38%
+  [Superclass] Seen        : 95.39% ± 0.38%
+  [Superclass] Unseen      : 0.00% ± 0.00%
+  [Subclass] Overall       : 68.59% ± 1.21%
+  [Subclass] Seen          : 89.01% ± 2.32%
+  [Subclass] Unseen        : 51.90% ± 3.52%
   [Superclass] AUROC       : nan ± nan
-  [Subclass] AUROC         : 0.8940 ± 0.0077
+  [Subclass] AUROC         : 0.8808 ± 0.0171
 
 观察：开启 Feature Gating 后，需要使用更多 epochs 训练。
 
@@ -177,14 +177,14 @@ class ExperimentConfig:
     prediction_temperature: float = 3.5
 ```
 
-  [Superclass] Overall     : 95.07% ± 0.12%
-  [Superclass] Seen        : 95.07% ± 0.12%
+  [Superclass] Overall     : 95.39% ± 0.38%
+  [Superclass] Seen        : 95.39% ± 0.38%
   [Superclass] Unseen      : 0.00% ± 0.00%
-  [Subclass] Overall       : 71.57% ± 1.76%
-  [Subclass] Seen          : 87.65% ± 0.97%
-  [Subclass] Unseen        : 57.86% ± 3.20%
+  [Subclass] Overall       : 68.59% ± 1.21%
+  [Subclass] Seen          : 89.01% ± 2.32%
+  [Subclass] Unseen        : 51.90% ± 3.52%
   [Superclass] AUROC       : nan ± nan
-  [Subclass] AUROC         : 0.8940 ± 0.0077
+  [Subclass] AUROC         : 0.8808 ± 0.0171
 
 ### CE + Energy
 
@@ -201,14 +201,14 @@ class ExperimentConfig:
 
 观察：Energy 方法受益于较低温度，T=0.02 时性能最优。
 
-  [Superclass] Overall     : 95.11% ± 0.11%
-  [Superclass] Seen        : 95.11% ± 0.11%
+  [Superclass] Overall     : 95.43% ± 0.62%
+  [Superclass] Seen        : 95.43% ± 0.62%
   [Superclass] Unseen      : 0.00% ± 0.00%
-  [Subclass] Overall       : 66.03% ± 1.58%
-  [Subclass] Seen          : 87.02% ± 1.06%
-  [Subclass] Unseen        : 48.13% ± 3.26%
+  [Subclass] Overall       : 64.08% ± 1.29%
+  [Subclass] Seen          : 88.22% ± 2.65%
+  [Subclass] Unseen        : 44.38% ± 4.09%
   [Superclass] AUROC       : nan ± nan
-  [Subclass] AUROC         : 0.8780 ± 0.0083
+  [Subclass] AUROC         : 0.8590 ± 0.0191
 
 ### 阶段性结论
 
@@ -220,18 +220,6 @@ class ExperimentConfig:
 ### BCE + Energy
 
 ```py
-class ExperimentConfig:
-    # 训练参数
-    batch_size: int = 64
-    learning_rate: float = 1e-3
-    epochs: int = 100
-    target_recall: float = 0.95
-    seed: int = 42
-
-    # 模型选择
-    enable_hierarchical_masking: bool = True  # 推理时使用 Hierarchical Masking
-    enable_feature_gating: bool = True  # 训练时使用 SE Feature Gating
-
     # 方法选择
     training_loss: TrainingLoss = TrainingLoss.BCE
     threshold_method: OODScoreMethod = OODScoreMethod.Energy
@@ -242,16 +230,16 @@ class ExperimentConfig:
     prediction_temperature: float = 0.02
 ```
 
-  [Superclass] Overall     : 95.36% ± 0.23%
-  [Superclass] Seen        : 95.36% ± 0.23%
+  [Superclass] Overall     : 95.34% ± 0.33%
+  [Superclass] Seen        : 95.34% ± 0.33%
   [Superclass] Unseen      : 0.00% ± 0.00%
-  [Subclass] Overall       : 67.02% ± 0.34%
-  [Subclass] Seen          : 88.27% ± 0.62%
-  [Subclass] Unseen        : 48.90% ± 0.86%
+  [Subclass] Overall       : 68.01% ± 2.82%
+  [Subclass] Seen          : 89.01% ± 1.82%
+  [Subclass] Unseen        : 50.86% ± 4.91%
   [Superclass] AUROC       : nan ± nan
-  [Subclass] AUROC         : 0.8556 ± 0.0023
+  [Subclass] AUROC         : 0.8593 ± 0.0251
 
-结论：对 Energy 配置，将损失函数从 Softmax + CE 替换为 Sigmoid + BCE，性能有略微提升。
+结论：对 Energy 配置，将损失函数从 Softmax + CE 替换为 Sigmoid + BCE，性能有显著提升。
 
 ### BCE + MaxSigmoid
 
@@ -266,34 +254,56 @@ class ExperimentConfig:
     prediction_temperature: float = 1
 ```
 
-  [Superclass] Overall     : 95.36% ± 0.23%
-  [Superclass] Seen        : 95.36% ± 0.23%
+  [Superclass] Overall     : 95.34% ± 0.33%
+  [Superclass] Seen        : 95.34% ± 0.33%
   [Superclass] Unseen      : 0.00% ± 0.00%
-  [Subclass] Overall       : 67.02% ± 0.34%
-  [Subclass] Seen          : 88.27% ± 0.62%
-  [Subclass] Unseen        : 48.90% ± 0.86%
+  [Subclass] Overall       : 68.01% ± 2.82%
+  [Subclass] Seen          : 89.01% ± 1.82%
+  [Subclass] Unseen        : 50.86% ± 4.91%
   [Superclass] AUROC       : nan ± nan
-  [Subclass] AUROC         : 0.8556 ± 0.0023
+  [Subclass] AUROC         : 0.8593 ± 0.0251
 
 观察：只要 T >= 1，结果将完全保持一致。
 
-结论：对于 Sigmoid + BCE 损失函数，使用 MaxSigmoid 或 Energy 阈值和预测方法，性能不变。
+结论：对于 Sigmoid + BCE 损失函数，使用 MaxSigmoid 或 Energy 阈值和预测方法，性能相同。
 
 ## Variant 探索
 
-目前三个baseline分别是：
-
 - CE + MSP (T=3.5):
-95.07% ± 0.12%, 71.57% ± 1.76%, 87.65% ± 0.97%, 57.86% ± 3.20%, 0.8940 ± 0.0077
+95.39% ± 0.38%, 68.59% ± 1.21%, 89.01% ± 2.32%, 51.90% ± 3.52%, 0.8808 ± 0.0171
 - BCE + Energy (T=0.02):
-95.36% ± 0.23%, 67.02% ± 0.34%, 88.27% ± 0.62%, 48.90% ± 0.86%, 0.8556 ± 0.0023
+95.34% ± 0.33%, 68.01% ± 2.82%, 89.01% ± 1.82%, 50.86% ± 4.91%, 0.8593 ± 0.0251
 - BCE + MaxSigmoid (T=1):
-95.36% ± 0.23%,67.02% ± 0.34%, 88.27% ± 0.62%, 48.90% ± 0.86%, 0.8556 ± 0.0023
+95.34% ± 0.33%, 68.01% ± 2.82%, 89.01% ± 1.82%, 50.86% ± 4.91%, 0.8593 ± 0.0251
 
 变种可以为：
 
-- 在 Threshold & Prediction 混合使用 Energy & MaxSigmoid
+- BCE + MSP
 - 使用不一致的 Threshold & Prediction 温度 (Tt != Tp)
+
+### BCE + MSP
+
+```py
+    # 方法选择
+    training_loss: TrainingLoss = TrainingLoss.BCE
+    threshold_method: OODScoreMethod = OODScoreMethod.MSP
+    prediction_method: OODScoreMethod = OODScoreMethod.MSP
+
+    # 温度参数
+    threshold_temperature: float = 3.5
+    prediction_temperature: float = 3.5
+```
+
+  [Superclass] Overall     : 95.30% ± 0.42%
+  [Superclass] Seen        : 95.30% ± 0.42%
+  [Superclass] Unseen      : 0.00% ± 0.00%
+  [Subclass] Overall       : 66.33% ± 3.06%
+  [Subclass] Seen          : 89.20% ± 1.86%
+  [Subclass] Unseen        : 47.65% ± 5.78%
+  [Superclass] AUROC       : nan ± nan
+  [Subclass] AUROC         : 0.8577 ± 0.0238
+
+结论：与理论相符，不一致的训练与推理方法导致性能下降。
 
 ### CE + MSP
 
@@ -311,14 +321,14 @@ class ExperimentConfig:
 
 平衡 seen & unseen：最佳配置为 Tt = 2, Tp = 0.02，提升幅度为 7%。
 
-  [Superclass] Overall     : 95.34% ± 0.21%
-  [Superclass] Seen        : 95.34% ± 0.21%
+  [Superclass] Overall     : 95.34% ± 0.33%
+  [Superclass] Seen        : 95.34% ± 0.33%
   [Superclass] Unseen      : 0.00% ± 0.00%
-  [Subclass] Overall       : 74.71% ± 0.20%
-  [Subclass] Seen          : 77.53% ± 0.20%
-  [Subclass] Unseen        : 72.31% ± 0.40%
+  [Subclass] Overall       : 75.79% ± 2.42%
+  [Subclass] Seen          : 79.59% ± 1.99%
+  [Subclass] Unseen        : 72.70% ± 5.18%
   [Superclass] AUROC       : nan ± nan
-  [Subclass] AUROC         : 0.8556 ± 0.0023
+  [Subclass] AUROC         : 0.8593 ± 0.0251
 
 ### BCE + MaxSigmoid
 
@@ -333,14 +343,14 @@ class ExperimentConfig:
     prediction_temperature: float = 1
 ```
 
-  [Superclass] Overall     : 99.91% ± 0.00%
-  [Superclass] Seen        : 99.91% ± 0.00%
+  [Superclass] Overall     : 99.47% ± 0.28%
+  [Superclass] Seen        : 99.47% ± 0.28%
   [Superclass] Unseen      : 0.00% ± 0.00%
-  [Subclass] Overall       : 70.42% ± 0.32%
-  [Subclass] Seen          : 88.43% ± 0.21%
-  [Subclass] Unseen        : 55.05% ± 0.54%
+  [Subclass] Overall       : 70.27% ± 3.14%
+  [Subclass] Seen          : 89.44% ± 0.86%
+  [Subclass] Unseen        : 54.63% ± 5.99%
   [Superclass] AUROC       : nan ± nan
-  [Subclass] AUROC         : 0.8556 ± 0.0023
+  [Subclass] AUROC         : 0.8593 ± 0.0251
 
 结论：对于 BCE + 双 MaxSigmoid 方法，Tt = 3.5, Tp = 1，全性能均有显著提升，尤其是 super 性能取得了目前的最佳。这是一个很奇怪的事情，因为根据前面的试验，取不一样的 Tt & Tp，是在 seen 与 unseen 之间取得平衡，而这里直接提升了全性能。
 
@@ -348,14 +358,14 @@ class ExperimentConfig:
 
 平衡 seen & unseen：最佳配置为 Tt = 10, Tp = 0.5，提升幅度为 1%。这里似乎无法单纯通过调整 Tt & Tp 来取得平衡，因为这两个参数在这里的边际收益递减非常明显，且Tp <= 0.2 会导致 AUROC 显著下降。
 
-  [Superclass] Overall     : 99.91% ± 0.00%
-  [Superclass] Seen        : 99.91% ± 0.00%
+  [Superclass] Overall     : 99.81% ± 0.17%
+  [Superclass] Seen        : 99.81% ± 0.17%
   [Superclass] Unseen      : 0.00% ± 0.00%
-  [Subclass] Overall       : 71.48% ± 0.22%
-  [Subclass] Seen          : 87.73% ± 0.16%
-  [Subclass] Unseen        : 57.63% ± 0.46%
+  [Subclass] Overall       : 71.14% ± 3.48%
+  [Subclass] Seen          : 88.89% ± 0.92%
+  [Subclass] Unseen        : 56.68% ± 6.66%
   [Superclass] AUROC       : nan ± nan
-  [Subclass] AUROC         : 0.8556 ± 0.0023
+  [Subclass] AUROC         : 0.8593 ± 0.0251
 
 ## 总结
 
@@ -364,22 +374,22 @@ super seen, sub overall, sub seen, sub unseen, sub auroc
 ### 追求一致性：
 
 - CE + MSP (T=3.5):
-95.07% ± 0.12%, 71.57% ± 1.76%, 87.65% ± 0.97%, 57.86% ± 3.20%, 0.8940 ± 0.0077
+95.39% ± 0.38%, 68.59% ± 1.21%, 89.01% ± 2.32%, 51.90% ± 3.52%, 0.8808 ± 0.0171
 - BCE + Energy (T=0.02):
-95.36% ± 0.23%, 67.02% ± 0.34%, 88.27% ± 0.62%, 48.90% ± 0.86%, 0.8556 ± 0.0023
+95.34% ± 0.33%, 68.01% ± 2.82%, 89.01% ± 1.82%, 50.86% ± 4.91%, 0.8593 ± 0.0251
 - BCE + MaxSigmoid (T=1):
-95.36% ± 0.23%, 67.02% ± 0.34%, 88.27% ± 0.62%, 48.90% ± 0.86%, 0.8556 ± 0.0023
+95.34% ± 0.33%, 68.01% ± 2.82%, 89.01% ± 1.82%, 50.86% ± 4.91%, 0.8593 ± 0.0251
 
-- 应该选 CE + MSP (T=3.5)
+- 应该选 CE + MSP (T=3.5)，因为其 AUROC 显著更高。
 
 ### 忽略一致性，追求性能，且尽可能平衡 seen & unseen：
 
 - CE + MSP (Tt=Tp=3.5):      
 95.07% ± 0.12%, 71.57% ± 1.76%, 87.65% ± 0.97%, 57.86% ± 3.20%, 0.8940 ± 0.0077
 - BCE + Energy (Tt=2, Tp=0.02): 
-95.34% ± 0.21%, 74.71% ± 0.20%，77.53% ± 0.20%, 72.31% ± 0.40%, 0.8556 ± 0.0023
+95.34% ± 0.21%, 75.79% ± 2.42%，79.59% ± 1.99%, 72.70% ± 5.18%, 0.8593 ± 0.0251
 - BCE + MaxSigmoid (Tt=10, Tp=0.5):
-99.91% ± 0.00%, 70.42% ± 0.32%, 87.73% ± 0.16%, 57.63% ± 0.46%, 0.8556 ± 0.0023
+99.81% ± 0.17%, 71.14% ± 3.48%, 88.89% ± 0.92%, 56.68% ± 6.66%, 0.8556 ± 0.0023
 
 - 最高 AUROC ，应该选 CE + MSP (Tt=Tp=3.5)
 - 最高 sub overall，选 BCE + Energy & MaxSigmoid (Tt=0.02, Tp=2)
