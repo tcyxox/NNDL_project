@@ -1,5 +1,11 @@
 # Evaluations
 
+## TODOs
+
+- 递交结果时用 CLIP ViT-L/14 替换 ViT-B/32
+- 论文添加不同的 Threshold 设定方法
+- 对于Auxiliary Confidence Gating，需要在训练数据中也添加未知类
+
 ## 基础架构探索
 
 ### Baseline: Linear Dual Head + MSP (Temperature = 1) + Quantile (Recall = 95%)
@@ -10,14 +16,14 @@
     learning_rate: float = 1e-3
     epochs: int = 50
 
+    # 模型选择
+    enable_hierarchical_masking: bool = False  # 推理时 Hierarchical Masking 开关
+    enable_feature_gating: bool = False  # 训练时 SE Feature Gating 开关
+
     # 阈值设定
     threshold_method: ThresholdMethod = ThresholdMethod.Quantile  # 阈值设定方法
     target_recall: float = 0.95  # Quantile 方法: target recall
     std_multiplier: float = 1.645  # ZScore 方法: 标准差乘数
-
-    # 模型选择
-    enable_hierarchical_masking: bool = False  # 推理时 Hierarchical Masking 开关
-    enable_feature_gating: bool = False  # 训练时 SE Feature Gating 开关
 
     # 方法选择
     training_loss: TrainingLoss = TrainingLoss.CE
@@ -44,14 +50,14 @@
     learning_rate: float = 1e-3
     epochs: int = 50
 
+    # 模型选择
+    enable_hierarchical_masking: bool = False  # 推理时 Hierarchical Masking 开关
+    enable_feature_gating: bool = False  # 训练时 SE Feature Gating 开关
+
     # 阈值设定
     threshold_method: ThresholdMethod = ThresholdMethod.ZScore  # 阈值设定方法
     target_recall: float = 0.95  # Quantile 方法: target recall
     std_multiplier: float = 1.645  # ZScore 方法: 标准差乘数
-
-    # 模型选择
-    enable_hierarchical_masking: bool = False  # 推理时 Hierarchical Masking 开关
-    enable_feature_gating: bool = False  # 训练时 SE Feature Gating 开关
 
     # 方法选择
     training_loss: TrainingLoss = TrainingLoss.CE
@@ -80,14 +86,14 @@
     learning_rate: float = 1e-3
     epochs: int = 50
 
+    # 模型选择
+    enable_hierarchical_masking: bool = False  # 推理时 Hierarchical Masking 开关
+    enable_feature_gating: bool = False  # 训练时 SE Feature Gating 开关
+
     # 阈值设定
     threshold_method: ThresholdMethod = ThresholdMethod.ZScore  # 阈值设定方法
     target_recall: float = 0.95  # Quantile 方法: target recall
     std_multiplier: float = 1.645  # ZScore 方法: 标准差乘数
-
-    # 模型选择
-    enable_hierarchical_masking: bool = False  # 推理时 Hierarchical Masking 开关
-    enable_feature_gating: bool = False  # 训练时 SE Feature Gating 开关
 
     # 方法选择
     training_loss: TrainingLoss = TrainingLoss.CE
@@ -116,14 +122,14 @@
     learning_rate: float = 1e-3
     epochs: int = 50
 
+    # 模型选择
+    enable_hierarchical_masking: bool = True  # 推理时 Hierarchical Masking 开关
+    enable_feature_gating: bool = False  # 训练时 SE Feature Gating 开关
+
     # 阈值设定
     threshold_method: ThresholdMethod = ThresholdMethod.ZScore  # 阈值设定方法
     target_recall: float = 0.95  # Quantile 方法: target recall
     std_multiplier: float = 1.645  # ZScore 方法: 标准差乘数
-
-    # 模型选择
-    enable_hierarchical_masking: bool = True  # 推理时 Hierarchical Masking 开关
-    enable_feature_gating: bool = False  # 训练时 SE Feature Gating 开关
 
     # 方法选择
     training_loss: TrainingLoss = TrainingLoss.CE
@@ -152,14 +158,14 @@
     learning_rate: float = 1e-3
     epochs: int = 75
 
+    # 模型选择
+    enable_hierarchical_masking: bool = True  # 推理时 Hierarchical Masking 开关
+    enable_feature_gating: bool = True  # 训练时 SE Feature Gating 开关
+
     # 阈值设定
     threshold_method: ThresholdMethod = ThresholdMethod.ZScore  # 阈值设定方法
     target_recall: float = 0.95  # Quantile 方法: target recall
     std_multiplier: float = 1.645  # ZScore 方法: 标准差乘数
-
-    # 模型选择
-    enable_hierarchical_masking: bool = True  # 推理时 Hierarchical Masking 开关
-    enable_feature_gating: bool = True  # 训练时 SE Feature Gating 开关
 
     # 方法选择
     training_loss: TrainingLoss = TrainingLoss.CE
@@ -192,14 +198,14 @@
     learning_rate: float = 1e-3
     epochs: int = 75
 
+    # 模型选择
+    enable_hierarchical_masking: bool = True  # 推理时 Hierarchical Masking 开关
+    enable_feature_gating: bool = True  # 训练时 SE Feature Gating 开关
+
     # 阈值设定
     threshold_method: ThresholdMethod = ThresholdMethod.ZScore  # 阈值设定方法
     target_recall: float = 0.95  # Quantile 方法: target recall
     std_multiplier: float = 1.645  # ZScore 方法: 标准差乘数
-
-    # 模型选择
-    enable_hierarchical_masking: bool = True  # 推理时 Hierarchical Masking 开关
-    enable_feature_gating: bool = True  # 训练时 SE Feature Gating 开关
 ```
 
 ### Baseline: CE + MSP

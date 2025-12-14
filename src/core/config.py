@@ -71,14 +71,14 @@ class ExperimentConfig:
     learning_rate: float = 1e-3
     epochs: int = 75
 
+    # 模型选择
+    enable_hierarchical_masking: bool = True  # 推理时 Hierarchical Masking 开关
+    enable_feature_gating: bool = True  # 训练时 SE Feature Gating 开关
+
     # 阈值设定
     threshold_method: ThresholdMethod = ThresholdMethod.ZScore  # 阈值设定方法
     target_recall: float = 0.95  # Quantile 方法: target recall
     std_multiplier: float = 1.645  # ZScore 方法: 标准差乘数
-
-    # 模型选择
-    enable_hierarchical_masking: bool = True  # 推理时 Hierarchical Masking 开关
-    enable_feature_gating: bool = True  # 训练时 SE Feature Gating 开关
 
     # 方法选择
     training_loss: TrainingLoss = TrainingLoss.BCE

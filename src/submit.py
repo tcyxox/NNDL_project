@@ -44,15 +44,16 @@ CONFIG = {
     "batch_size": config.experiment.batch_size,
     "learning_rate": config.experiment.learning_rate,
     "epochs": config.experiment.epochs,
-    # 阈值设定参数
-    "threshold_method": config.experiment.threshold_method,
-    "target_recall": config.experiment.target_recall,
-    "std_multiplier": config.experiment.std_multiplier,
     
     # 模型选择
     "enable_feature_gating": config.experiment.enable_feature_gating,
     "enable_hierarchical_masking": config.experiment.enable_hierarchical_masking,
     "training_loss": config.experiment.training_loss,
+    
+    # 阈值设定参数
+    "threshold_method": config.experiment.threshold_method,
+    "target_recall": config.experiment.target_recall,
+    "std_multiplier": config.experiment.std_multiplier,
     
     # 推理参数
     "validation_score_method": config.experiment.validation_score_method,

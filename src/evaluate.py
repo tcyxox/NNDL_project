@@ -20,13 +20,13 @@ CONFIG = {
     "epochs": config.experiment.epochs,
     "novel_super_idx": config.osr.novel_super_index,
     "novel_sub_idx": config.osr.novel_sub_index,
+    # 模型参数
+    "enable_feature_gating": config.experiment.enable_feature_gating,
+    "enable_hierarchical_masking": config.experiment.enable_hierarchical_masking,
     # 阈值设定参数
     "threshold_method": config.experiment.threshold_method,
     "target_recall": config.experiment.target_recall,
     "std_multiplier": config.experiment.std_multiplier,
-    # 模型参数
-    "enable_feature_gating": config.experiment.enable_feature_gating,
-    "enable_hierarchical_masking": config.experiment.enable_hierarchical_masking,
     # 方法参数
     "training_loss": config.experiment.training_loss,
     "validation_score_method": config.experiment.validation_score_method,
