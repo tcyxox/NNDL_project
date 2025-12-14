@@ -303,20 +303,20 @@ class ExperimentConfig:
 
 目前三个baseline分别是：
 
-1. CE + MSP (T=3.5):       71.57% ± 1.76%, 87.65% ± 0.97%, 57.86% ± 3.20%
-2. BCE + Energy (T=0.02):  67.02% ± 0.34%, 88.27% ± 0.62%, 48.90% ± 0.86%
-3. BCE + MaxSigmoid (T=1): 67.02% ± 0.34%, 88.27% ± 0.62%, 48.90% ± 0.86%
+- CE + MSP (T=3.5):       71.57% ± 1.76%, 87.65% ± 0.97%, 57.86% ± 3.20%, 0.8940 ± 0.0077
+- BCE + Energy (T=0.02):  67.02% ± 0.34%, 88.27% ± 0.62%, 48.90% ± 0.86%, 0.8556 ± 0.0023
+- BCE + MaxSigmoid (T=1): 67.02% ± 0.34%, 88.27% ± 0.62%, 48.90% ± 0.86%, 0.8556 ± 0.0023
 
-变种可以为
+变种可以为：
 
-1. 在 Threshold & Prediction 混合使用 Energy & MaxSigmoid
-2. 使用不一致的温度
+- 在 Threshold & Prediction 混合使用 Energy & MaxSigmoid
+- 使用不一致的温度
 
 ### CE + MSP
 
 对于 CE + MSP，经过测试，若要维持 88% + 的 seen 分类准确率，原配置最佳。
 
-若要使 overall 分类准确率提升，最佳配置为 Th = 3.5, Tp = 4，提升幅度为 6%。
+若要使 overall 分类准确率提升，最佳配置为 Tt = 3.5, Tp = 4，提升幅度为 6%。
 
   [Superclass] Overall     : 88.47% ± 0.28%
   [Superclass] Seen        : 88.47% ± 0.28%
@@ -362,6 +362,26 @@ class ExperimentConfig:
   [Subclass] Overall       : 70.42% ± 0.32%
   [Subclass] Seen          : 88.43% ± 0.21%
   [Subclass] Unseen        : 55.05% ± 0.54%
+  [Superclass] AUROC       : nan ± nan
+  [Subclass] AUROC         : 0.8556 ± 0.0023
+
+3.5, 0.8
+  [Superclass] Overall     : 99.91% ± 0.00%
+  [Superclass] Seen        : 99.91% ± 0.00%
+  [Superclass] Unseen      : 0.00% ± 0.00%
+  [Subclass] Overall       : 70.67% ± 0.37%
+  [Subclass] Seen          : 88.31% ± 0.20%
+  [Subclass] Unseen        : 55.62% ± 0.68%
+  [Superclass] AUROC       : nan ± nan
+  [Subclass] AUROC         : 0.8556 ± 0.0023
+
+3.5, 1.2
+  [Superclass] Overall     : 99.91% ± 0.00%
+  [Superclass] Seen        : 99.91% ± 0.00%
+  [Superclass] Unseen      : 0.00% ± 0.00%
+  [Subclass] Overall       : 70.13% ± 0.33%
+  [Subclass] Seen          : 88.67% ± 0.34%
+  [Subclass] Unseen        : 54.31% ± 0.56%
   [Superclass] AUROC       : nan ± nan
   [Subclass] AUROC         : 0.8556 ± 0.0023
 
