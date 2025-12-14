@@ -190,7 +190,7 @@
 
 ## 具体方法和参数探索
 
-此后全部使用 Linear Dual Head + Hierarchical Masking + Z-Score (k = 1.645)
+此后若未特别说明，全部使用 Linear Dual Head + Hierarchical Masking + Z-Score (k = 1.645)
 
 ```py
     # 训练参数
@@ -215,8 +215,8 @@
     training_loss: TrainingLoss = TrainingLoss.CE
     validation_score_method: OODScoreMethod = OODScoreMethod.MSP
     prediction_score_method: OODScoreMethod = OODScoreMethod.MSP
-    validation_score_temperature: float = 3.5
-    prediction_score_temperature: float = 3.5
+    validation_score_temperature: float = 1.5
+    prediction_score_temperature: float = 1.5
 ```
 
 98.56% ± 0.35%, 71.35% ± 2.12%, 87.30% ± 1.66%, 58.33% ± 3.90%, 0.8663 ± 0.0113
@@ -226,6 +226,8 @@
 1. 问题：MSP 阈值打分法中用到的 Softmax 的强制归一化导致丢失了幅值信息。方案：使用 Logit-based 的 MaxSigmoid 或 Energy 阈值打分法。
 
 2. 问题：MSP 中使用基于 Softmax 的不保留幅值信息的阈值打分法 + 基于 Softmax 的不保留幅值信息的 CE 损失函数，是统一的；而使用 Logit-based 的保留幅值信息的阈值打分法 + 基于 Softmax 的不保留幅值信息的 CE 损失函数，是不统一的。方案：将 Softmax 替换为保留幅值信息的 Sigmoid，并使用 BCE 损失函数。
+
+备注：根据实验测试，不一致的 BCE + MSP, CE + MaxSigmoid, CE + Energy 相比其一致版本的方法，性能均有不同程度下降。
 
 ### BCE + MaxSigmoid
 
@@ -247,13 +249,18 @@
   [Superclass] AUROC       : nan ± nan
   [Subclass] AUROC         : 0.8524 ± 0.0270
 
-观察：MaxSigmoid 受益于较低温度，T=0.2 时综合性能最优，但与标准温度结果相差不大。温度越低，seen 性能越好，unseen 性能越差。
+观察：MaxSigmoid 受益于较低温度，T=0.2 时综合性能最优，但与标准温度结果相差不大，原因未知。温度越低，seen 性能越好，unseen 性能越差。
 
 结论：MaxSigmoid 方法可以使 super 准确率提高到几乎满分。
 
-### BCE + Energy
+### BCE + Energy + Quantile
 
 ```py
+    # 阈值设定
+    threshold_method: ThresholdMethod = ThresholdMethod.ZScore  # 阈值设定方法
+    target_recall: float = 0.95  # Quantile 方法: target recall
+    std_multiplier: float = 1.645  # ZScore 方法: 标准差乘数
+
     # 方法选择
     training_loss: TrainingLoss = TrainingLoss.BCE
     validation_score_method: OODScoreMethod = OODScoreMethod.Energy
@@ -261,15 +268,6 @@
     validation_score_temperature: float = 0.05
     prediction_score_temperature: float = 0.05
 ```
-T=0.05
-  [Superclass] Overall     : 94.06% ± 0.55%
-  [Superclass] Seen        : 94.06% ± 0.55%
-  [Superclass] Unseen      : 0.00% ± 0.00%
-  [Subclass] Overall       : 67.01% ± 3.28%
-  [Subclass] Seen          : 88.11% ± 2.44%
-  [Subclass] Unseen        : 49.82% ± 5.27%
-  [Superclass] AUROC       : nan ± nan
-  [Subclass] AUROC         : 0.8566 ± 0.0259
 
 Quantile: T=0.02
   [Superclass] Overall     : 95.34% ± 0.33%
@@ -281,55 +279,43 @@ Quantile: T=0.02
   [Superclass] AUROC       : nan ± nan
   [Subclass] AUROC         : 0.8593 ± 0.0251
 
-观察：Energy 方法受益于较低温度，T<=0.05 时性能最优。低温时，模型关注绝对幅值。
+观察：
+- Energy 方法由于是无界的，所以 Z-Score 阈值方法不如 Quantile。
+- Energy 方法受益于较低温度，T<=0.05 时性能最优。低温时，模型关注绝对幅值。
 
 ## Variant 探索
 
-- CE + MSP (T=3.5):
-95.39% ± 0.38%, 68.59% ± 1.21%, 89.01% ± 2.32%, 51.90% ± 3.52%, 0.8808 ± 0.0171
+- CE + MSP (T=1.5):
+98.56% ± 0.35%, 71.35% ± 2.12%, 87.30% ± 1.66%, 58.33% ± 3.90%, 0.8663 ± 0.0113
+- BCE + MaxSigmoid (T=0.2):
+99.72% ± 0.24%, 71.26% ± 3.40%, 87.35% ± 1.12%, 58.14% ± 6.58%, 0.8524 ± 0.0270
 - BCE + Energy (T=0.02):
 95.34% ± 0.33%, 68.01% ± 2.82%, 89.01% ± 1.82%, 50.86% ± 4.91%, 0.8593 ± 0.0251
-- BCE + MaxSigmoid (T=1):
-95.34% ± 0.33%, 68.01% ± 2.82%, 89.01% ± 1.82%, 50.86% ± 4.91%, 0.8593 ± 0.0251
 
-变种可以为：
-
-- BCE + MSP
-- 使用不一致的 Threshold & Prediction 温度 (Tt != Tp)
-
-### BCE + MSP
-
-```py
-    # 方法选择
-    training_loss: TrainingLoss = TrainingLoss.BCE
-    validation_score_method: OODScoreMethod = OODScoreMethod.MSP
-    prediction_score_method: OODScoreMethod = OODScoreMethod.MSP
-    validation_score_temperature: float = 3.5
-    prediction_score_temperature: float = 3.5
-```
-
-  [Superclass] Overall     : 95.30% ± 0.42%
-  [Superclass] Seen        : 95.30% ± 0.42%
-  [Superclass] Unseen      : 0.00% ± 0.00%
-  [Subclass] Overall       : 66.33% ± 3.06%
-  [Subclass] Seen          : 89.20% ± 1.86%
-  [Subclass] Unseen        : 47.65% ± 5.78%
-  [Superclass] AUROC       : nan ± nan
-  [Subclass] AUROC         : 0.8577 ± 0.0238
-
-结论：与理论相符，不一致的训练与推理方法导致性能下降。
+变种使用不一致的 Threshold & Prediction 温度 (Tt != Tp)
 
 ### CE + MSP
 
-对于 CE + MSP，经过测试，若要维持 88% + 的 seen 分类准确率，原配置 T=3.5 最佳。
-
 观察：提高 Tt 或降低 Tp：seen 准确率上升，unseen 准确率下降。
 
-平衡 seen & unseen：根据试验，不一致的 Tt & Tp 会严重损害 super 准确率，因此无法达成平衡。
+平衡 seen & unseen：根据试验，不一致的 Tt & Tp 会一定程度损害 super 准确率，当 Tt=1.5, Tp=1.75 时，seen 准确率下降 1%，unseen 准确率上升 4%。
 
-### BCE + Energy
+  [Superclass] Overall     : 97.80% ± 0.38%
+  [Superclass] Seen        : 97.80% ± 0.38%
+  [Superclass] Unseen      : 0.00% ± 0.00%
+  [Subclass] Overall       : 75.92% ± 2.14%
+  [Subclass] Seen          : 83.71% ± 2.41%
+  [Subclass] Unseen        : 69.59% ± 3.62%
+  [Superclass] AUROC       : nan ± nan
+  [Subclass] AUROC         : 0.8705 ± 0.0129
 
-对于 BCE + Energy，经过测试，若要维持 88% + 的 seen 分类准确率，原配置 T=0.02 最佳。
+### BCE + MaxSigmoid
+
+观察：提高 Tt 或降低 Tp：seen 准确率下降，unseen 准确率上升。
+
+平衡 seen & unseen：无法单纯通过调整 Tt & Tp 来取得平衡，因为这两个参数在这里的边际收益递减非常明显，且Tp < 0.2 会导致 AUROC 显著下降。
+
+### BCE + Energy + Quantile
 
 观察：提高 Tt 或降低 Tp：seen 准确率下降，unseen 准确率上升。
 
@@ -344,76 +330,43 @@ Quantile: T=0.02
   [Superclass] AUROC       : nan ± nan
   [Subclass] AUROC         : 0.8593 ± 0.0251
 
-### BCE + MaxSigmoid
-
-```py
-    # 方法选择
-    training_loss: TrainingLoss = TrainingLoss.BCE
-    validation_score_method: OODScoreMethod = OODScoreMethod.MaxSigmoid
-    prediction_score_method: OODScoreMethod = OODScoreMethod.MaxSigmoid
-    validation_score_temperature: float = 3.5
-    prediction_score_temperature: float = 1
-```
-
-  [Superclass] Overall     : 99.47% ± 0.28%
-  [Superclass] Seen        : 99.47% ± 0.28%
-  [Superclass] Unseen      : 0.00% ± 0.00%
-  [Subclass] Overall       : 70.27% ± 3.14%
-  [Subclass] Seen          : 89.44% ± 0.86%
-  [Subclass] Unseen        : 54.63% ± 5.99%
-  [Superclass] AUROC       : nan ± nan
-  [Subclass] AUROC         : 0.8593 ± 0.0251
-
-结论：对于 BCE + 双 MaxSigmoid 方法，Tt = 3.5, Tp = 1，全性能均有显著提升，尤其是 super 性能取得了目前的最佳。这是一个很奇怪的事情，因为根据前面的试验，取不一样的 Tt & Tp，是在 seen 与 unseen 之间取得平衡，而这里直接提升了全性能。
-
-观察：提高 Tt 或降低 Tp：seen 准确率下降，unseen 准确率上升。
-
-平衡 seen & unseen：最佳配置为 Tt = 10, Tp = 0.5，提升幅度为 1%。这里似乎无法单纯通过调整 Tt & Tp 来取得平衡，因为这两个参数在这里的边际收益递减非常明显，且Tp <= 0.2 会导致 AUROC 显著下降。
-
-  [Superclass] Overall     : 99.81% ± 0.17%
-  [Superclass] Seen        : 99.81% ± 0.17%
-  [Superclass] Unseen      : 0.00% ± 0.00%
-  [Subclass] Overall       : 71.14% ± 3.48%
-  [Subclass] Seen          : 88.89% ± 0.92%
-  [Subclass] Unseen        : 56.68% ± 6.66%
-  [Superclass] AUROC       : nan ± nan
-  [Subclass] AUROC         : 0.8593 ± 0.0251
-
 ## 总结
 
 super seen, sub overall, sub seen, sub unseen, sub auroc
 
 ### 追求一致性：
 
-- CE + MSP (T=3.5):
-95.39% ± 0.38%, 68.59% ± 1.21%, 89.01% ± 2.32%, 51.90% ± 3.52%, 0.8808 ± 0.0171
+- CE + MSP (T=1.5):
+98.56% ± 0.35%, 71.35% ± 2.12%, 87.30% ± 1.66%, 58.33% ± 3.90%, 0.8663 ± 0.0113
+- BCE + MaxSigmoid (T=0.2):
+99.72% ± 0.24%, 71.26% ± 3.40%, 87.35% ± 1.12%, 58.14% ± 6.58%, 0.8524 ± 0.0270
 - BCE + Energy (T=0.02):
 95.34% ± 0.33%, 68.01% ± 2.82%, 89.01% ± 1.82%, 50.86% ± 4.91%, 0.8593 ± 0.0251
-- BCE + MaxSigmoid (T=1):
-95.34% ± 0.33%, 68.01% ± 2.82%, 89.01% ± 1.82%, 50.86% ± 4.91%, 0.8593 ± 0.0251
 
-- 应该选 CE + MSP (T=3.5)，因为其 AUROC 显著更高。
+- 应该选 BCE + MaxSigmoid (T=0.2)。
 
 ### 忽略一致性，追求性能，且尽可能平衡 seen & unseen：
 
-- CE + MSP (Tt=Tp=3.5):      
-95.07% ± 0.12%, 71.57% ± 1.76%, 87.65% ± 0.97%, 57.86% ± 3.20%, 0.8940 ± 0.0077
+- CE + MSP (Tt=1.5, Tp=1.75):      
+97.80% ± 0.38%, 75.92% ± 2.14%, 83.71% ± 2.41%, 69.59% ± 3.62%, 0.8705 ± 0.0129
+- BCE + MaxSigmoid (T=0.2):
+99.72% ± 0.24%, 71.26% ± 3.40%, 87.35% ± 1.12%, 58.14% ± 6.58%, 0.8524 ± 0.0270
 - BCE + Energy (Tt=2, Tp=0.02): 
 95.34% ± 0.21%, 75.79% ± 2.42%，79.59% ± 1.99%, 72.70% ± 5.18%, 0.8593 ± 0.0251
-- BCE + MaxSigmoid (Tt=10, Tp=0.5):
-99.81% ± 0.17%, 71.14% ± 3.48%, 88.89% ± 0.92%, 56.68% ± 6.66%, 0.8593 ± 0.0251
 
 - 最高 AUROC，应该选 CE + MSP (Tt=Tp=3.5)
-- 最高 sub overall，选 BCE + Energy & MaxSigmoid (Tt=0.02, Tp=2)
-- 最高 super seen，选 BCE + MaxSigmoid (Tt=10, Tp=0.5)
+- 最高 super seen，选 BCE + MaxSigmoid (T=0.2)
 
-### 关于 Recall Rate 设定
+### 关于 Threshold 设定参数
 
-有两种平衡seen和unseen的方法。一种是把 Tt 和 Tp 调成不一样的，另一种是调 recall rate。
+有两种平衡seen和unseen的方法。一种是把 Tt 和 Tp 调成不一样的，另一种是调 Threshold 设定参数。
 
-实验发现 Tt Tp 调了以后，有些时候可以在不掉 super seen 的情况下，把 sub 调匀。但是调 recall rate 一定会掉 super seen，而且掉的很猛。
+实验发现：
+- 调 Tt Tp：有些情况可以在不掉 super seen 的情况下，把 sub 调匀。
+- 调 recall rate 一定会掉 super seen，而且掉的很猛。
+- 调 std multiplier 有些情况不掉 super seen，但在有些调 Tt Tp 不掉 super seen 的情况下会掉 super seen。
 
-所以一定是先把温度调好，再去调 recall rate。
+因此，一定是先把温度调好，再去调 Threshold 设定参数。
 
 # CAC 
 ## v1.0
