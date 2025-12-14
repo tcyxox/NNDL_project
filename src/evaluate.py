@@ -51,7 +51,7 @@ def calculate_metrics(y_true, y_pred, novel_label):
     return acc_all, acc_known, acc_novel
 
 
-def run_single_trial(cfg: dict, seed: int, verbose: bool = True):
+def run_single_trial(cfg: dict, seed: int, verbose: bool, use_val_as_test: bool):
     """
     运行单次实验，返回各项指标
     
@@ -64,6 +64,7 @@ def run_single_trial(cfg: dict, seed: int, verbose: bool = True):
             - threshold_temperature, prediction_temperature
         seed: 随机种子
         verbose: 是否打印训练进度信息
+        use_val_as_test: 如果为 True，则在验证集上评估而不是测试集
     
     Returns:
         dict: 包含各项评估指标
@@ -75,9 +76,15 @@ def run_single_trial(cfg: dict, seed: int, verbose: bool = True):
     val_super_labels = torch.load(os.path.join(cfg["feature_dir"], "val_super_labels.pt"))
     val_sub_labels = torch.load(os.path.join(cfg["feature_dir"], "val_sub_labels.pt"))
     
-    test_features = torch.load(os.path.join(cfg["feature_dir"], "test_features.pt")).to(device)
-    test_super_labels = torch.load(os.path.join(cfg["feature_dir"], "test_super_labels.pt"))
-    test_sub_labels = torch.load(os.path.join(cfg["feature_dir"], "test_sub_labels.pt"))
+    # 根据参数决定评估集
+    if use_val_as_test:
+        test_features = val_features.to(device)
+        test_super_labels = val_super_labels
+        test_sub_labels = val_sub_labels
+    else:
+        test_features = torch.load(os.path.join(cfg["feature_dir"], "test_features.pt")).to(device)
+        test_super_labels = torch.load(os.path.join(cfg["feature_dir"], "test_super_labels.pt"))
+        test_sub_labels = torch.load(os.path.join(cfg["feature_dir"], "test_sub_labels.pt"))
     
     # 使用 run_training 训练（不保存文件）
     result = run_training(
@@ -172,7 +179,7 @@ def run_single_trial(cfg: dict, seed: int, verbose: bool = True):
     }
 
 
-def run_multiple_trials(cfg: dict, seeds: list[int], verbose: bool = True) -> dict:
+def run_multiple_trials(cfg: dict, seeds: list[int], verbose: bool, use_val_as_test: bool) -> dict:
     """
     运行多种子评估，返回聚合统计结果
     
@@ -180,6 +187,7 @@ def run_multiple_trials(cfg: dict, seeds: list[int], verbose: bool = True) -> di
         cfg: 配置字典
         seeds: 随机种子列表
         verbose: 是否打印进度信息
+        use_val_as_test: 如果为 True，则在验证集上评估而不是测试集
     
     Returns:
         dict: 包含均值和标准差的聚合统计结果
@@ -188,7 +196,7 @@ def run_multiple_trials(cfg: dict, seeds: list[int], verbose: bool = True) -> di
     
     for i, seed in enumerate(seeds):
         print(f">>> Trial {i+1}/{len(seeds)}, Seed={seed}")
-        result = run_single_trial(cfg, seed, verbose=verbose)
+        result = run_single_trial(cfg, seed, verbose, use_val_as_test)
         all_results.append(result)
         if verbose:
             print(f"    Subclass Unseen: {result['sub_unseen']*100:.2f}%")
@@ -221,15 +229,19 @@ def print_evaluation_report(stats: dict):
     print(f"  [Subclass] AUROC         : {stats['sub_auroc_mean']:.4f} ± {stats['sub_auroc_std']:.4f}")
 
 if __name__ == "__main__":
+    USE_VAL_AS_TEST = False  # 设置为 True 在验证集上评估，False 在测试集上评估
+    
     mode = "SE Feature Gating" if CONFIG["enable_feature_gating"] else "Independent Training"
     masking = "Enabled" if CONFIG["enable_hierarchical_masking"] else "Disabled"
+    eval_set = "Validation Set" if USE_VAL_AS_TEST else "Test Set"
     print("=" * 75)
     print(f"Multi-seed Evaluation | Mode: {mode} | Masking: {masking} | Trials: {len(SEEDS)}")
     print("=" * 75)
+    print(f"Evaluation Set: {eval_set}")
     print(f"Training Loss: {CONFIG['training_loss'].value}")
     print(f"Threshold Method: {CONFIG['threshold_method'].value} (T={CONFIG['threshold_temperature']})")
     print(f"Prediction Method: {CONFIG['prediction_method'].value} (T={CONFIG['prediction_temperature']})")
     print("=" * 75)
     
-    stats = run_multiple_trials(CONFIG, SEEDS, verbose=False)
+    stats = run_multiple_trials(CONFIG, SEEDS, False, USE_VAL_AS_TEST)
     print_evaluation_report(stats)

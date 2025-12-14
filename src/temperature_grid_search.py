@@ -7,7 +7,7 @@ import numpy as np
 import sys
 
 from core.config import config, TrainingLoss, OODScoreMethod
-from evaluate_performance import run_multiple_trials, print_evaluation_report
+from evaluate import run_multiple_trials, print_evaluation_report
 
 # 温度值列表：<=0.2的情况是一致的
 TEMPERATURES = [0.02, 0.1, 0.2, 0.5, 1, 1.2, 1.5, 2, 3, 3.5, 4]
@@ -97,7 +97,7 @@ def run_grid_search():
             
             try:
                 # 运行多种子评估
-                stats = run_multiple_trials(cfg, SEEDS, verbose=False)
+                stats = run_multiple_trials(cfg, SEEDS, False, False)
                 
                 # 保存结果
                 result = {
