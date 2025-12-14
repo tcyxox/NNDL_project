@@ -4,10 +4,11 @@
 运行: python submit.py
 
 流程:
-  Step 1: 用完整数据训练模型
-  Step 2: 在验证集上计算阈值
-  Step 3: 在测试集上推理
-  Step 4: 生成提交 CSV
+  Step 1: 划分数据 (训练集 + 验证集)
+  Step 2: 用训练集训练模型
+  Step 3: 在验证集上计算阈值
+  Step 4: 在测试集上推理
+  Step 5: 生成提交 CSV
 """
 import os
 
@@ -15,7 +16,8 @@ import pandas as pd
 import torch
 
 from core.config import config
-from core.train import run_training, create_label_mapping, create_super_to_sub_mapping
+from core.data_split import split_features
+from core.train import run_training
 from core.inference import (
     calculate_threshold_gated_dual_head,
     calculate_threshold_linear_single_head,
@@ -27,9 +29,13 @@ from core.utils import set_seed
 # ===================== 配置 =====================
 CONFIG = {
     # 数据路径
-    "feature_dir": config.paths.features,           # 完整训练数据
-    "val_data_dir": config.paths.split_features,    # 验证集数据 (用于阈值计算)
+    "feature_dir": config.paths.features,
     "output_csv": os.path.join(config.paths.outputs, "submission_osr.csv"),
+    
+    # 数据划分
+    "novel_ratio": config.split.novel_ratio,
+    "train_ratio": config.split.train_ratio,
+    "val_test_ratio": config.split.val_test_ratio,
     
     # 模型参数
     "feature_dim": config.model.feature_dim,
@@ -71,13 +77,29 @@ if __name__ == "__main__":
     print(f"Prediction: {CONFIG['prediction_method'].value} (T={CONFIG['prediction_temperature']})")
     print("=" * 70)
     
-    # === Step 1: 训练模型 (使用完整数据) ===
-    print("\n--- Step 1: 训练模型 (完整数据) ---")
+    # === Step 1: 划分数据 ===
+    print("\n--- Step 1: 划分数据 ---")
     
-    train_features = torch.load(os.path.join(CONFIG["feature_dir"], "train_features.pt"))
-    train_super_labels = torch.load(os.path.join(CONFIG["feature_dir"], "train_super_labels.pt"))
-    train_sub_labels = torch.load(os.path.join(CONFIG["feature_dir"], "train_sub_labels.pt"))
-    print(f"  > 训练样本数: {len(train_features)}")
+    data = split_features(
+        feature_dir=CONFIG["feature_dir"],
+        novel_ratio=CONFIG["novel_ratio"],
+        train_ratio=CONFIG["train_ratio"],
+        val_test_ratio=CONFIG["val_test_ratio"],
+        novel_sub_index=CONFIG["novel_sub_idx"],
+        output_dir=None,  # 不保存中间文件
+        verbose=True
+    )
+    
+    # 合并 train + val + test 作为完整训练数据
+    # (因为提交时我们要用尽可能多的数据训练)
+    full_train_features = torch.cat([data.train_features, data.val_features, data.test_features], dim=0)
+    full_train_super = torch.cat([data.train_super_labels, data.val_super_labels, data.test_super_labels], dim=0)
+    full_train_sub = torch.cat([data.train_sub_labels, data.val_sub_labels, data.test_sub_labels], dim=0)
+    
+    print(f"  > 完整训练样本数: {len(full_train_features)} (训练{len(data.train_features)} + 验证{len(data.val_features)} + 测试{len(data.test_features)})")
+    
+    # === Step 2: 训练模型 ===
+    print("\n--- Step 2: 训练模型 ---")
     
     result = run_training(
         feature_dim=CONFIG["feature_dim"],
@@ -87,9 +109,9 @@ if __name__ == "__main__":
         device=device,
         enable_feature_gating=CONFIG["enable_feature_gating"],
         training_loss=CONFIG["training_loss"],
-        train_features=train_features,
-        train_super_labels=train_super_labels,
-        train_sub_labels=train_sub_labels,
+        train_features=full_train_features,
+        train_super_labels=full_train_super,
+        train_sub_labels=full_train_sub,
         output_dir=None,  # 不保存中间文件
         verbose=True
     )
@@ -107,29 +129,31 @@ if __name__ == "__main__":
     if not CONFIG["enable_hierarchical_masking"]:
         super_to_sub = None
     
-    # === Step 2: 计算阈值 (使用验证集) ===
-    print("\n--- Step 2: 计算阈值 (验证集) ---")
+    # === Step 3: 计算阈值 (使用 val + test 作为阈值数据) ===
+    print("\n--- Step 3: 计算阈值 ---")
     
-    val_features = torch.load(os.path.join(CONFIG["val_data_dir"], "val_features.pt"))
-    val_super_labels = torch.load(os.path.join(CONFIG["val_data_dir"], "val_super_labels.pt"))
-    val_sub_labels = torch.load(os.path.join(CONFIG["val_data_dir"], "val_sub_labels.pt"))
-    print(f"  > 验证样本数: {len(val_features)}")
+    # 合并 val + test 用于阈值计算 (最大化阈值估计的数据量)
+    threshold_features = torch.cat([data.val_features, data.test_features], dim=0)
+    threshold_super_labels = torch.cat([data.val_super_labels, data.test_super_labels], dim=0)
+    threshold_sub_labels = torch.cat([data.val_sub_labels, data.test_sub_labels], dim=0)
+    
+    print(f"  > 阈值数据量: {len(threshold_features)} (val {len(data.val_features)} + test {len(data.test_features)})")
     print(f"  > 阈值方法: {CONFIG['threshold_method'].value} (T={CONFIG['threshold_temperature']})")
     
     if CONFIG["enable_feature_gating"]:
         thresh_super, thresh_sub = calculate_threshold_gated_dual_head(
-            model, val_features, val_super_labels, val_sub_labels,
+            model, threshold_features, threshold_super_labels, threshold_sub_labels,
             super_map_inv, sub_map_inv, CONFIG["target_recall"], device,
             CONFIG["threshold_temperature"], CONFIG["threshold_method"]
         )
     else:
         thresh_super = calculate_threshold_linear_single_head(
-            super_model, val_features, val_super_labels, super_map_inv,
+            super_model, threshold_features, threshold_super_labels, super_map_inv,
             CONFIG["target_recall"], device,
             CONFIG["threshold_temperature"], CONFIG["threshold_method"]
         )
         thresh_sub = calculate_threshold_linear_single_head(
-            sub_model, val_features, val_sub_labels, sub_map_inv,
+            sub_model, threshold_features, threshold_sub_labels, sub_map_inv,
             CONFIG["target_recall"], device,
             CONFIG["threshold_temperature"], CONFIG["threshold_method"]
         )
@@ -137,12 +161,12 @@ if __name__ == "__main__":
     print(f"  > Superclass 阈值: {thresh_super:.4f}")
     print(f"  > Subclass 阈值:   {thresh_sub:.4f}")
     
-    # === Step 3: 测试集推理 ===
-    print("\n--- Step 3: 测试集推理 ---")
+    # === Step 4: 测试集推理 ===
+    print("\n--- Step 4: 测试集推理 ---")
     
     test_features = torch.load(os.path.join(CONFIG["feature_dir"], "test_features.pt")).to(device)
     test_image_names = torch.load(os.path.join(CONFIG["feature_dir"], "test_image_names.pt"))
-    print(f"  > 测试样本数: {len(test_features)}")
+    print(f"  > 真实测试样本数: {len(test_features)}")
     print(f"  > 预测方法: {CONFIG['prediction_method'].value} (T={CONFIG['prediction_temperature']})")
     
     if CONFIG["enable_feature_gating"]:
@@ -161,8 +185,8 @@ if __name__ == "__main__":
             super_to_sub, CONFIG["prediction_temperature"], CONFIG["prediction_method"]
         )
     
-    # === Step 4: 生成提交文件 ===
-    print("\n--- Step 4: 生成提交文件 ---")
+    # === Step 5: 生成提交文件 ===
+    print("\n--- Step 5: 生成提交文件 ---")
     
     predictions = [
         {"image": test_image_names[i], "superclass_index": super_preds[i], "subclass_index": sub_preds[i]}
@@ -183,3 +207,4 @@ if __name__ == "__main__":
     print("\n" + "=" * 70)
     print("提交完成!")
     print("=" * 70)
+
