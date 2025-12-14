@@ -1,4 +1,5 @@
 import os
+os.environ["HF_ENDPOINT"] = "https://hf-mirror.com"
 
 import pandas as pd
 import torch
@@ -41,28 +42,49 @@ def extract_features(image_paths, img_dir):
     features = model.get_image_features(**inputs)
     return features.cpu()
 
+@torch.no_grad()
+def extract_text_features(text_list):
+    # truncation=True: CLIP 最大支持 77 个 token
+    # padding=True 保证批次内长度一致
+    inputs = processor(text=text_list, return_tensors="pt", padding=True, truncation=True).to(device)
+    features = model.get_text_features(**inputs)
+    return features.cpu()
+
 
 if __name__ == "__main__":
     # =============================== 处理训练数据 ===============================
     print("正在处理训练集...")
     train_df = pd.read_csv(CONFIG["train_csv_path"])
     train_images = train_df["image"].tolist()
+    train_descriptions = train_df["description"].tolist()
+
     train_super_labels = torch.tensor(train_df["superclass_index"].values, dtype=torch.long)
     train_sub_labels = torch.tensor(train_df["subclass_index"].values, dtype=torch.long)
 
     train_features_list = []
+    train_text_features_list = []
+
     for i in tqdm(range(0, len(train_images), CONFIG["batch_size"]), desc="提取训练特征"):
+        # 提取图像特征
         batch_paths = train_images[i:i + CONFIG["batch_size"]]
         batch_features = extract_features(batch_paths, CONFIG["train_img_dir"])
         train_features_list.append(batch_features)
 
+        # 提取文本
+        batch_texts = train_descriptions[i:i + CONFIG["batch_size"]]
+        batch_text_feats = extract_text_features(batch_texts)
+        train_text_features_list.append(batch_text_feats)
+
     train_features = torch.cat(train_features_list, dim=0)
+    train_text_features = torch.cat(train_text_features_list, dim=0)
 
     # 保存训练特征和标签
     torch.save(train_features, os.path.join(CONFIG["output_dir"], "train_features.pt"))
+    torch.save(train_text_features, os.path.join(CONFIG["output_dir"], "train_text_features.pt"))
     torch.save(train_super_labels, os.path.join(CONFIG["output_dir"], "train_super_labels.pt"))
     torch.save(train_sub_labels, os.path.join(CONFIG["output_dir"], "train_sub_labels.pt"))
     print(f"训练特征已保存: {train_features.shape}")
+    print(f"训练文本特征已保存: {train_text_features.shape}")
 
     # =============================== 处理测试数据 ===============================
     print("正在处理测试集...")
@@ -78,7 +100,7 @@ if __name__ == "__main__":
 
     # 保存测试特征和图像名称
     torch.save(test_features, os.path.join(CONFIG["output_dir"], "test_features.pt"))
-    torch.save(test_images, os.path.join(CONFIG["output_dir"], "test_image_names.pt"))  # 保存文件名用于最后提交
+    torch.save(test_images, os.path.join(CONFIG["output_dir"], "test_image_names.pt"))
     print(f"测试特征已保存: {test_features.shape}")
 
     print("--- 特征提取完成 ---")
