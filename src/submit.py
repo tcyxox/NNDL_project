@@ -18,11 +18,13 @@ import torch
 from core.config import config
 from core.data_split import split_features
 from core.training import run_training
-from core.inference import (
-    calculate_threshold_gated_dual_head,
-    calculate_threshold_linear_single_head,
+from core.prediction import (
     predict_with_gated_dual_head,
     predict_with_linear_single_head
+)
+from core.validation import (
+    calculate_threshold_gated_dual_head,
+    calculate_threshold_linear_single_head
 )
 from core.utils import set_seed
 
