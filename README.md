@@ -28,8 +28,7 @@ Sidharth Sharma - ss7202@columbia.edu
 ### Development (Evaluation)
 
 1. Extract Features
-2. Split Feature Dataset
-3. Evaluate Performance
+2. Evaluate Performance
 
 ### Submission
 

@@ -389,7 +389,7 @@ super seen, sub overall, sub seen, sub unseen, sub auroc
 - BCE + Energy (Tt=2, Tp=0.02): 
 95.34% ± 0.21%, 75.79% ± 2.42%，79.59% ± 1.99%, 72.70% ± 5.18%, 0.8593 ± 0.0251
 - BCE + MaxSigmoid (Tt=10, Tp=0.5):
-99.81% ± 0.17%, 71.14% ± 3.48%, 88.89% ± 0.92%, 56.68% ± 6.66%, 0.8556 ± 0.0023
+99.81% ± 0.17%, 71.14% ± 3.48%, 88.89% ± 0.92%, 56.68% ± 6.66%, 0.8593 ± 0.0251
 
 - 最高 AUROC，应该选 CE + MSP (Tt=Tp=3.5)
 - 最高 sub overall，选 BCE + Energy & MaxSigmoid (Tt=0.02, Tp=2)
