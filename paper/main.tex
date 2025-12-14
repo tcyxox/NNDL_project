@@ -111,7 +111,7 @@ We categorize the approaches we explored into post-hoc methods applied to standa
 
 \subsubsection{Post-hoc Score-based Methods}
 These methods define a scoring function based on the outputs (logits or softmax probabilities) of a pre-trained closed-set classifier. A threshold is applied to this score to reject novel samples.
-\paragraph{Threshold Methods:}
+\paragraph{Threshold Scoring Methods:}
 For all score-based methods, a sample is classified as novel if its score falls below (or above, for Energy) a threshold $\tau$ calibrated on the validation set to achieve a target recall rate.
 \begin{itemize}
     \item Maximum Softmax Probability (MSP)~\cite{hendrycks2018baselinedetectingmisclassifiedoutofdistribution}: The baseline approach. It uses the maximum value of the softmax distribution as the confidence score. Logit $\to$ Softmax $\to$ Threshold Gate.
@@ -165,8 +165,8 @@ A known issue with MSP and ODIN is their reliance on the Softmax function. Softm
 
 \subsubsection{Class-wise Sigmoid with BCE Loss}
 
-\paragraph{Consistency between Threshold Method and Training Objective:}
-In the MSP framework, the thresholding method (based on Softmax probabilities) and the training objective (Cross-Entropy loss based on Softmax) are consistent, as neither preserves magnitude information. However, for Energy-based OOD detection, there is a theoretical inconsistency: the thresholding method relies on Logits and their magnitude information, whereas the training objective (CE loss with Softmax) discards this information. Therefore, to ensure consistency and preserve magnitude information, we propose replacing Softmax with \textbf{Class-wise Sigmoids}~\cite{shu2017docdeepopenclassification}.
+\paragraph{Consistency between Threshold Scoring Method and Training Objective:}
+In the MSP framework, the threshold scoring method (based on Softmax probabilities) and the training objective (Cross-Entropy loss based on Softmax) are consistent, as neither preserves magnitude information. However, for Energy-based OOD detection, there is a theoretical inconsistency: the threshold scoring method relies on Logits and their magnitude information, whereas the training objective (CE loss with Softmax) discards this information. Therefore, to ensure consistency and preserve magnitude information, we propose replacing Softmax with \textbf{Class-wise Sigmoids}~\cite{shu2017docdeepopenclassification}.
 
 \paragraph{Formulation:}
 Instead of the standard Softmax normalization, we apply independent sigmoid activations to each class logit, treating the multi-class classification problem as multiple \textbf{one-vs-rest} (\textbf{OvR}) binary classification problems:

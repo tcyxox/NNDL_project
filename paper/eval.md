@@ -215,7 +215,7 @@ class ExperimentConfig:
 1. MSP 受益于较高温度（T=3.5 时性能最优）：高温时，模型关注相对尖锐度。
 2. Energy 方法受益于较低温度（T=0.02 时性能最优）：低温时，模型关注绝对幅值。
 3. 问题：Softmax 的强制归一化导致丢失了幅值信息；方案：使用基于 Logits 的 Energy 方法。
-4. MSP 中使用基于 Softmax 的不保留幅值信息的阈值方法 + 基于 Softmax 的不保留幅值信息的 CE 损失函数，是统一的；而 Energy 方法 中使用基于 Logits 的保留幅值信息的阈值方法 + 基于 Softmax 的不保留幅值信息的 CE 损失函数，是不统一的。所以理论上应将 Softmax 替换为保留幅值信息的 Sigmoid，并使用 BCE 损失函数。
+4. MSP 中使用基于 Softmax 的不保留幅值信息的阈值打分方法 + 基于 Softmax 的不保留幅值信息的 CE 损失函数，是统一的；而 Energy 方法 中使用基于 Logits 的保留幅值信息的阈值打分方法 + 基于 Softmax 的不保留幅值信息的 CE 损失函数，是不统一的。所以理论上应将 Softmax 替换为保留幅值信息的 Sigmoid，并使用 BCE 损失函数。
 
 ### BCE + Energy
 
@@ -265,7 +265,7 @@ class ExperimentConfig:
 
 观察：只要 T >= 1，结果将完全保持一致。
 
-结论：对于 Sigmoid + BCE 损失函数，使用 MaxSigmoid 或 Energy 阈值和预测方法，性能相同。
+结论：对于 Sigmoid + BCE 损失函数，使用 MaxSigmoid 或 Energy 阈值打分方法，性能相同。
 
 ## Variant 探索
 
