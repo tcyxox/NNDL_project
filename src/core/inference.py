@@ -270,6 +270,79 @@ def load_gated_dual_head(model_dir, feature_dim, num_super, num_sub, device):
     return model, super_map, sub_map
 
 
+def _get_prediction_idx(logits):
+    """
+    获取预测类别索引（直接取 logits 的 argmax，等价于 argmax(softmax/sigmoid)）
+    """
+    return torch.argmax(logits, dim=1).item()
+
+
+def _apply_hierarchical_masking(sub_logits, final_super, novel_super_idx, super_to_sub, 
+                                 sub_global_to_local, num_sub_classes, device):
+    """
+    应用 Hierarchical Masking：mask 掉不属于预测超类的子类
+    
+    Returns:
+        masked_sub_logits: 应用 mask 后的 sub logits
+    """
+    if final_super != novel_super_idx and final_super in super_to_sub:
+        valid_subs = super_to_sub[final_super]
+        mask = torch.full((1, num_sub_classes), float('-inf'), device=device)
+        for sub_id in valid_subs:
+            if sub_id in sub_global_to_local:
+                local_id = sub_global_to_local[sub_id]
+                mask[0, local_id] = 0
+        return sub_logits + mask
+    return sub_logits
+
+
+def _predict_single_sample(
+        super_logits, sub_logits, 
+        super_map, sub_map,
+        thresh_super, thresh_sub,
+        novel_super_idx, novel_sub_idx,
+        super_to_sub, sub_global_to_local, num_sub_classes,
+        temperature, score_method, device
+):
+    """
+    预测单个样本的超类和子类
+    
+    Returns:
+        final_super: 最终超类预测
+        final_sub: 最终子类预测
+        super_score: 超类 OOD 得分
+        sub_score: 子类 OOD 得分
+    """
+    use_masking = (super_to_sub is not None)
+    
+    # === 超类预测 ===
+    super_idx = _get_prediction_idx(super_logits)
+    super_score = compute_ood_score(super_logits, temperature, score_method).item()
+    is_novel_super = super_score < thresh_super
+    final_super = novel_super_idx if is_novel_super else super_map[super_idx]
+    
+    # === 子类预测 ===
+    # OOD 得分必须在 masking 之前计算
+    sub_score = compute_ood_score(sub_logits, temperature, score_method).item()
+    is_novel_sub = sub_score < thresh_sub
+    
+    # 应用 Hierarchical Masking
+    if use_masking:
+        sub_logits = _apply_hierarchical_masking(
+            sub_logits, final_super, novel_super_idx, super_to_sub,
+            sub_global_to_local, num_sub_classes, device
+        )
+    
+    sub_idx = _get_prediction_idx(sub_logits)
+    final_sub = novel_sub_idx if is_novel_sub else sub_map[sub_idx]
+    
+    # Hard Constraint: 超类 novel → 子类也 novel
+    if final_super == novel_super_idx:
+        final_sub = novel_sub_idx
+    
+    return final_super, final_sub, super_score, sub_score
+
+
 def predict_with_linear_single_head(
         features, super_model, sub_model,
         super_map, sub_map,
@@ -278,105 +351,36 @@ def predict_with_linear_single_head(
         super_to_sub, temperature, score_method: OODScoreMethod
 ):
     """
-    Args:
-        features: 输入特征 [N, 512]
-        super_model: 超类分类模型
-        sub_model: 子类分类模型
-        super_map: 超类 local_to_global 映射
-        sub_map: 子类 local_to_global 映射
-        thresh_super: 超类阈值
-        thresh_sub: 子类阈值
-        novel_super_idx: 未知超类的 ID (3)
-        novel_sub_idx: 未知子类的 ID (87)
-        device: 'cuda' or 'cpu'
-        super_to_sub: 超类到子类的映射 {super_id: [sub_ids]}（可选，用于 masking）
-        temperature: OOD 温度缩放参数
-        score_method: OODScoreMethod ENUM - 得分计算方法
-
+    使用两个独立的 LinearSingleHead 模型进行预测
+    
     Returns:
-        super_preds: 超类预测列表 [N]
-        sub_preds: 子类预测列表 [N]
-        super_scores: 超类 OOD 得分列表 [N] (用于 AUROC，越高越像已知类)
-        sub_scores: 子类 OOD 得分列表 [N] (用于 AUROC，越高越像已知类)
+        super_preds, sub_preds, super_scores, sub_scores
     """
-    super_preds = []
-    sub_preds = []
-    super_scores = []  # OOD 得分（用于 AUROC）
-    sub_scores = []  # OOD 得分（用于 AUROC）
-
-    # 是否启用 hierarchical masking
+    super_preds, sub_preds, super_scores, sub_scores = [], [], [], []
+    
     use_masking = (super_to_sub is not None)
     num_sub_classes = sub_model.layer.out_features
-
-    # 如果启用 masking，从 sub_map 反转计算 global_to_local
     sub_global_to_local = {v: int(k) for k, v in sub_map.items()} if use_masking else None
 
     with torch.no_grad():
         for i in range(len(features)):
             feature = features[i].unsqueeze(0)
-
-            # === 超类预测 ===
             super_logits = super_model(feature)
-            
-            # 计算概率分布（用于获取预测类别）
-            if score_method == OODScoreMethod.MaxSigmoid:
-                super_probs = torch.sigmoid(super_logits / temperature)
-            else:
-                super_probs = F.softmax(super_logits / temperature, dim=1)
-            _, super_idx = torch.max(super_probs, dim=1)
-
-            # 计算 OOD 得分（统一接口）
-            super_score = compute_ood_score(super_logits, temperature, score_method).item()
-
-            super_scores.append(super_score)
-
-            # 判断是否为 novel（统一逻辑：score < threshold → novel）
-            is_novel_super = super_score < thresh_super
-
-            if is_novel_super:
-                final_super = novel_super_idx
-            else:
-                final_super = super_map[super_idx.item()]
-
-            # === 子类预测（带 Hierarchical Masking）===
             sub_logits = sub_model(feature)
-
-            # 计算 OOD 得分（必须在 masking 之前，与阈值计算保持一致）
-            sub_score = compute_ood_score(sub_logits, temperature, score_method).item()
-
-            sub_scores.append(sub_score)
-
-            # 如果超类不是 novel 且启用了 masking，则 mask 掉不属于该超类的子类
-            if use_masking and final_super != novel_super_idx and final_super in super_to_sub:
-                valid_subs = super_to_sub[final_super]
-                mask = torch.full((1, num_sub_classes), float('-inf'), device=device)
-                for sub_id in valid_subs:
-                    if sub_id in sub_global_to_local:
-                        local_id = sub_global_to_local[sub_id]
-                        mask[0, local_id] = 0
-                sub_logits = sub_logits + mask
-
-            # 对 masked logits 计算最终预测
-            if score_method == OODScoreMethod.MaxSigmoid:
-                sub_probs = torch.sigmoid(sub_logits / temperature)
-            else:
-                sub_probs = F.softmax(sub_logits, dim=1)
-            _, sub_idx = torch.max(sub_probs, dim=1)
-
-            # 判断是否为 novel（统一逻辑：score < threshold → novel）
-            is_novel_sub = sub_score < thresh_sub
-
-            if is_novel_sub:
-                final_sub = novel_sub_idx
-            else:
-                final_sub = sub_map[sub_idx.item()]
-
-            # === Hard Constraint: 超类 novel → 子类也 novel ===
-            if final_super == novel_super_idx:
-                final_sub = novel_sub_idx
-
+            
+            final_super, final_sub, super_score, sub_score = _predict_single_sample(
+                super_logits, sub_logits,
+                super_map, sub_map,
+                thresh_super, thresh_sub,
+                novel_super_idx, novel_sub_idx,
+                super_to_sub, sub_global_to_local, num_sub_classes,
+                temperature, score_method, device
+            )
+            
             super_preds.append(final_super)
             sub_preds.append(final_sub)
+            super_scores.append(super_score)
+            sub_scores.append(sub_score)
 
     return super_preds, sub_preds, super_scores, sub_scores
 
@@ -388,31 +392,13 @@ def predict_with_gated_dual_head(
         super_to_sub, temperature, score_method: OODScoreMethod
 ):
     """
-    Args:
-        features: [N, D] - 输入特征
-        model: GatedDualHead 模型
-        super_map: {local_id: global_id} - 超类映射
-        sub_map: {local_id: global_id} - 子类映射
-        thresh_super: float - 超类阈值
-        thresh_sub: float - 子类阈值
-        novel_super_idx: int - 未知超类的 ID (3)
-        novel_sub_idx: int - 未知子类的 ID (87)
-        device: str - 'cuda' or 'cpu'
-        super_to_sub: dict - 超类到子类的映射（用于 hard masking，可选）
-        temperature: float - OOD 温度缩放参数
-        score_method: OODScoreMethod ENUM - 得分计算方法
-
+    使用 GatedDualHead 模型进行预测
+    
     Returns:
-        super_preds: list[int] - 超类预测列表 [N]
-        sub_preds: list[int] - 子类预测列表 [N]
-        super_scores: list[float] - 超类 OOD 得分 [N] (越高越像已知类)
-        sub_scores: list[float] - 子类 OOD 得分 [N] (越高越像已知类)
+        super_preds, sub_preds, super_scores, sub_scores
     """
-    super_preds = []
-    sub_preds = []
-    super_scores = []  # OOD 得分（用于 AUROC）
-    sub_scores = []  # OOD 得分（用于 AUROC）
-
+    super_preds, sub_preds, super_scores, sub_scores = [], [], [], []
+    
     use_masking = (super_to_sub is not None)
     num_sub_classes = len(sub_map)
     sub_global_to_local = {v: int(k) for k, v in sub_map.items()} if use_masking else None
@@ -420,69 +406,21 @@ def predict_with_gated_dual_head(
     with torch.no_grad():
         for i in range(len(features)):
             feature = features[i].unsqueeze(0)
-
-            # 模型同时输出 super 和 sub logits
             super_logits, sub_logits = model(feature)
-
-            # === 超类预测 ===
-            # Step 1: 计算概率分布（用于获取预测类别）
-            if score_method == OODScoreMethod.MaxSigmoid:
-                super_probs = torch.sigmoid(super_logits / temperature)
-            else:
-                super_probs = F.softmax(super_logits / temperature, dim=1)
-            _, super_idx = torch.max(super_probs, dim=1)
-
-            # Step 2: 计算 OOD 得分（统一接口）
-            super_score = compute_ood_score(super_logits, temperature, score_method).item()
-
-            super_scores.append(super_score)
-
-            # Step 3: 判断是否为 novel（统一逻辑：score < threshold → novel）
-            is_novel_super = super_score < thresh_super
-
-            # Step 4: 确定最终预测
-            if is_novel_super:
-                final_super = novel_super_idx
-            else:
-                final_super = super_map[super_idx.item()]
-
-            # === 子类预测（带 Hierarchical Masking）===
-
-            # Step 1: 计算 OOD 得分（必须在 masking 之前，与阈值计算保持一致）
-            sub_score = compute_ood_score(sub_logits, temperature, score_method).item()
-
-            sub_scores.append(sub_score)
-
-            # Step 2: 判断是否为 novel（统一逻辑：score < threshold → novel）
-            is_novel_sub = sub_score < thresh_sub
-
-            # Step 3: 如果超类不是 novel 且启用了 masking，则 mask 掉不属于该超类的子类
-            if use_masking and final_super != novel_super_idx and final_super in super_to_sub:
-                valid_subs = super_to_sub[final_super]
-                mask = torch.full((1, num_sub_classes), float('-inf'), device=device)
-                for sub_id in valid_subs:
-                    if sub_id in sub_global_to_local:
-                        local_id = sub_global_to_local[sub_id]
-                        mask[0, local_id] = 0
-                sub_logits = sub_logits + mask
-
-            # Step 4: 对 masked logits 计算最终预测
-            if score_method == OODScoreMethod.MaxSigmoid:
-                sub_probs = torch.sigmoid(sub_logits / temperature)
-            else:
-                sub_probs = F.softmax(sub_logits, dim=1)
-            _, sub_idx = torch.max(sub_probs, dim=1)
-
-            if is_novel_sub:
-                final_sub = novel_sub_idx
-            else:
-                final_sub = sub_map[sub_idx.item()]
-
-            # === Hard Constraint: 超类 novel → 子类也 novel ===
-            if final_super == novel_super_idx:
-                final_sub = novel_sub_idx
-
+            
+            final_super, final_sub, super_score, sub_score = _predict_single_sample(
+                super_logits, sub_logits,
+                super_map, sub_map,
+                thresh_super, thresh_sub,
+                novel_super_idx, novel_sub_idx,
+                super_to_sub, sub_global_to_local, num_sub_classes,
+                temperature, score_method, device
+            )
+            
             super_preds.append(final_super)
             sub_preds.append(final_sub)
+            super_scores.append(super_score)
+            sub_scores.append(sub_score)
 
     return super_preds, sub_preds, super_scores, sub_scores
+
