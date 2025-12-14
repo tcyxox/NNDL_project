@@ -3,7 +3,12 @@
 ## TODOs
 
 - 递交结果时用 CLIP ViT-L/14 替换 ViT-B/32
-- Threshold 用已知+未知来计算
+- 关于数据集划分，有多种主流方法：
+  - 对于 Post-hoc 方法：
+    - Train 为纯已知类，Val 为纯已知类，Test 为已知类+未知类
+    - Train 为纯已知类，Val 为已知类+未知类，Test 为已知类+未知类（Test 的未知类理论上应和Val 的未知类不同）
+  - 对于 Training-time 方法：
+    - Train 为已知类+未知类，Val 为已知类+未知类，Test 为已知类+未知类
 
 ## 基础架构探索
 
