@@ -69,12 +69,12 @@ class ExperimentConfig:
 
     # 方法选择
     training_loss: TrainingLoss = TrainingLoss.BCE
-    threshold_method: OODScoreMethod = OODScoreMethod.MaxSigmoid
+    threshold_method: OODScoreMethod = OODScoreMethod.Energy
     prediction_method: OODScoreMethod = OODScoreMethod.MaxSigmoid
 
     # 温度参数
-    threshold_temperature: float = 3
-    prediction_temperature: float = 3
+    threshold_temperature: float = 0.02
+    prediction_temperature: float = 2
 
 
 @dataclass

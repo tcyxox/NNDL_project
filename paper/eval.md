@@ -177,12 +177,12 @@ class ExperimentConfig:
     prediction_temperature: float = 3.5
 ```
 
-  [Superclass] Overall     : 95.07% ± 0.12%       
-  [Superclass] Seen        : 95.07% ± 0.12%       
-  [Superclass] Unseen      : 0.00% ± 0.00%        
-  [Subclass] Overall       : 71.57% ± 1.76%       
-  [Subclass] Seen          : 87.65% ± 0.97%       
-  [Subclass] Unseen        : 57.86% ± 3.20%       
+  [Superclass] Overall     : 95.07% ± 0.12%
+  [Superclass] Seen        : 95.07% ± 0.12%
+  [Superclass] Unseen      : 0.00% ± 0.00%
+  [Subclass] Overall       : 71.57% ± 1.76%
+  [Subclass] Seen          : 87.65% ± 0.97%
+  [Subclass] Unseen        : 57.86% ± 3.20%
   [Superclass] AUROC       : nan ± nan
   [Subclass] AUROC         : 0.8940 ± 0.0077
 
@@ -201,12 +201,12 @@ class ExperimentConfig:
 
 观察：Energy 方法受益于较低温度，T=0.02 时性能最优。
 
-  [Superclass] Overall     : 95.11% ± 0.11%       
-  [Superclass] Seen        : 95.11% ± 0.11%       
-  [Superclass] Unseen      : 0.00% ± 0.00%        
-  [Subclass] Overall       : 66.03% ± 1.58%       
-  [Subclass] Seen          : 87.02% ± 1.06%       
-  [Subclass] Unseen        : 48.13% ± 3.26%       
+  [Superclass] Overall     : 95.11% ± 0.11%
+  [Superclass] Seen        : 95.11% ± 0.11%
+  [Superclass] Unseen      : 0.00% ± 0.00%
+  [Subclass] Overall       : 66.03% ± 1.58%
+  [Subclass] Seen          : 87.02% ± 1.06%
+  [Subclass] Unseen        : 48.13% ± 3.26%
   [Superclass] AUROC       : nan ± nan
   [Subclass] AUROC         : 0.8780 ± 0.0083
 
@@ -283,9 +283,12 @@ class ExperimentConfig:
 
 目前三个baseline分别是：
 
-- CE + MSP (T=3.5):       71.57% ± 1.76%, 87.65% ± 0.97%, 57.86% ± 3.20%, 0.8940 ± 0.0077
-- BCE + Energy (T=0.02):  67.02% ± 0.34%, 88.27% ± 0.62%, 48.90% ± 0.86%, 0.8556 ± 0.0023
-- BCE + MaxSigmoid (T=1): 67.02% ± 0.34%, 88.27% ± 0.62%, 48.90% ± 0.86%, 0.8556 ± 0.0023
+- CE + MSP (T=3.5):
+95.07% ± 0.12%, 71.57% ± 1.76%, 87.65% ± 0.97%, 57.86% ± 3.20%, 0.8940 ± 0.0077
+- BCE + Energy (T=0.02):
+95.36% ± 0.23%, 67.02% ± 0.34%, 88.27% ± 0.62%, 48.90% ± 0.86%, 0.8556 ± 0.0023
+- BCE + MaxSigmoid (T=1):
+95.36% ± 0.23%,67.02% ± 0.34%, 88.27% ± 0.62%, 48.90% ± 0.86%, 0.8556 ± 0.0023
 
 变种可以为：
 
@@ -296,24 +299,15 @@ class ExperimentConfig:
 
 对于 CE + MSP，经过测试，若要维持 88% + 的 seen 分类准确率，原配置 T=3.5 最佳。
 
-观察：当 Tt >> Tp 时，seen 准确率上升，unseen 准确率下降。
+观察：提高 Tt 或降低 Tp：seen 准确率上升，unseen 准确率下降。
 
-平衡 seen & unseen：最佳配置为 Tt = 3.5, Tp = 4，提升幅度为 6%，AUROC 也有 4% 的提升。但是此时 super overall 准确率崩了。不建议使用。
-
-  [Superclass] Overall     : 88.47% ± 0.28%
-  [Superclass] Seen        : 88.47% ± 0.28%
-  [Superclass] Unseen      : 0.00% ± 0.00%
-  [Subclass] Overall       : 77.80% ± 1.18%
-  [Subclass] Seen          : 77.65% ± 1.39%
-  [Subclass] Unseen        : 77.93% ± 2.62%
-  [Superclass] AUROC       : nan ± nan
-  [Subclass] AUROC         : 0.8930 ± 0.0079
+平衡 seen & unseen：根据试验，不一致的 Tt & Tp 会严重损害 super 准确率，因此无法达成平衡。
 
 ### BCE + Energy
 
 对于 BCE + Energy，经过测试，若要维持 88% + 的 seen 分类准确率，原配置 T=0.02 最佳。
 
-观察：当 Tt >> Tp 时，seen 准确率下降，unseen 准确率上升。
+观察：提高 Tt 或降低 Tp：seen 准确率下降，unseen 准确率上升。
 
 平衡 seen & unseen：最佳配置为 Tt = 2, Tp = 0.02，提升幅度为 7%。
 
@@ -348,9 +342,9 @@ class ExperimentConfig:
   [Superclass] AUROC       : nan ± nan
   [Subclass] AUROC         : 0.8556 ± 0.0023
 
-结论：对于 BCE + 双 MaxSigmoid 方法，Tt = 3.5, Tp = 1，全性能均有显著提升。这是一个很奇怪的事情，因为根据前面的试验，取不一样的 Tt & Tp，是在 seen 与 unseen 之间取得平衡，而这里直接提升了全性能。
+结论：对于 BCE + 双 MaxSigmoid 方法，Tt = 3.5, Tp = 1，全性能均有显著提升，尤其是 super 性能取得了目前的最佳。这是一个很奇怪的事情，因为根据前面的试验，取不一样的 Tt & Tp，是在 seen 与 unseen 之间取得平衡，而这里直接提升了全性能。
 
-观察：当 Tt >> Tp 时，seen 准确率下降，unseen 准确率上升。
+观察：提高 Tt 或降低 Tp：seen 准确率下降，unseen 准确率上升。
 
 平衡 seen & unseen：最佳配置为 Tt = 10, Tp = 0.5，提升幅度为 1%。这里似乎无法单纯通过调整 Tt & Tp 来取得平衡，因为这两个参数在这里的边际收益递减非常明显，且Tp <= 0.2 会导致 AUROC 显著下降。
 
@@ -382,6 +376,63 @@ class ExperimentConfig:
   [Subclass] Overall       : 74.68% ± 0.46%
   [Subclass] Seen          : 81.65% ± 2.33%
   [Subclass] Unseen        : 68.73% ± 2.81%
+  [Superclass] AUROC       : nan ± nan
+  [Subclass] AUROC         : 0.8556 ± 0.0023
+
+结论：这种方法不知道为什么可以让 super 性能直接拉满，而且 sub 性能提升也很大。但是无法让 sub seen 性能保持在 Baseline 的 87% 水平。
+
+观察：提高 Tt 或降低 Tp：seen 准确率上升，unseen 准确率下降。与纯 MaxSigmoid 方法一样，Tp <= 0.2 会导致 AUROC 显著下降。
+
+平衡 seen & unseen：最佳配置为 Tt = 0.02, Tp = 2，提升幅度为 1%。
+
+  [Superclass] Overall     : 100.00% ± 0.00%
+  [Superclass] Seen        : 100.00% ± 0.00%
+  [Superclass] Unseen      : 0.00% ± 0.00%
+  [Subclass] Overall       : 76.19% ± 0.59%
+  [Subclass] Seen          : 75.06% ± 3.62%
+  [Subclass] Unseen        : 77.16% ± 4.02%
+  [Superclass] AUROC       : nan ± nan
+  [Subclass] AUROC         : 0.8556 ± 0.0023
+
+## 总结
+
+super seen, sub overall, sub seen, sub unseen, sub auroc
+
+### 追求一致性：
+
+- CE + MSP (T=3.5):
+95.07% ± 0.12%, 71.57% ± 1.76%, 87.65% ± 0.97%, 57.86% ± 3.20%, 0.8940 ± 0.0077
+- BCE + Energy (T=0.02):
+95.36% ± 0.23%, 67.02% ± 0.34%, 88.27% ± 0.62%, 48.90% ± 0.86%, 0.8556 ± 0.0023
+- BCE + MaxSigmoid (T=1):
+95.36% ± 0.23%, 67.02% ± 0.34%, 88.27% ± 0.62%, 48.90% ± 0.86%, 0.8556 ± 0.0023
+
+- 应该选 CE + MSP (T=3.5)
+
+### 忽略一致性，追求性能，且尽可能平衡 seen & unseen：
+
+- CE + MSP (Tt=Tp=3.5):      
+95.07% ± 0.12%, 71.57% ± 1.76%, 87.65% ± 0.97%, 57.86% ± 3.20%, 0.8940 ± 0.0077
+- BCE + Energy (Tt=2, Tp=0.02): 
+95.34% ± 0.21%, 74.71% ± 0.20%，77.53% ± 0.20%, 72.31% ± 0.40%, 0.8556 ± 0.0023
+- BCE + MaxSigmoid (Tt=10, Tp=0.5):
+99.91% ± 0.00%, 70.42% ± 0.32%, 87.73% ± 0.16%, 57.63% ± 0.46%, 0.8556 ± 0.0023
+- BCE + Energy & MaxSigmoid (Tt=0.02, Tp=2):
+100.00% ± 0.00%, 76.19% ± 0.59%, 75.06% ± 3.62%, 77.16% ± 4.02%, 0.8556 ± 0.0023
+
+- 最高AUROC，应该选 CE + MSP (Tt=Tp=3.5)
+- 最高综合性能，选 BCE + Energy & MaxSigmoid (Tt=0.02, Tp=2)
+
+### 所以综合来看，目前的SOTA
+
+BCE + Energy & MaxSigmoid (Tt=0.02, Tp=2)
+
+  [Superclass] Overall     : 100.00% ± 0.00%
+  [Superclass] Seen        : 100.00% ± 0.00%
+  [Superclass] Unseen      : 0.00% ± 0.00%
+  [Subclass] Overall       : 76.19% ± 0.59%
+  [Subclass] Seen          : 75.06% ± 3.62%
+  [Subclass] Unseen        : 77.16% ± 4.02%
   [Superclass] AUROC       : nan ± nan
   [Subclass] AUROC         : 0.8556 ± 0.0023
 
