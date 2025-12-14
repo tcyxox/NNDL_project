@@ -1,24 +1,10 @@
-"""
-温度参数网格搜索脚本
-
-对于配置:
-- enable_hierarchical_masking: True
-- enable_feature_gating: True
-- training_loss: CE
-- threshold_method: MSP
-- prediction_method: MSP
-
-测试 threshold_temperature 和 prediction_temperature 的 11x11 种组合
-温度值域: [0.02, 0.1, 0.2, 0.5, 1, 1.2, 1.5, 2, 3, 3.5, 4]
-"""
-
 import json
 import os
 import time
 from datetime import datetime
 
 import numpy as np
-import torch
+import sys
 
 from core.config import config, TrainingLoss, OODScoreMethod
 from evaluate_performance import run_multiple_trials, print_evaluation_report
@@ -43,9 +29,9 @@ BASE_CONFIG = {
     # 固定配置
     "enable_feature_gating": True,
     "enable_hierarchical_masking": True,
-    "training_loss": TrainingLoss.CE,
-    "threshold_method": OODScoreMethod.MSP,
-    "prediction_method": OODScoreMethod.MSP,
+    "training_loss": TrainingLoss.BCE,
+    "threshold_method": OODScoreMethod.Energy,
+    "prediction_method": OODScoreMethod.Energy,
 }
 
 def run_grid_search():
@@ -248,9 +234,9 @@ def analyze_results(results_file: str = None):
 
 
 if __name__ == "__main__":
-    import sys
+    analyze = True
     
-    if len(sys.argv) > 1 and sys.argv[1] == "--analyze":
+    if analyze or (len(sys.argv) > 1 and sys.argv[1] == "--analyze"):
         # 只分析已有结果
         results_file = sys.argv[2] if len(sys.argv) > 2 else None
         analyze_results(results_file)
