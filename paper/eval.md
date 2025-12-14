@@ -1,8 +1,8 @@
 # Evaluations
 
-## Baseline: Linear Dual Head + MSP (Temperature = 1)
+## 基础架构探索
 
-### 参数配置
+### Baseline: Linear Dual Head + MSP (Temperature = 1)
 
 ```py
 class ExperimentConfig:
@@ -27,8 +27,6 @@ class ExperimentConfig:
     prediction_temperature: float = 1
 ```
 
-### 评估结果
-
   [Superclass] Overall     : 95.40% ± 0.16%
   [Superclass] Seen        : 95.40% ± 0.16%
   [Superclass] Unseen      :  0.00% ± 0.00%
@@ -38,7 +36,7 @@ class ExperimentConfig:
   [Superclass] AUROC       : nan ± nan
   [Subclass] AUROC         : 0.8539 ± 0.0016
 
-## Linear Dual Head + MSP
+### Linear Dual Head + MSP
 
 ```py
 class ExperimentConfig:
@@ -74,7 +72,7 @@ class ExperimentConfig:
 
 观察：MSP 方法受益于较高温度，T=3.5 时性能最优。
 
-## Linear Dual Head + MSP + Hierarchical Masking
+### Linear Dual Head + MSP + Hierarchical Masking
 
 ```py
 class ExperimentConfig:
@@ -110,7 +108,7 @@ class ExperimentConfig:
 
 结论：根据理论，Baseline + Hierarchical Masking >= Baseline 恒成立。
 
-## Gated Dual Head + MSP + Hierarchical Masking
+### Gated Dual Head + MSP + Hierarchical Masking
 
 ```py
 class ExperimentConfig:
@@ -148,7 +146,45 @@ class ExperimentConfig:
 
 结论：Gated Dual Head 能使未知subclass准确率显著提高。
 
-## Gated Dual Head + Energy + Hierarchical Masking
+## 具体方法和参数探索
+
+此后全部使用 Linear Dual Head + Hierarchical Masking
+
+### Baseline: CE + MSP
+
+```py
+class ExperimentConfig:
+    # 训练参数
+    batch_size: int = 64
+    learning_rate: float = 1e-3
+    epochs: int = 100
+    target_recall: float = 0.95
+    seed: int = 42
+
+    # 模型选择
+    enable_hierarchical_masking: bool = True  # 推理时 Hierarchical Masking 开关
+    enable_feature_gating: bool = True  # 训练时 SE Feature Gating 开关
+
+    # 方法选择
+    training_loss: TrainingLoss = TrainingLoss.CE
+    threshold_method: OODScoreMethod = OODScoreMethod.MSP
+    prediction_method: OODScoreMethod = OODScoreMethod.MSP
+
+    # 温度参数
+    threshold_temperature: float = 3.5
+    prediction_temperature: float = 3.5
+```
+
+  [Superclass] Overall     : 95.07% ± 0.12%       
+  [Superclass] Seen        : 95.07% ± 0.12%       
+  [Superclass] Unseen      : 0.00% ± 0.00%        
+  [Subclass] Overall       : 71.57% ± 1.76%       
+  [Subclass] Seen          : 87.65% ± 0.97%       
+  [Subclass] Unseen        : 57.86% ± 3.20%       
+  [Superclass] AUROC       : nan ± nan
+  [Subclass] AUROC         : 0.8940 ± 0.0077
+
+### CE + Energy
 
 ```py
 class ExperimentConfig:
@@ -186,13 +222,12 @@ class ExperimentConfig:
 
 ### 阶段性结论
 
-1. Gated Dual Head + Hierarchical Masking 是一定要使用的。
-2. MSP 受益于较高温度（T=3.5 时性能最优）：高温时，模型关注相对尖锐度。
-3. Energy 方法受益于较低温度（T=0.02 时性能最优）：低温时，模型关注绝对幅值。
-4. 问题：Softmax 的强制归一化导致丢失了幅值信息；方案：使用基于 Logits 的 Energy 方法。
-5. MSP 中使用基于 Softmax 的不保留幅值信息的阈值方法 + 基于 Softmax 的不保留幅值信息的 CE 损失函数，是统一的；而 Energy 方法 中使用基于 Logits 的保留幅值信息的阈值方法 + 基于 Softmax 的不保留幅值信息的 CE 损失函数，是不统一的。所以理论上应将 Softmax 替换为保留幅值信息的 Sigmoid。
+1. MSP 受益于较高温度（T=3.5 时性能最优）：高温时，模型关注相对尖锐度。
+2. Energy 方法受益于较低温度（T=0.02 时性能最优）：低温时，模型关注绝对幅值。
+3. 问题：Softmax 的强制归一化导致丢失了幅值信息；方案：使用基于 Logits 的 Energy 方法。
+4. MSP 中使用基于 Softmax 的不保留幅值信息的阈值方法 + 基于 Softmax 的不保留幅值信息的 CE 损失函数，是统一的；而 Energy 方法 中使用基于 Logits 的保留幅值信息的阈值方法 + 基于 Softmax 的不保留幅值信息的 CE 损失函数，是不统一的。所以理论上应将 Softmax 替换为保留幅值信息的 Sigmoid。
 
-## Gated Dual Head + Energy + Hierarchical Masking + Sigmoid & BCE
+### Sigmoid & BCE + Energy
 
 ```py
 class ExperimentConfig:
@@ -228,7 +263,7 @@ class ExperimentConfig:
 
 结论：对 Energy 配置，将损失函数从 Softmax + CE 替换为 Sigmoid + BCE，性能有略微提升。
 
-## Gated Dual Head + MaxSigmoid + Hierarchical Masking + Sigmoid & BCE
+### Sigmoid & BCE + MaxSigmoid
 
 ```py
 class ExperimentConfig:
@@ -264,7 +299,9 @@ class ExperimentConfig:
 
 结论：对于 Sigmoid + BCE 损失函数，使用 MaxSigmoid 或 Energy阈值和预测方法，性能不变。只要 Tt = Tp，结果都保持一致。
 
-## Gated Dual Head + Energy + Hierarchical Masking + Sigmoid & BCE (Variant)
+## Variant 探索
+
+### Sigmoid & BCE + Energy & MaxSigmoid
 
 ```py
 class ExperimentConfig:
@@ -300,7 +337,7 @@ class ExperimentConfig:
 
 结论：使用 Sigmoid + BCE 损失函数，配合不一致的 Energy 阈值计算方法 & MaxSigmoid 预测方法，性能居然出现显著提升，原因未知。根据实验启发，后面测试更多不一致的配置。
 
-## Gated Dual Head + MaxSigmoid + Hierarchical Masking + Sigmoid & BCE (Variant)
+### Sigmoid & BCE + MaxSigmoid
 
 ```py
 class ExperimentConfig:
@@ -336,7 +373,7 @@ class ExperimentConfig:
 
 结论：对于 BCE + 双 MaxSigmoid 方法，Tt = 3.5, Tp = 1，性能有显著提升。
 
-## ## Gated Dual Head + MSP + Hierarchical Masking (Variant)
+### CE + MSP (Variant)
 
 ```py
 class ExperimentConfig:
