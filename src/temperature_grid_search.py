@@ -9,8 +9,13 @@ import sys
 from core.config import config, TrainingLoss, OODScoreMethod
 from evaluate_performance import run_multiple_trials, print_evaluation_report
 
-# 温度值列表
+# 温度值列表：<=0.2的情况是一致的
 TEMPERATURES = [0.02, 0.1, 0.2, 0.5, 1, 1.2, 1.5, 2, 3, 3.5, 4]
+
+# 搜索半径: 当 SEARCH_RADIUS > 0 时，对于每个 threshold_temp，
+# 只搜索其前后 SEARCH_RADIUS 个索引范围内的 prediction_temp
+# 设为 None 或 0 表示全量搜索
+SEARCH_RADIUS = None
 
 # 多种子评估配置
 SEEDS = [42, 123, 456, 789, 1024]
@@ -37,7 +42,16 @@ BASE_CONFIG = {
 def run_grid_search():
     """执行温度参数网格搜索"""
     results = []
-    total_combinations = len(TEMPERATURES) ** 2
+    
+    # 计算实际组合数
+    if SEARCH_RADIUS and SEARCH_RADIUS > 0:
+        total_combinations = sum(
+            min(i + SEARCH_RADIUS + 1, len(TEMPERATURES)) - max(i - SEARCH_RADIUS, 0)
+            for i in range(len(TEMPERATURES))
+        )
+    else:
+        total_combinations = len(TEMPERATURES) ** 2
+    
     current = 0
     
     # 输出目录
@@ -52,12 +66,24 @@ def run_grid_search():
     print("=" * 80)
     print("Temperature Grid Search")
     print(f"Temperature values: {TEMPERATURES}")
+    if SEARCH_RADIUS and SEARCH_RADIUS > 0:
+        print(f"Search radius: ±{SEARCH_RADIUS} (limited search)")
+    else:
+        print("Search radius: Full grid search")
     print(f"Total combinations: {total_combinations}")
     print(f"Seeds per combination: {len(SEEDS)}")
     print("=" * 80)
     
-    for thresh_temp in TEMPERATURES:
-        for pred_temp in TEMPERATURES:
+    for thresh_idx, thresh_temp in enumerate(TEMPERATURES):
+        # 计算 prediction_temp 的搜索范围
+        if SEARCH_RADIUS and SEARCH_RADIUS > 0:
+            start_idx = max(0, thresh_idx - SEARCH_RADIUS)
+            end_idx = min(len(TEMPERATURES), thresh_idx + SEARCH_RADIUS + 1)
+            pred_temps = TEMPERATURES[start_idx:end_idx]
+        else:
+            pred_temps = TEMPERATURES
+        
+        for pred_temp in pred_temps:
             current += 1
             
             print(f"\n{'='*80}")
