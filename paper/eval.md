@@ -5,13 +5,15 @@
 ### Baseline: Linear Dual Head + MSP (Temperature = 1)
 
 ```py
-class ExperimentConfig:
     # 训练参数
     batch_size: int = 64
     learning_rate: float = 1e-3
     epochs: int = 50
-    target_recall: float = 0.95
-    seed: int = 42
+
+    # 阈值设定
+    threshold_method: ThresholdMethod = ThresholdMethod.Quantile  # 阈值设定方法
+    target_recall: float = 0.95  # Quantile 方法: target recall
+    std_multiplier: float = 1.645  # ZScore 方法: 标准差乘数
 
     # 模型选择
     enable_hierarchical_masking: bool = False  # 推理时 Hierarchical Masking 开关
@@ -37,13 +39,15 @@ class ExperimentConfig:
 ### Linear Dual Head + MSP
 
 ```py
-class ExperimentConfig:
     # 训练参数
     batch_size: int = 64
     learning_rate: float = 1e-3
     epochs: int = 50
-    target_recall: float = 0.95
-    seed: int = 42
+
+    # 阈值设定
+    threshold_method: ThresholdMethod = ThresholdMethod.Quantile  # 阈值设定方法
+    target_recall: float = 0.95  # Quantile 方法: target recall
+    std_multiplier: float = 1.645  # ZScore 方法: 标准差乘数
 
     # 模型选择
     enable_hierarchical_masking: bool = False  # 推理时 Hierarchical Masking 开关
@@ -71,13 +75,15 @@ class ExperimentConfig:
 ### Linear Dual Head + MSP + Hierarchical Masking
 
 ```py
-class ExperimentConfig:
     # 训练参数
     batch_size: int = 64
     learning_rate: float = 1e-3
-    epochs: int = 100
-    target_recall: float = 0.95
-    seed: int = 42
+    epochs: int = 50
+
+    # 阈值设定
+    threshold_method: ThresholdMethod = ThresholdMethod.Quantile  # 阈值设定方法
+    target_recall: float = 0.95  # Quantile 方法: target recall
+    std_multiplier: float = 1.645  # ZScore 方法: 标准差乘数
 
     # 模型选择
     enable_hierarchical_masking: bool = True  # 推理时 Hierarchical Masking 开关
@@ -91,27 +97,29 @@ class ExperimentConfig:
     prediction_score_temperature: float = 3.5
 ```
 
-  [Superclass] Overall     : 95.44% ± 0.39%
-  [Superclass] Seen        : 95.44% ± 0.39%
+  [Superclass] Overall     : 95.55% ± 0.55%
+  [Superclass] Seen        : 95.55% ± 0.55%
   [Superclass] Unseen      : 0.00% ± 0.00%
-  [Subclass] Overall       : 66.53% ± 2.10%
-  [Subclass] Seen          : 89.56% ± 1.86%
-  [Subclass] Unseen        : 47.70% ± 4.21%
+  [Subclass] Overall       : 66.48% ± 3.35%
+  [Subclass] Seen          : 88.73% ± 1.73%
+  [Subclass] Unseen        : 48.29% ± 6.23%
   [Superclass] AUROC       : nan ± nan
-  [Subclass] AUROC         : 0.8657 ± 0.0176
+  [Subclass] AUROC         : 0.8667 ± 0.0195
 
 结论：根据理论，Baseline + Hierarchical Masking >= Baseline 恒成立。
 
 ### Gated Dual Head + MSP + Hierarchical Masking
 
 ```py
-class ExperimentConfig:
     # 训练参数
     batch_size: int = 64
     learning_rate: float = 1e-3
-    epochs: int = 100
-    target_recall: float = 0.95
-    seed: int = 42
+    epochs: int = 50
+
+    # 阈值设定
+    threshold_method: ThresholdMethod = ThresholdMethod.Quantile  # 阈值设定方法
+    target_recall: float = 0.95  # Quantile 方法: target recall
+    std_multiplier: float = 1.645  # ZScore 方法: 标准差乘数
 
     # 模型选择
     enable_hierarchical_masking: bool = True  # 推理时 Hierarchical Masking 开关
@@ -143,13 +151,15 @@ class ExperimentConfig:
 此后全部使用 Linear Dual Head + Hierarchical Masking
 
 ```py
-class ExperimentConfig:
     # 训练参数
     batch_size: int = 64
     learning_rate: float = 1e-3
-    epochs: int = 100
-    target_recall: float = 0.95
-    seed: int = 42
+    epochs: int = 50
+
+    # 阈值设定
+    threshold_method: ThresholdMethod = ThresholdMethod.Quantile  # 阈值设定方法
+    target_recall: float = 0.95  # Quantile 方法: target recall
+    std_multiplier: float = 1.645  # ZScore 方法: 标准差乘数
 
     # 模型选择
     enable_hierarchical_masking: bool = True  # 推理时 Hierarchical Masking 开关
@@ -387,7 +397,6 @@ super seen, sub overall, sub seen, sub unseen, sub auroc
 ## v1.0
 
 ```py
-class ExperimentConfig:
     # 训练参数
     batch_size: int = 64
     learning_rate: float = 1e-2
@@ -413,7 +422,6 @@ class ExperimentConfig:
   
 ## v1.1
 ```py
-class ExperimentConfig:
     # 训练参数
     batch_size: int = 64
     learning_rate: float = 1e-2
@@ -434,7 +442,6 @@ class ExperimentConfig:
 
 ## v1.2
 ```py
-class ExperimentConfig:
     # 训练参数
     batch_size: int = 64
     learning_rate: float = 1e-2
@@ -455,7 +462,6 @@ class ExperimentConfig:
 se_reduction=4相较于v1.0有更好表现
 
 ```py
-class ExperimentConfig:
     # 训练参数
     batch_size: int = 64
     learning_rate: float = 1e-2
@@ -477,7 +483,6 @@ class ExperimentConfig:
 # OpenMax
 ## v1.0 LinearClassifier + OpenMax
 ```py
-class ExperimentConfig:
     # 训练参数
     batch_size: int = 64
     learning_rate: float = 1e-3
@@ -499,7 +504,6 @@ class ExperimentConfig:
 
 ## v1.1 CAC + OpenMax
 ``` py
-class ExperimentConfig:
     # 训练参数
     batch_size: int = 64
     learning_rate: float = 1e-2

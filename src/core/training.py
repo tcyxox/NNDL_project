@@ -92,7 +92,7 @@ def train_linear_single_head(features, labels, label_map, num_classes,
         learning_rate: 学习率
         epochs: 训练轮数
         device: 'cuda' or 'cpu'
-        training_loss: TrainingLoss ENUM - 训练损失函数类型
+        training_loss: TrainingLoss Enum - 训练损失函数类型
 
     Returns:
         model: 训练好的模型
@@ -159,7 +159,7 @@ def train_gated_dual_head(features, super_labels, sub_labels, super_map, sub_map
         learning_rate: 学习率
         epochs: 训练轮数
         device: 'cuda' or 'cpu'
-        training_loss: TrainingLoss ENUM - 训练损失函数类型
+        training_loss: TrainingLoss Enum - 训练损失函数类型
 
     Returns:
         model: 训练好的模型
@@ -228,7 +228,7 @@ def run_training(feature_dim, batch_size, learning_rate, epochs, device,
         epochs: 训练轮数
         device: 'cuda' or 'cpu'
         enable_feature_gating: 是否启用 SE Feature Gating
-        training_loss: TrainingLoss ENUM - 训练损失函数类型
+        training_loss: TrainingLoss Enum - 训练损失函数类型
         train_features: 训练特征（可选，若提供则直接使用）
         train_super_labels: 训练超类标签（可选）
         train_sub_labels: 训练子类标签（可选）

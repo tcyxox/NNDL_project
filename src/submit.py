@@ -44,7 +44,10 @@ CONFIG = {
     "batch_size": config.experiment.batch_size,
     "learning_rate": config.experiment.learning_rate,
     "epochs": config.experiment.epochs,
+    # 阈值设定参数
+    "threshold_method": config.experiment.threshold_method,
     "target_recall": config.experiment.target_recall,
+    "std_multiplier": config.experiment.std_multiplier,
     
     # 模型选择
     "enable_feature_gating": config.experiment.enable_feature_gating,
@@ -145,18 +148,19 @@ if __name__ == "__main__":
     if CONFIG["enable_feature_gating"]:
         thresh_super, thresh_sub = calculate_threshold_gated_dual_head(
             model, threshold_features, threshold_super_labels, threshold_sub_labels,
-            super_map_inv, sub_map_inv, CONFIG["target_recall"], device,
+            super_map_inv, sub_map_inv, device,
+            CONFIG["threshold_method"], CONFIG["target_recall"], CONFIG["std_multiplier"],
             CONFIG["validation_score_temperature"], CONFIG["validation_score_method"]
         )
     else:
         thresh_super = calculate_threshold_linear_single_head(
-            super_model, threshold_features, threshold_super_labels, super_map_inv,
-            CONFIG["target_recall"], device,
+            super_model, threshold_features, threshold_super_labels, super_map_inv, device,
+            CONFIG["threshold_method"], CONFIG["target_recall"], CONFIG["std_multiplier"],
             CONFIG["validation_score_temperature"], CONFIG["validation_score_method"]
         )
         thresh_sub = calculate_threshold_linear_single_head(
-            sub_model, threshold_features, threshold_sub_labels, sub_map_inv,
-            CONFIG["target_recall"], device,
+            sub_model, threshold_features, threshold_sub_labels, sub_map_inv, device,
+            CONFIG["threshold_method"], CONFIG["target_recall"], CONFIG["std_multiplier"],
             CONFIG["validation_score_temperature"], CONFIG["validation_score_method"]
         )
     

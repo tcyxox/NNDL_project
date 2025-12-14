@@ -68,7 +68,7 @@ def compute_ood_score(logits, temperature, score_method: OODScoreMethod):
     Args:
         logits: [N, C] - 模型输出的 logits
         temperature: float - 温度缩放参数
-        score_method: OODScoreMethod ENUM - 得分计算方法
+        score_method: OODScoreMethod Enum - 得分计算方法
 
     Returns:
         scores: [N] - OOD 得分，越高越可能是已知类

@@ -5,14 +5,15 @@
 """
 import torch
 
-from .config import OODScoreMethod
+from .config import OODScoreMethod, ThresholdMethod
 from .scoring import compute_ood_score, get_default_threshold
 
 
 
 def calculate_threshold_linear_single_head(
-        model, val_features, val_labels, label_map,
-        target_recall, device, temperature, score_method: OODScoreMethod
+        model, val_features, val_labels, label_map, device,
+        threshold_method: ThresholdMethod, target_recall, std_multiplier,
+        temperature, score_method: OODScoreMethod
 ):
     """
     在验证集上为 LinearSingleHead 计算 OSR 阈值
@@ -22,10 +23,12 @@ def calculate_threshold_linear_single_head(
         val_features: 验证集特征
         val_labels: 验证集标签
         label_map: local_to_global 映射
-        target_recall: 目标召回率 (如 0.95)
         device: 'cuda' or 'cpu'
+        threshold_method: ThresholdMethod Enum - 阈值设定方法
+        target_recall: 目标召回率 (如 0.95)，用于 Quantile 方法
+        std_multiplier: 标准差乘数，用于 ZScore 方法
         temperature: OOD 温度缩放参数
-        score_method: OODScoreMethod ENUM - 得分计算方法
+        score_method: OODScoreMethod Enum - 得分计算方法
 
     Returns:
         threshold: 计算出的阈值
@@ -42,14 +45,21 @@ def calculate_threshold_linear_single_head(
     with torch.no_grad():
         logits = model(X_known)
         scores = compute_ood_score(logits, temperature, score_method)
-        threshold = torch.quantile(scores, 1 - target_recall).item()
+        
+        if threshold_method == ThresholdMethod.ZScore:
+            # 使用 mean - k*std 设定阈值
+            threshold = (scores.mean() - std_multiplier * scores.std()).item()
+        else:
+            # 使用 target recall 设定阈值
+            threshold = torch.quantile(scores, 1 - target_recall).item()
 
     return threshold
 
 
 def calculate_threshold_gated_dual_head(
         model, val_features, val_super_labels, val_sub_labels,
-        super_map_inv, sub_map_inv, target_recall, device,
+        super_map_inv, sub_map_inv, device,
+        threshold_method: ThresholdMethod, target_recall, std_multiplier,
         temperature, score_method: OODScoreMethod
 ):
     """
@@ -62,20 +72,27 @@ def calculate_threshold_gated_dual_head(
         val_sub_labels: [N] - 验证集子类标签
         super_map_inv: {local_id: global_id} - 超类映射
         sub_map_inv: {local_id: global_id} - 子类映射
-        target_recall: float - 目标召回率 (如 0.95)
         device: str - 'cuda' or 'cpu'
+        threshold_method: ThresholdMethod Enum - 阈值设定方法
+        target_recall: float - 目标召回率 (如 0.95)，用于 Quantile 方法
+        std_multiplier: float - 标准差乘数，用于 ZScore 方法
         temperature: float - OOD 温度缩放参数
-        score_method: OODScoreMethod ENUM - 得分计算方法
+        score_method: OODScoreMethod Enum - 得分计算方法
 
     Returns:
         thresh_super: float - 超类阈值
         thresh_sub: float - 子类阈值
     """
 
-    def _calculate_single_threshold(logits, known_mask, target_recall, temperature, score_method):
+    def _calculate_single_threshold(logits, known_mask, threshold_method, target_recall, std_multiplier, temperature, score_method):
         if known_mask.sum() > 0:
             scores = compute_ood_score(logits[known_mask], temperature, score_method)
-            threshold = torch.quantile(scores, 1 - target_recall).item()
+            if threshold_method == ThresholdMethod.ZScore:
+                # 使用 mean - k*std 设定阈值
+                threshold = (scores.mean() - std_multiplier * scores.std()).item()
+            else:
+                # 使用 target recall 设定阈值
+                threshold = torch.quantile(scores, 1 - target_recall).item()
         else:
             print(f"Warning: No known samples in validation set, using default threshold")
             threshold = get_default_threshold(score_method)
@@ -87,9 +104,10 @@ def calculate_threshold_gated_dual_head(
         super_logits, sub_logits = model(val_features.to(device))
 
     known_super = torch.tensor([l.item() in super_map_inv for l in val_super_labels])
-    thresh_super = _calculate_single_threshold(super_logits, known_super, target_recall, temperature, score_method)
+    thresh_super = _calculate_single_threshold(super_logits, known_super, threshold_method, target_recall, std_multiplier, temperature, score_method)
 
     known_sub = torch.tensor([l.item() in sub_map_inv for l in val_sub_labels])
-    thresh_sub = _calculate_single_threshold(sub_logits, known_sub, target_recall, temperature, score_method)
+    thresh_sub = _calculate_single_threshold(sub_logits, known_sub, threshold_method, target_recall, std_multiplier, temperature, score_method)
 
     return thresh_super, thresh_sub
+

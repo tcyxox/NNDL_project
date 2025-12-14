@@ -8,7 +8,7 @@ SRC_DIR = os.path.dirname(SCRIPT_DIR)
 PROJECT_ROOT = os.path.dirname(SRC_DIR)
 
 
-# ================= ENUM 定义 =================
+# ================= Enum 定义 =================
 class TrainingLoss(Enum):
     """训练损失函数类型"""
     CE = "ce"    # Cross Entropy (Softmax + CE)
@@ -20,6 +20,12 @@ class OODScoreMethod(Enum):
     Energy = "energy"           # Energy-based score
     MSP = "msp"                 # Max Softmax Probability
     MaxSigmoid = "max_sigmoid"  # Max Sigmoid Probability
+
+
+class ThresholdMethod(Enum):
+    """阈值设定方法"""
+    Quantile = "quantile"  # 使用 target recall 设定阈值
+    ZScore = "zscore"      # 使用 mean - k*std 设定阈值
 
 
 # ================= 配置类 =================
@@ -58,23 +64,28 @@ class ModelConfig:
 
 @dataclass
 class ExperimentConfig:
+    seed: int = 42  # evaluate 时不使用
+
     # 训练参数
     batch_size: int = 64
     learning_rate: float = 1e-3
     epochs: int = 100
-    target_recall: float = 0.95
-    seed: int = 42  # evaluate 时不使用
+
+    # 阈值设定
+    threshold_method: ThresholdMethod = ThresholdMethod.Quantile  # 阈值设定方法
+    target_recall: float = 0.95  # Quantile 方法: target recall
+    std_multiplier: float = 1.645  # ZScore 方法: 标准差乘数
 
     # 模型选择
     enable_hierarchical_masking: bool = True  # 推理时 Hierarchical Masking 开关
     enable_feature_gating: bool = True  # 训练时 SE Feature Gating 开关
 
     # 方法选择
-    training_loss: TrainingLoss = TrainingLoss.CE
-    validation_score_method: OODScoreMethod = OODScoreMethod.MSP
-    prediction_score_method: OODScoreMethod = OODScoreMethod.MSP
-    validation_score_temperature: float = 3.5
-    prediction_score_temperature: float = 3.5
+    training_loss: TrainingLoss = TrainingLoss.BCE
+    validation_score_method: OODScoreMethod = OODScoreMethod.Energy
+    prediction_score_method: OODScoreMethod = OODScoreMethod.Energy
+    validation_score_temperature: float = 0.02
+    prediction_score_temperature: float = 0.02
 
 
 @dataclass

@@ -4,7 +4,7 @@ import numpy as np
 import torch
 from sklearn.metrics import accuracy_score, roc_auc_score
 
-from core.config import config, TrainingLoss, OODScoreMethod
+from core.config import config, TrainingLoss, OODScoreMethod, ThresholdMethod
 from core.data_split import split_features
 from core.prediction import predict_with_linear_single_head, predict_with_gated_dual_head
 from core.validation import calculate_threshold_linear_single_head, calculate_threshold_gated_dual_head
@@ -20,10 +20,14 @@ CONFIG = {
     "epochs": config.experiment.epochs,
     "novel_super_idx": config.osr.novel_super_index,
     "novel_sub_idx": config.osr.novel_sub_index,
+    # 阈值设定参数
+    "threshold_method": config.experiment.threshold_method,
     "target_recall": config.experiment.target_recall,
+    "std_multiplier": config.experiment.std_multiplier,
+    # 模型参数
     "enable_feature_gating": config.experiment.enable_feature_gating,
     "enable_hierarchical_masking": config.experiment.enable_hierarchical_masking,
-    # ENUM-based configuration
+    # 方法参数
     "training_loss": config.experiment.training_loss,
     "validation_score_method": config.experiment.validation_score_method,
     "prediction_score_method": config.experiment.prediction_score_method,
@@ -135,7 +139,8 @@ def run_single_trial(cfg: dict, seed: int, verbose: bool, use_val_as_test: bool)
         # 计算阈值
         thresh_super, thresh_sub = calculate_threshold_gated_dual_head(
             model, val_features, val_super_labels, val_sub_labels,
-            super_map_inv, sub_map_inv, cfg["target_recall"], device,
+            super_map_inv, sub_map_inv, device,
+            cfg["threshold_method"], cfg["target_recall"], cfg["std_multiplier"],
             cfg["validation_score_temperature"], cfg["validation_score_method"]
         )
         
@@ -148,13 +153,13 @@ def run_single_trial(cfg: dict, seed: int, verbose: bool, use_val_as_test: bool)
     else:
         # 计算阈值
         thresh_super = calculate_threshold_linear_single_head(
-            super_model, val_features, val_super_labels, super_map_inv,
-            cfg["target_recall"], device,
+            super_model, val_features, val_super_labels, super_map_inv, device,
+            cfg["threshold_method"], cfg["target_recall"], cfg["std_multiplier"],
             cfg["validation_score_temperature"], cfg["validation_score_method"]
         )
         thresh_sub = calculate_threshold_linear_single_head(
-            sub_model, val_features, val_sub_labels, sub_map_inv,
-            cfg["target_recall"], device,
+            sub_model, val_features, val_sub_labels, sub_map_inv, device,
+            cfg["threshold_method"], cfg["target_recall"], cfg["std_multiplier"],
             cfg["validation_score_temperature"], cfg["validation_score_method"]
         )
         
@@ -258,6 +263,11 @@ if __name__ == "__main__":
     print("=" * 75)
     print(f"Evaluation Set: {eval_set}")
     print(f"Training Loss: {CONFIG['training_loss'].value}")
+    # 阈值设定方法
+    if CONFIG["threshold_method"] == ThresholdMethod.ZScore:
+        print(f"Threshold: {CONFIG['threshold_method'].value} (std_multiplier={CONFIG['std_multiplier']})")
+    else:
+        print(f"Threshold: {CONFIG['threshold_method'].value} (recall={CONFIG['target_recall']})")
     print(f"Validation: {CONFIG['validation_score_method'].value} (T={CONFIG['validation_score_temperature']})")
     print(f"Prediction: {CONFIG['prediction_score_method'].value} (T={CONFIG['prediction_score_temperature']})")
     print("=" * 75)
