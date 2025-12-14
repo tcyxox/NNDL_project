@@ -391,9 +391,17 @@ super seen, sub overall, sub seen, sub unseen, sub auroc
 - BCE + MaxSigmoid (Tt=10, Tp=0.5):
 99.81% ± 0.17%, 71.14% ± 3.48%, 88.89% ± 0.92%, 56.68% ± 6.66%, 0.8556 ± 0.0023
 
-- 最高 AUROC ，应该选 CE + MSP (Tt=Tp=3.5)
+- 最高 AUROC，应该选 CE + MSP (Tt=Tp=3.5)
 - 最高 sub overall，选 BCE + Energy & MaxSigmoid (Tt=0.02, Tp=2)
 - 最高 super seen，选 BCE + MaxSigmoid (Tt=10, Tp=0.5)
+
+### 关于 Recall Rate 设定
+
+有两种平衡seen和unseen的方法。一种是把 Tt 和 Tp 调成不一样的，另一种是调 recall rate。
+
+实验发现 Tt Tp 调了以后，有些时候可以在不掉 super seen 的情况下，把 sub 调匀。但是调 recall rate 一定会掉 super seen，而且掉的很猛。
+
+所以一定是先把温度调好，再去调 recall rate。
 
 # CAC 
 ## v1.0
