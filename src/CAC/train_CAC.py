@@ -10,7 +10,7 @@ import os
 
 from src.CAC.CAC import CACProjector, CACLoss
 from src.core.config import *
-from src.core.train import create_label_mapping
+from src.core.training import create_label_mapping
 from src.core.utils import set_seed
 
 

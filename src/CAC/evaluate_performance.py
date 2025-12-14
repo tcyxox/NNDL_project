@@ -7,7 +7,7 @@ from src.CAC.train_CAC import train_cac_classifier
 # from src.CAC.train_mixup_CAC import train_cac_mixup_classifier as train_cac_classifier
 from src.CAC.test_CAC import test_cac_openset
 from src.core.config import *
-from src.core.train import create_label_mapping
+from src.core.training import create_label_mapping
 from src.core.utils import set_seed
 
 # ================= 配置区域 =================

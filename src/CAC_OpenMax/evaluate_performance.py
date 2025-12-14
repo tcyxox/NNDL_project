@@ -5,7 +5,7 @@ import os
 from src.CAC_OpenMax.train_CAC_OpenMax import train_cac_openmax_classifier
 from src.CAC_OpenMax.test_CAC_OpenMax import test_CAC_OpenMax_openset
 from src.core.config import *
-from src.core.train import create_label_mapping
+from src.core.training import create_label_mapping
 
 # ================= 配置区域 =================
 CONFIG = {

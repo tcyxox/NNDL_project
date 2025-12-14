@@ -17,7 +17,7 @@ import torch
 
 from core.config import config
 from core.data_split import split_features
-from core.train import run_training
+from core.training import run_training
 from core.inference import (
     calculate_threshold_gated_dual_head,
     calculate_threshold_linear_single_head,

@@ -5,7 +5,7 @@ import os
 from src.OpenMax.train_OpenMax import train_openmax_classifier
 from src.OpenMax.test_OpenMax import test_OpenMax_openset
 from src.core.config import *
-from src.core.train import create_label_mapping
+from src.core.training import create_label_mapping
 
 # ================= 配置区域 =================
 CONFIG = {

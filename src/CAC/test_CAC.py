@@ -4,7 +4,7 @@ from sklearn.metrics import roc_auc_score
 import os
 
 from src.core.config import *
-from src.core.train import create_label_mapping
+from src.core.training import create_label_mapping
 from src.core.utils import set_seed
 from src.CAC.CAC import *
 

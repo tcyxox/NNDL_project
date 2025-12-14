@@ -8,7 +8,7 @@ import pickle
 from src.OpenMax.OpenMax import *
 from src.core.utils import set_seed
 from src.core.config import *
-from src.core.train import create_label_mapping
+from src.core.training import create_label_mapping
 
 
 CONFIG = {
