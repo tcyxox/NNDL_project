@@ -50,10 +50,10 @@ CONFIG = {
     "training_loss": config.experiment.training_loss,
     
     # 推理参数
-    "threshold_method": config.experiment.threshold_method,
-    "threshold_temperature": config.experiment.threshold_temperature,
-    "prediction_method": config.experiment.prediction_method,
-    "prediction_temperature": config.experiment.prediction_temperature,
+    "validation_score_method": config.experiment.validation_score_method,
+    "validation_score_temperature": config.experiment.validation_score_temperature,
+    "prediction_score_method": config.experiment.prediction_score_method,
+    "prediction_score_temperature": config.experiment.prediction_score_temperature,
     
     # OSR 标签
     "novel_super_idx": config.osr.novel_super_index,
@@ -73,8 +73,8 @@ if __name__ == "__main__":
     masking = "Enabled" if CONFIG["enable_hierarchical_masking"] else "Disabled"
     print(f"Mode: {mode} | Masking: {masking} | Device: {device}")
     print(f"Training Loss: {CONFIG['training_loss'].value}")
-    print(f"Threshold: {CONFIG['threshold_method'].value} (T={CONFIG['threshold_temperature']})")
-    print(f"Prediction: {CONFIG['prediction_method'].value} (T={CONFIG['prediction_temperature']})")
+    print(f"Validation: {CONFIG['validation_score_method'].value} (T={CONFIG['validation_score_temperature']})")
+    print(f"Prediction: {CONFIG['prediction_score_method'].value} (T={CONFIG['prediction_score_temperature']})")
     print("=" * 70)
     
     # === Step 1: 划分数据 ===
@@ -138,24 +138,24 @@ if __name__ == "__main__":
     threshold_sub_labels = torch.cat([data.val_sub_labels, data.test_sub_labels], dim=0)
     
     print(f"  > 阈值数据量: {len(threshold_features)} (val {len(data.val_features)} + test {len(data.test_features)})")
-    print(f"  > 阈值方法: {CONFIG['threshold_method'].value} (T={CONFIG['threshold_temperature']})")
+    print(f"  > 阈值方法: {CONFIG['validation_score_method'].value} (T={CONFIG['validation_score_temperature']})")
     
     if CONFIG["enable_feature_gating"]:
         thresh_super, thresh_sub = calculate_threshold_gated_dual_head(
             model, threshold_features, threshold_super_labels, threshold_sub_labels,
             super_map_inv, sub_map_inv, CONFIG["target_recall"], device,
-            CONFIG["threshold_temperature"], CONFIG["threshold_method"]
+            CONFIG["validation_score_temperature"], CONFIG["validation_score_method"]
         )
     else:
         thresh_super = calculate_threshold_linear_single_head(
             super_model, threshold_features, threshold_super_labels, super_map_inv,
             CONFIG["target_recall"], device,
-            CONFIG["threshold_temperature"], CONFIG["threshold_method"]
+            CONFIG["validation_score_temperature"], CONFIG["validation_score_method"]
         )
         thresh_sub = calculate_threshold_linear_single_head(
             sub_model, threshold_features, threshold_sub_labels, sub_map_inv,
             CONFIG["target_recall"], device,
-            CONFIG["threshold_temperature"], CONFIG["threshold_method"]
+            CONFIG["validation_score_temperature"], CONFIG["validation_score_method"]
         )
     
     print(f"  > Superclass 阈值: {thresh_super:.4f}")
@@ -167,14 +167,14 @@ if __name__ == "__main__":
     test_features = torch.load(os.path.join(CONFIG["feature_dir"], "test_features.pt")).to(device)
     test_image_names = torch.load(os.path.join(CONFIG["feature_dir"], "test_image_names.pt"))
     print(f"  > 真实测试样本数: {len(test_features)}")
-    print(f"  > 预测方法: {CONFIG['prediction_method'].value} (T={CONFIG['prediction_temperature']})")
+    print(f"  > 预测方法: {CONFIG['prediction_score_method'].value} (T={CONFIG['prediction_score_temperature']})")
     
     if CONFIG["enable_feature_gating"]:
         super_preds, sub_preds, _, _ = predict_with_gated_dual_head(
             test_features, model, super_map_inv, sub_map_inv,
             thresh_super, thresh_sub,
             CONFIG["novel_super_idx"], CONFIG["novel_sub_idx"], device,
-            super_to_sub, CONFIG["prediction_temperature"], CONFIG["prediction_method"]
+            super_to_sub, CONFIG["prediction_score_temperature"], CONFIG["prediction_score_method"]
         )
     else:
         super_preds, sub_preds, _, _ = predict_with_linear_single_head(
@@ -182,7 +182,7 @@ if __name__ == "__main__":
             super_map_inv, sub_map_inv,
             thresh_super, thresh_sub,
             CONFIG["novel_super_idx"], CONFIG["novel_sub_idx"], device,
-            super_to_sub, CONFIG["prediction_temperature"], CONFIG["prediction_method"]
+            super_to_sub, CONFIG["prediction_score_temperature"], CONFIG["prediction_score_method"]
         )
     
     # === Step 5: 生成提交文件 ===

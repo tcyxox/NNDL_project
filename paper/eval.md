@@ -19,12 +19,10 @@ class ExperimentConfig:
 
     # 方法选择
     training_loss: TrainingLoss = TrainingLoss.CE
-    threshold_method: OODScoreMethod = OODScoreMethod.MSP
-    prediction_method: OODScoreMethod = OODScoreMethod.MSP
-
-    # 温度参数
-    threshold_temperature: float = 1
-    prediction_temperature: float = 1
+    validation_score_method: OODScoreMethod = OODScoreMethod.MSP
+    prediction_score_method: OODScoreMethod = OODScoreMethod.MSP
+    validation_score_temperature: float = 1
+    prediction_score_temperature: float = 1
 ```
 
   [Superclass] Overall     : 95.54% ± 0.46%
@@ -53,12 +51,10 @@ class ExperimentConfig:
 
     # 方法选择
     training_loss: TrainingLoss = TrainingLoss.CE
-    threshold_method: OODScoreMethod = OODScoreMethod.MSP
-    prediction_method: OODScoreMethod = OODScoreMethod.MSP
-
-    # 温度参数
-    threshold_temperature: float = 3.5
-    prediction_temperature: float = 3.5
+    validation_score_method: OODScoreMethod = OODScoreMethod.MSP
+    prediction_score_method: OODScoreMethod = OODScoreMethod.MSP
+    validation_score_temperature: float = 3.5
+    prediction_score_temperature: float = 3.5
 ```
 
   [Superclass] Overall     : 95.55% ± 0.55%
@@ -89,12 +85,10 @@ class ExperimentConfig:
 
     # 方法选择
     training_loss: TrainingLoss = TrainingLoss.CE
-    threshold_method: OODScoreMethod = OODScoreMethod.MSP
-    prediction_method: OODScoreMethod = OODScoreMethod.MSP
-
-    # 温度参数
-    threshold_temperature: float = 3.5
-    prediction_temperature: float = 3.5
+    validation_score_method: OODScoreMethod = OODScoreMethod.MSP
+    prediction_score_method: OODScoreMethod = OODScoreMethod.MSP
+    validation_score_temperature: float = 3.5
+    prediction_score_temperature: float = 3.5
 ```
 
   [Superclass] Overall     : 95.44% ± 0.39%
@@ -125,12 +119,10 @@ class ExperimentConfig:
 
     # 方法选择
     training_loss: TrainingLoss = TrainingLoss.CE
-    threshold_method: OODScoreMethod = OODScoreMethod.MSP
-    prediction_method: OODScoreMethod = OODScoreMethod.MSP
-
-    # 温度参数
-    threshold_temperature: float = 3.5
-    prediction_temperature: float = 3.5
+    validation_score_method: OODScoreMethod = OODScoreMethod.MSP
+    prediction_score_method: OODScoreMethod = OODScoreMethod.MSP
+    validation_score_temperature: float = 3.5
+    prediction_score_temperature: float = 3.5
 ```
 
   [Superclass] Overall     : 95.39% ± 0.38%
@@ -169,12 +161,10 @@ class ExperimentConfig:
 ```py
     # 方法选择
     training_loss: TrainingLoss = TrainingLoss.CE
-    threshold_method: OODScoreMethod = OODScoreMethod.MSP
-    prediction_method: OODScoreMethod = OODScoreMethod.MSP
-
-    # 温度参数
-    threshold_temperature: float = 3.5
-    prediction_temperature: float = 3.5
+    validation_score_method: OODScoreMethod = OODScoreMethod.MSP
+    prediction_score_method: OODScoreMethod = OODScoreMethod.MSP
+    validation_score_temperature: float = 3.5
+    prediction_score_temperature: float = 3.5
 ```
 
   [Superclass] Overall     : 95.39% ± 0.38%
@@ -191,12 +181,10 @@ class ExperimentConfig:
 ```py
     # 方法选择
     training_loss: TrainingLoss = TrainingLoss.CE
-    threshold_method: OODScoreMethod = OODScoreMethod.Energy
-    prediction_method: OODScoreMethod = OODScoreMethod.Energy
-
-    # 温度参数
-    threshold_temperature: float = 0.02
-    prediction_temperature: float = 0.02
+    validation_score_method: OODScoreMethod = OODScoreMethod.Energy
+    prediction_score_method: OODScoreMethod = OODScoreMethod.Energy
+    validation_score_temperature: float = 0.02
+    prediction_score_temperature: float = 0.02
 ```
 
 观察：Energy 方法受益于较低温度，T=0.02 时性能最优。
@@ -222,12 +210,10 @@ class ExperimentConfig:
 ```py
     # 方法选择
     training_loss: TrainingLoss = TrainingLoss.BCE
-    threshold_method: OODScoreMethod = OODScoreMethod.Energy
-    prediction_method: OODScoreMethod = OODScoreMethod.Energy
-
-    # 温度参数
-    threshold_temperature: float = 0.02
-    prediction_temperature: float = 0.02
+    validation_score_method: OODScoreMethod = OODScoreMethod.Energy
+    prediction_score_method: OODScoreMethod = OODScoreMethod.Energy
+    validation_score_temperature: float = 0.02
+    prediction_score_temperature: float = 0.02
 ```
 
   [Superclass] Overall     : 95.34% ± 0.33%
@@ -246,12 +232,10 @@ class ExperimentConfig:
 ```py
     # 方法选择
     training_loss: TrainingLoss = TrainingLoss.BCE
-    threshold_method: OODScoreMethod = OODScoreMethod.MaxSigmoid
-    prediction_method: OODScoreMethod = OODScoreMethod.MaxSigmoid
-
-    # 温度参数
-    threshold_temperature: float = 1
-    prediction_temperature: float = 1
+    validation_score_method: OODScoreMethod = OODScoreMethod.MaxSigmoid
+    prediction_score_method: OODScoreMethod = OODScoreMethod.MaxSigmoid
+    validation_score_temperature: float = 1
+    prediction_score_temperature: float = 1
 ```
 
   [Superclass] Overall     : 95.34% ± 0.33%
@@ -286,12 +270,10 @@ class ExperimentConfig:
 ```py
     # 方法选择
     training_loss: TrainingLoss = TrainingLoss.BCE
-    threshold_method: OODScoreMethod = OODScoreMethod.MSP
-    prediction_method: OODScoreMethod = OODScoreMethod.MSP
-
-    # 温度参数
-    threshold_temperature: float = 3.5
-    prediction_temperature: float = 3.5
+    validation_score_method: OODScoreMethod = OODScoreMethod.MSP
+    prediction_score_method: OODScoreMethod = OODScoreMethod.MSP
+    validation_score_temperature: float = 3.5
+    prediction_score_temperature: float = 3.5
 ```
 
   [Superclass] Overall     : 95.30% ± 0.42%
@@ -335,12 +317,10 @@ class ExperimentConfig:
 ```py
     # 方法选择
     training_loss: TrainingLoss = TrainingLoss.BCE
-    threshold_method: OODScoreMethod = OODScoreMethod.MaxSigmoid
-    prediction_method: OODScoreMethod = OODScoreMethod.MaxSigmoid
-
-    # 温度参数
-    threshold_temperature: float = 3.5
-    prediction_temperature: float = 1
+    validation_score_method: OODScoreMethod = OODScoreMethod.MaxSigmoid
+    prediction_score_method: OODScoreMethod = OODScoreMethod.MaxSigmoid
+    validation_score_temperature: float = 3.5
+    prediction_score_temperature: float = 1
 ```
 
   [Superclass] Overall     : 99.47% ± 0.28%

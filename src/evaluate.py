@@ -24,10 +24,10 @@ CONFIG = {
     "enable_hierarchical_masking": config.experiment.enable_hierarchical_masking,
     # ENUM-based configuration
     "training_loss": config.experiment.training_loss,
-    "threshold_method": config.experiment.threshold_method,
-    "prediction_method": config.experiment.prediction_method,
-    "threshold_temperature": config.experiment.threshold_temperature,
-    "prediction_temperature": config.experiment.prediction_temperature,
+    "validation_score_method": config.experiment.validation_score_method,
+    "prediction_score_method": config.experiment.prediction_score_method,
+    "validation_score_temperature": config.experiment.validation_score_temperature,
+    "prediction_score_temperature": config.experiment.prediction_score_temperature,
     # 数据划分参数
     "novel_ratio": config.split.novel_ratio,
     "train_ratio": config.split.train_ratio,
@@ -135,26 +135,26 @@ def run_single_trial(cfg: dict, seed: int, verbose: bool, use_val_as_test: bool)
         thresh_super, thresh_sub = calculate_threshold_gated_dual_head(
             model, val_features, val_super_labels, val_sub_labels,
             super_map_inv, sub_map_inv, cfg["target_recall"], device,
-            cfg["threshold_temperature"], cfg["threshold_method"]
+            cfg["validation_score_temperature"], cfg["validation_score_method"]
         )
         
         # 推理
         super_preds, sub_preds, super_scores, sub_scores = predict_with_gated_dual_head(
             test_features, model, super_map_inv, sub_map_inv,
             thresh_super, thresh_sub, cfg["novel_super_idx"], cfg["novel_sub_idx"], device,
-            super_to_sub, cfg["prediction_temperature"], cfg["prediction_method"]
+            super_to_sub, cfg["prediction_score_temperature"], cfg["prediction_score_method"]
         )
     else:
         # 计算阈值
         thresh_super = calculate_threshold_linear_single_head(
             super_model, val_features, val_super_labels, super_map_inv,
             cfg["target_recall"], device,
-            cfg["threshold_temperature"], cfg["threshold_method"]
+            cfg["validation_score_temperature"], cfg["validation_score_method"]
         )
         thresh_sub = calculate_threshold_linear_single_head(
             sub_model, val_features, val_sub_labels, sub_map_inv,
             cfg["target_recall"], device,
-            cfg["threshold_temperature"], cfg["threshold_method"]
+            cfg["validation_score_temperature"], cfg["validation_score_method"]
         )
         
         # 推理
@@ -162,7 +162,7 @@ def run_single_trial(cfg: dict, seed: int, verbose: bool, use_val_as_test: bool)
             test_features, super_model, sub_model,
             super_map_inv, sub_map_inv,
             thresh_super, thresh_sub, cfg["novel_super_idx"], cfg["novel_sub_idx"], device,
-            super_to_sub, cfg["prediction_temperature"], cfg["prediction_method"]
+            super_to_sub, cfg["prediction_score_temperature"], cfg["prediction_score_method"]
         )
     
     # 计算指标
@@ -257,8 +257,8 @@ if __name__ == "__main__":
     print("=" * 75)
     print(f"Evaluation Set: {eval_set}")
     print(f"Training Loss: {CONFIG['training_loss'].value}")
-    print(f"Threshold Method: {CONFIG['threshold_method'].value} (T={CONFIG['threshold_temperature']})")
-    print(f"Prediction Method: {CONFIG['prediction_method'].value} (T={CONFIG['prediction_temperature']})")
+    print(f"Validation: {CONFIG['validation_score_method'].value} (T={CONFIG['validation_score_temperature']})")
+    print(f"Prediction: {CONFIG['prediction_score_method'].value} (T={CONFIG['prediction_score_temperature']})")
     print("=" * 75)
     
     stats = run_multiple_trials(CONFIG, SEEDS, False, USE_VAL_AS_TEST)

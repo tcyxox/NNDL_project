@@ -63,7 +63,7 @@ class ExperimentConfig:
     learning_rate: float = 1e-3
     epochs: int = 100
     target_recall: float = 0.95
-    seed: int = 42
+    seed: int = 42  # evaluate 时不使用
 
     # 模型选择
     enable_hierarchical_masking: bool = True  # 推理时 Hierarchical Masking 开关
@@ -71,12 +71,10 @@ class ExperimentConfig:
 
     # 方法选择
     training_loss: TrainingLoss = TrainingLoss.CE
-    threshold_method: OODScoreMethod = OODScoreMethod.MSP
-    prediction_method: OODScoreMethod = OODScoreMethod.MSP
-
-    # 温度参数
-    threshold_temperature: float = 3.5
-    prediction_temperature: float = 3.5
+    validation_score_method: OODScoreMethod = OODScoreMethod.MSP
+    prediction_score_method: OODScoreMethod = OODScoreMethod.MSP
+    validation_score_temperature: float = 3.5
+    prediction_score_temperature: float = 3.5
 
 
 @dataclass
