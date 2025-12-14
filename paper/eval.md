@@ -357,43 +357,6 @@ class ExperimentConfig:
   [Superclass] AUROC       : nan ± nan
   [Subclass] AUROC         : 0.8556 ± 0.0023
 
-### BCE + Energy & MaxSigmoid
-
-```py
-    # 方法选择
-    training_loss: TrainingLoss = TrainingLoss.BCE
-    threshold_method: OODScoreMethod = OODScoreMethod.Energy
-    prediction_method: OODScoreMethod = OODScoreMethod.MaxSigmoid
-
-    # 温度参数
-    threshold_temperature: float = 0.02
-    prediction_temperature: float = 1
-```
-
-  [Superclass] Overall     : 100.00% ± 0.00%
-  [Superclass] Seen        : 100.00% ± 0.00%
-  [Superclass] Unseen      : 0.00% ± 0.00%
-  [Subclass] Overall       : 74.68% ± 0.46%
-  [Subclass] Seen          : 81.65% ± 2.33%
-  [Subclass] Unseen        : 68.73% ± 2.81%
-  [Superclass] AUROC       : nan ± nan
-  [Subclass] AUROC         : 0.8556 ± 0.0023
-
-结论：这种方法不知道为什么可以让 super 性能直接拉满，而且 sub 性能提升也很大。但是无法让 sub seen 性能保持在 Baseline 的 87% 水平。
-
-观察：提高 Tt 或降低 Tp：seen 准确率上升，unseen 准确率下降。与纯 MaxSigmoid 方法一样，Tp <= 0.2 会导致 AUROC 显著下降。
-
-平衡 seen & unseen：最佳配置为 Tt = 0.02, Tp = 2，提升幅度为 1%。
-
-  [Superclass] Overall     : 100.00% ± 0.00%
-  [Superclass] Seen        : 100.00% ± 0.00%
-  [Superclass] Unseen      : 0.00% ± 0.00%
-  [Subclass] Overall       : 76.19% ± 0.59%
-  [Subclass] Seen          : 75.06% ± 3.62%
-  [Subclass] Unseen        : 77.16% ± 4.02%
-  [Superclass] AUROC       : nan ± nan
-  [Subclass] AUROC         : 0.8556 ± 0.0023
-
 ## 总结
 
 super seen, sub overall, sub seen, sub unseen, sub auroc
@@ -417,24 +380,10 @@ super seen, sub overall, sub seen, sub unseen, sub auroc
 95.34% ± 0.21%, 74.71% ± 0.20%，77.53% ± 0.20%, 72.31% ± 0.40%, 0.8556 ± 0.0023
 - BCE + MaxSigmoid (Tt=10, Tp=0.5):
 99.91% ± 0.00%, 70.42% ± 0.32%, 87.73% ± 0.16%, 57.63% ± 0.46%, 0.8556 ± 0.0023
-- BCE + Energy & MaxSigmoid (Tt=0.02, Tp=2):
-100.00% ± 0.00%, 76.19% ± 0.59%, 75.06% ± 3.62%, 77.16% ± 4.02%, 0.8556 ± 0.0023
 
-- 最高AUROC，应该选 CE + MSP (Tt=Tp=3.5)
-- 最高综合性能，选 BCE + Energy & MaxSigmoid (Tt=0.02, Tp=2)
-
-### 所以综合来看，目前的SOTA
-
-BCE + Energy & MaxSigmoid (Tt=0.02, Tp=2)
-
-  [Superclass] Overall     : 100.00% ± 0.00%
-  [Superclass] Seen        : 100.00% ± 0.00%
-  [Superclass] Unseen      : 0.00% ± 0.00%
-  [Subclass] Overall       : 76.19% ± 0.59%
-  [Subclass] Seen          : 75.06% ± 3.62%
-  [Subclass] Unseen        : 77.16% ± 4.02%
-  [Superclass] AUROC       : nan ± nan
-  [Subclass] AUROC         : 0.8556 ± 0.0023
+- 最高 AUROC ，应该选 CE + MSP (Tt=Tp=3.5)
+- 最高 sub overall，选 BCE + Energy & MaxSigmoid (Tt=0.02, Tp=2)
+- 最高 super seen，选 BCE + MaxSigmoid (Tt=10, Tp=0.5)
 
 # CAC 
 ## v1.0
