@@ -150,8 +150,6 @@ class ExperimentConfig:
 
 此后全部使用 Linear Dual Head + Hierarchical Masking
 
-### Baseline: CE + MSP
-
 ```py
 class ExperimentConfig:
     # 训练参数
@@ -164,7 +162,11 @@ class ExperimentConfig:
     # 模型选择
     enable_hierarchical_masking: bool = True  # 推理时 Hierarchical Masking 开关
     enable_feature_gating: bool = True  # 训练时 SE Feature Gating 开关
+```
 
+### Baseline: CE + MSP
+
+```py
     # 方法选择
     training_loss: TrainingLoss = TrainingLoss.CE
     threshold_method: OODScoreMethod = OODScoreMethod.MSP
@@ -187,18 +189,6 @@ class ExperimentConfig:
 ### CE + Energy
 
 ```py
-class ExperimentConfig:
-    # 训练参数
-    batch_size: int = 64
-    learning_rate: float = 1e-3
-    epochs: int = 100
-    target_recall: float = 0.95
-    seed: int = 42
-
-    # 模型选择
-    enable_hierarchical_masking: bool = True  # 推理时 Hierarchical Masking 开关
-    enable_feature_gating: bool = True  # 训练时 SE Feature Gating 开关
-
     # 方法选择
     training_loss: TrainingLoss = TrainingLoss.CE
     threshold_method: OODScoreMethod = OODScoreMethod.Energy
@@ -266,18 +256,6 @@ class ExperimentConfig:
 ### BCE + MaxSigmoid
 
 ```py
-class ExperimentConfig:
-    # 训练参数
-    batch_size: int = 64
-    learning_rate: float = 1e-3
-    epochs: int = 100
-    target_recall: float = 0.95
-    seed: int = 42
-
-    # 模型选择
-    enable_hierarchical_masking: bool = True  # 推理时 Hierarchical Masking 开关
-    enable_feature_gating: bool = True  # 训练时 SE Feature Gating 开关
-
     # 方法选择
     training_loss: TrainingLoss = TrainingLoss.BCE
     threshold_method: OODScoreMethod = OODScoreMethod.MaxSigmoid
@@ -297,7 +275,9 @@ class ExperimentConfig:
   [Superclass] AUROC       : nan ± nan
   [Subclass] AUROC         : 0.8556 ± 0.0023
 
-结论：对于 Sigmoid + BCE 损失函数，使用 MaxSigmoid 或 Energy 阈值和预测方法，性能不变。只要 Tt = Tp，结果都保持一致。
+观察：只要 T >= 1，结果将完全保持一致。
+
+结论：对于 Sigmoid + BCE 损失函数，使用 MaxSigmoid 或 Energy 阈值和预测方法，性能不变。
 
 ## Variant 探索
 
@@ -310,13 +290,15 @@ class ExperimentConfig:
 变种可以为：
 
 - 在 Threshold & Prediction 混合使用 Energy & MaxSigmoid
-- 使用不一致的温度
+- 使用不一致的 Threshold & Prediction 温度 (Tt != Tp)
 
 ### CE + MSP
 
-对于 CE + MSP，经过测试，若要维持 88% + 的 seen 分类准确率，原配置最佳。
+对于 CE + MSP，经过测试，若要维持 88% + 的 seen 分类准确率，原配置 T=3.5 最佳。
 
-若要使 overall 分类准确率提升，最佳配置为 Tt = 3.5, Tp = 4，提升幅度为 6%。
+观察：当 Tt >> Tp 时，seen 准确率上升，unseen 准确率下降。
+
+平衡 seen & unseen：最佳配置为 Tt = 3.5, Tp = 4，提升幅度为 6%，AUROC 也有 4% 的提升。但是此时 super overall 准确率崩了。不建议使用。
 
   [Superclass] Overall     : 88.47% ± 0.28%
   [Superclass] Seen        : 88.47% ± 0.28%
@@ -329,23 +311,24 @@ class ExperimentConfig:
 
 ### BCE + Energy
 
-对于 BCE + Energy，经过测试，若要维持 88% + 的 seen 分类准确率，原配置最佳。
+对于 BCE + Energy，经过测试，若要维持 88% + 的 seen 分类准确率，原配置 T=0.02 最佳。
+
+观察：当 Tt >> Tp 时，seen 准确率下降，unseen 准确率上升。
+
+平衡 seen & unseen：最佳配置为 Tt = 2, Tp = 0.02，提升幅度为 7%。
+
+  [Superclass] Overall     : 95.34% ± 0.21%
+  [Superclass] Seen        : 95.34% ± 0.21%
+  [Superclass] Unseen      : 0.00% ± 0.00%
+  [Subclass] Overall       : 74.71% ± 0.20%
+  [Subclass] Seen          : 77.53% ± 0.20%
+  [Subclass] Unseen        : 72.31% ± 0.40%
+  [Superclass] AUROC       : nan ± nan
+  [Subclass] AUROC         : 0.8556 ± 0.0023
 
 ### BCE + MaxSigmoid
 
 ```py
-class ExperimentConfig:
-    # 训练参数
-    batch_size: int = 64
-    learning_rate: float = 1e-3
-    epochs: int = 100
-    target_recall: float = 0.95
-    seed: int = 42
-
-    # 模型选择
-    enable_hierarchical_masking: bool = True  # 推理时 Hierarchical Masking 开关
-    enable_feature_gating: bool = True  # 训练时 SE Feature Gating 开关
-
     # 方法选择
     training_loss: TrainingLoss = TrainingLoss.BCE
     threshold_method: OODScoreMethod = OODScoreMethod.MaxSigmoid
@@ -365,43 +348,24 @@ class ExperimentConfig:
   [Superclass] AUROC       : nan ± nan
   [Subclass] AUROC         : 0.8556 ± 0.0023
 
-3.5, 0.8
+结论：对于 BCE + 双 MaxSigmoid 方法，Tt = 3.5, Tp = 1，全性能均有显著提升。这是一个很奇怪的事情，因为根据前面的试验，取不一样的 Tt & Tp，是在 seen 与 unseen 之间取得平衡，而这里直接提升了全性能。
+
+观察：当 Tt >> Tp 时，seen 准确率下降，unseen 准确率上升。
+
+平衡 seen & unseen：最佳配置为 Tt = 10, Tp = 0.5，提升幅度为 1%。这里似乎无法单纯通过调整 Tt & Tp 来取得平衡，因为这两个参数在这里的边际收益递减非常明显，且Tp <= 0.2 会导致 AUROC 显著下降。
+
   [Superclass] Overall     : 99.91% ± 0.00%
   [Superclass] Seen        : 99.91% ± 0.00%
   [Superclass] Unseen      : 0.00% ± 0.00%
-  [Subclass] Overall       : 70.67% ± 0.37%
-  [Subclass] Seen          : 88.31% ± 0.20%
-  [Subclass] Unseen        : 55.62% ± 0.68%
+  [Subclass] Overall       : 71.48% ± 0.22%
+  [Subclass] Seen          : 87.73% ± 0.16%
+  [Subclass] Unseen        : 57.63% ± 0.46%
   [Superclass] AUROC       : nan ± nan
   [Subclass] AUROC         : 0.8556 ± 0.0023
-
-3.5, 1.2
-  [Superclass] Overall     : 99.91% ± 0.00%
-  [Superclass] Seen        : 99.91% ± 0.00%
-  [Superclass] Unseen      : 0.00% ± 0.00%
-  [Subclass] Overall       : 70.13% ± 0.33%
-  [Subclass] Seen          : 88.67% ± 0.34%
-  [Subclass] Unseen        : 54.31% ± 0.56%
-  [Superclass] AUROC       : nan ± nan
-  [Subclass] AUROC         : 0.8556 ± 0.0023
-
-结论：对于 BCE + 双 MaxSigmoid 方法，Tt = 3.5, Tp = 1，性能有显著提升。
 
 ### BCE + Energy & MaxSigmoid
 
 ```py
-class ExperimentConfig:
-    # 训练参数
-    batch_size: int = 64
-    learning_rate: float = 1e-3
-    epochs: int = 100
-    target_recall: float = 0.95
-    seed: int = 42
-
-    # 模型选择
-    enable_hierarchical_masking: bool = True  # 推理时 Hierarchical Masking 开关
-    enable_feature_gating: bool = True  # 训练时 SE Feature Gating 开关
-
     # 方法选择
     training_loss: TrainingLoss = TrainingLoss.BCE
     threshold_method: OODScoreMethod = OODScoreMethod.Energy
