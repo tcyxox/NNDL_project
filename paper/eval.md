@@ -325,32 +325,6 @@ class ExperimentConfig:
     prediction_temperature: float = 0
 ```
 
-Prompt:
-
-class ExperimentConfig:
-    # 训练参数
-    batch_size: int = 64
-    learning_rate: float = 1e-3
-    epochs: int = 100
-    target_recall: float = 0.95
-    seed: int = 42
-
-    # 模型选择
-    enable_hierarchical_masking: bool = True  # 推理时 Hierarchical Masking 开关
-    enable_feature_gating: bool = True  # 训练时 SE Feature Gating 开关
-
-    # 方法选择
-    training_loss: TrainingLoss = TrainingLoss.CE
-    threshold_method: OODScoreMethod = OODScoreMethod.MSP
-    prediction_method: OODScoreMethod = OODScoreMethod.MSP
-
-    # 温度参数
-    threshold_temperature: float = 3.5
-    prediction_temperature: float = 3.5
-
-
-对于这个配置，帮我创建一个脚本，我要测试不同的温度矩阵，值域[0.02, 0.1, 0.2, 0.5, 1, 1.2, 1.5, 2, 3, 3.5, 4]，也就是11x11种可能性，把结果输出在文件中。最后你读取结果给我报告
-
 # CAC 
 ## v1.0
 
