@@ -77,15 +77,15 @@ class ExperimentConfig:
 
     # 阈值设定
     threshold_method: ThresholdMethod = ThresholdMethod.ZScore  # 阈值设定方法
-    target_recall: float = 0.95  # Quantile 方法: target recall
-    std_multiplier: float = 1  # ZScore 方法: 标准差乘数
+    target_recall: float = 0.95  # Quantile 方法: target recall，95%
+    std_multiplier: float = 1.645  # ZScore 方法: 标准差乘数，1.645
 
     # 方法选择
-    training_loss: TrainingLoss = TrainingLoss.BCE
-    validation_score_method: OODScoreMethod = OODScoreMethod.Energy
-    prediction_score_method: OODScoreMethod = OODScoreMethod.Energy
-    validation_score_temperature: float = 0.05
-    prediction_score_temperature: float = 0.05
+    training_loss: TrainingLoss = TrainingLoss.CE
+    validation_score_method: OODScoreMethod = OODScoreMethod.MSP
+    prediction_score_method: OODScoreMethod = OODScoreMethod.MSP
+    validation_score_temperature: float = 1.5
+    prediction_score_temperature: float = 1.5
 
 
 @dataclass

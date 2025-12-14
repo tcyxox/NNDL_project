@@ -1,17 +1,18 @@
 """
 统一的提交脚本 - 合并训练、调参和推理流程
 
-运行: python submit.py
-
 流程:
-  Step 1: 划分数据 (训练集 + 验证集)
-  Step 2: 用训练集训练模型
-  Step 3: 在验证集上计算阈值
-  Step 4: 在测试集上推理
-  Step 5: 生成提交 CSV
+  Phase 1: 多种子阈值校准
+    - 对每个种子: 划分数据 -> 在 train 上训练 -> 在 val+test 上计算阈值
+    - 取平均阈值
+  Phase 2: 训练最终模型 (全量数据)
+  Phase 3: 使用平均阈值在真实测试集上推理
+
+潜在问题：在略小数据集上训练的模型能力与在全量数据集上训练的模型能力存在差异，可能导致小幅度的阈值偏移
 """
 import os
 
+import numpy as np
 import pandas as pd
 import torch
 
@@ -66,14 +67,87 @@ CONFIG = {
     "novel_sub_idx": config.osr.novel_sub_index,
 }
 
+# 多种子阈值校准配置
+CALIBRATION_SEEDS = [42, 123, 456, 789, 1024]
+
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
 
-if __name__ == "__main__":
-    set_seed(config.experiment.seed)
+def calibrate_threshold_single_seed(cfg: dict, seed: int):
+    """
+    单次阈值校准: 划分数据 -> 在 train 上训练 -> 在 val+test 上计算阈值
     
+    Returns:
+        (thresh_super, thresh_sub): 超类和子类阈值
+    """
+    set_seed(seed)
+    
+    # 1. 划分数据
+    data = split_features(
+        feature_dir=cfg["feature_dir"],
+        novel_ratio=cfg["novel_ratio"],
+        train_ratio=cfg["train_ratio"],
+        val_test_ratio=cfg["val_test_ratio"],
+        novel_sub_index=cfg["novel_sub_idx"],
+        output_dir=None,
+        verbose=False
+    )
+    
+    # 2. 在 train 上训练模型 (不包含 val/test)
+    result = run_training(
+        feature_dim=cfg["feature_dim"],
+        batch_size=cfg["batch_size"],
+        learning_rate=cfg["learning_rate"],
+        epochs=cfg["epochs"],
+        device=device,
+        enable_feature_gating=cfg["enable_feature_gating"],
+        training_loss=cfg["training_loss"],
+        train_features=data.train_features,
+        train_super_labels=data.train_super_labels,
+        train_sub_labels=data.train_sub_labels,
+        output_dir=None,
+        verbose=False
+    )
+    
+    if cfg["enable_feature_gating"]:
+        model, super_map, sub_map, super_to_sub = result
+    else:
+        super_model, sub_model, super_map, sub_map, super_to_sub = result
+    
+    # 创建反向映射
+    super_map_inv = {v: int(k) for k, v in super_map.items()}
+    sub_map_inv = {v: int(k) for k, v in sub_map.items()}
+    
+    # 3. 在 val + test 上计算阈值 (模型未见过这些数据)
+    threshold_features = torch.cat([data.val_features, data.test_features], dim=0)
+    threshold_super_labels = torch.cat([data.val_super_labels, data.test_super_labels], dim=0)
+    threshold_sub_labels = torch.cat([data.val_sub_labels, data.test_sub_labels], dim=0)
+    
+    if cfg["enable_feature_gating"]:
+        thresh_super, thresh_sub = calculate_threshold_gated_dual_head(
+            model, threshold_features, threshold_super_labels, threshold_sub_labels,
+            super_map_inv, sub_map_inv, device,
+            cfg["threshold_method"], cfg["target_recall"], cfg["std_multiplier"],
+            cfg["validation_score_temperature"], cfg["validation_score_method"]
+        )
+    else:
+        thresh_super = calculate_threshold_linear_single_head(
+            super_model, threshold_features, threshold_super_labels, super_map_inv, device,
+            cfg["threshold_method"], cfg["target_recall"], cfg["std_multiplier"],
+            cfg["validation_score_temperature"], cfg["validation_score_method"]
+        )
+        thresh_sub = calculate_threshold_linear_single_head(
+            sub_model, threshold_features, threshold_sub_labels, sub_map_inv, device,
+            cfg["threshold_method"], cfg["target_recall"], cfg["std_multiplier"],
+            cfg["validation_score_temperature"], cfg["validation_score_method"]
+        )
+    
+    return thresh_super, thresh_sub
+
+
+if __name__ == "__main__":
     print("=" * 70)
-    print("Unified Submission Pipeline")
+    print("Unified Submission Pipeline (Multi-seed Threshold Calibration)")
     print("=" * 70)
     mode = "SE Feature Gating" if CONFIG["enable_feature_gating"] else "Independent Training"
     masking = "Enabled" if CONFIG["enable_hierarchical_masking"] else "Disabled"
@@ -83,29 +157,44 @@ if __name__ == "__main__":
     print(f"Prediction: {CONFIG['prediction_score_method'].value} (T={CONFIG['prediction_score_temperature']})")
     print("=" * 70)
     
-    # === Step 1: 划分数据 ===
-    print("\n--- Step 1: 划分数据 ---")
+    # === Phase 1: 多种子阈值校准 ===
+    print("\n" + "=" * 50)
+    print("Phase 1: Multi-seed Threshold Calibration")
+    print("=" * 50)
     
-    data = split_features(
-        feature_dir=CONFIG["feature_dir"],
-        novel_ratio=CONFIG["novel_ratio"],
-        train_ratio=CONFIG["train_ratio"],
-        val_test_ratio=CONFIG["val_test_ratio"],
-        novel_sub_index=CONFIG["novel_sub_idx"],
-        output_dir=None,  # 不保存中间文件
-        verbose=True
-    )
+    all_thresh_super = []
+    all_thresh_sub = []
     
-    # 合并 train + val + test 作为完整训练数据
-    # (因为提交时我们要用尽可能多的数据训练)
-    full_train_features = torch.cat([data.train_features, data.val_features, data.test_features], dim=0)
-    full_train_super = torch.cat([data.train_super_labels, data.val_super_labels, data.test_super_labels], dim=0)
-    full_train_sub = torch.cat([data.train_sub_labels, data.val_sub_labels, data.test_sub_labels], dim=0)
+    for i, seed in enumerate(CALIBRATION_SEEDS):
+        print(f"\n>>> Calibration Trial {i+1}/{len(CALIBRATION_SEEDS)}, Seed={seed}")
+        thresh_super, thresh_sub = calibrate_threshold_single_seed(CONFIG, seed)
+        all_thresh_super.append(thresh_super)
+        all_thresh_sub.append(thresh_sub)
+        print(f"    Super: {thresh_super:.4f}, Sub: {thresh_sub:.4f}")
     
-    print(f"  > 完整训练样本数: {len(full_train_features)} (训练{len(data.train_features)} + 验证{len(data.val_features)} + 测试{len(data.test_features)})")
+    # 取平均阈值
+    avg_thresh_super = np.mean(all_thresh_super)
+    avg_thresh_sub = np.mean(all_thresh_sub)
+    std_thresh_super = np.std(all_thresh_super)
+    std_thresh_sub = np.std(all_thresh_sub)
     
-    # === Step 2: 训练模型 ===
-    print("\n--- Step 2: 训练模型 ---")
+    print(f"\n>>> 阈值统计:")
+    print(f"    Superclass: {avg_thresh_super:.4f} ± {std_thresh_super:.4f}")
+    print(f"    Subclass:   {avg_thresh_sub:.4f} ± {std_thresh_sub:.4f}")
+    
+    # === Phase 2: 训练最终模型 (全量数据) ===
+    print("\n" + "=" * 50)
+    print("Phase 2: Train Final Model (Full Data)")
+    print("=" * 50)
+    
+    set_seed(config.experiment.seed)
+    
+    # 加载完整训练数据 (不做划分)
+    train_features = torch.load(os.path.join(CONFIG["feature_dir"], "train_features.pt"))
+    train_super_labels = torch.load(os.path.join(CONFIG["feature_dir"], "train_super_labels.pt"))
+    train_sub_labels = torch.load(os.path.join(CONFIG["feature_dir"], "train_sub_labels.pt"))
+    
+    print(f"  > 完整训练样本数: {len(train_features)}")
     
     result = run_training(
         feature_dim=CONFIG["feature_dim"],
@@ -115,10 +204,10 @@ if __name__ == "__main__":
         device=device,
         enable_feature_gating=CONFIG["enable_feature_gating"],
         training_loss=CONFIG["training_loss"],
-        train_features=full_train_features,
-        train_super_labels=full_train_super,
-        train_sub_labels=full_train_sub,
-        output_dir=None,  # 不保存中间文件
+        train_features=train_features,
+        train_super_labels=train_super_labels,
+        train_sub_labels=train_sub_labels,
+        output_dir=None,
         verbose=True
     )
     
@@ -135,51 +224,21 @@ if __name__ == "__main__":
     if not CONFIG["enable_hierarchical_masking"]:
         super_to_sub = None
     
-    # === Step 3: 计算阈值 (使用 val + test 作为阈值数据) ===
-    print("\n--- Step 3: 计算阈值 ---")
-    
-    # 合并 val + test 用于阈值计算 (最大化阈值估计的数据量)
-    threshold_features = torch.cat([data.val_features, data.test_features], dim=0)
-    threshold_super_labels = torch.cat([data.val_super_labels, data.test_super_labels], dim=0)
-    threshold_sub_labels = torch.cat([data.val_sub_labels, data.test_sub_labels], dim=0)
-    
-    print(f"  > 阈值数据量: {len(threshold_features)} (val {len(data.val_features)} + test {len(data.test_features)})")
-    print(f"  > 阈值方法: {CONFIG['validation_score_method'].value} (T={CONFIG['validation_score_temperature']})")
-    
-    if CONFIG["enable_feature_gating"]:
-        thresh_super, thresh_sub = calculate_threshold_gated_dual_head(
-            model, threshold_features, threshold_super_labels, threshold_sub_labels,
-            super_map_inv, sub_map_inv, device,
-            CONFIG["threshold_method"], CONFIG["target_recall"], CONFIG["std_multiplier"],
-            CONFIG["validation_score_temperature"], CONFIG["validation_score_method"]
-        )
-    else:
-        thresh_super = calculate_threshold_linear_single_head(
-            super_model, threshold_features, threshold_super_labels, super_map_inv, device,
-            CONFIG["threshold_method"], CONFIG["target_recall"], CONFIG["std_multiplier"],
-            CONFIG["validation_score_temperature"], CONFIG["validation_score_method"]
-        )
-        thresh_sub = calculate_threshold_linear_single_head(
-            sub_model, threshold_features, threshold_sub_labels, sub_map_inv, device,
-            CONFIG["threshold_method"], CONFIG["target_recall"], CONFIG["std_multiplier"],
-            CONFIG["validation_score_temperature"], CONFIG["validation_score_method"]
-        )
-    
-    print(f"  > Superclass 阈值: {thresh_super:.4f}")
-    print(f"  > Subclass 阈值:   {thresh_sub:.4f}")
-    
-    # === Step 4: 测试集推理 ===
-    print("\n--- Step 4: 测试集推理 ---")
+    # === Phase 3: 使用平均阈值在真实测试集上推理 ===
+    print("\n" + "=" * 50)
+    print("Phase 3: Inference with Calibrated Threshold")
+    print("=" * 50)
     
     test_features = torch.load(os.path.join(CONFIG["feature_dir"], "test_features.pt")).to(device)
     test_image_names = torch.load(os.path.join(CONFIG["feature_dir"], "test_image_names.pt"))
     print(f"  > 真实测试样本数: {len(test_features)}")
+    print(f"  > 使用阈值: Super={avg_thresh_super:.4f}, Sub={avg_thresh_sub:.4f}")
     print(f"  > 预测方法: {CONFIG['prediction_score_method'].value} (T={CONFIG['prediction_score_temperature']})")
     
     if CONFIG["enable_feature_gating"]:
         super_preds, sub_preds, _, _ = predict_with_gated_dual_head(
             test_features, model, super_map_inv, sub_map_inv,
-            thresh_super, thresh_sub,
+            avg_thresh_super, avg_thresh_sub,
             CONFIG["novel_super_idx"], CONFIG["novel_sub_idx"], device,
             super_to_sub, CONFIG["prediction_score_temperature"], CONFIG["prediction_score_method"]
         )
@@ -187,13 +246,13 @@ if __name__ == "__main__":
         super_preds, sub_preds, _, _ = predict_with_linear_single_head(
             test_features, super_model, sub_model,
             super_map_inv, sub_map_inv,
-            thresh_super, thresh_sub,
+            avg_thresh_super, avg_thresh_sub,
             CONFIG["novel_super_idx"], CONFIG["novel_sub_idx"], device,
             super_to_sub, CONFIG["prediction_score_temperature"], CONFIG["prediction_score_method"]
         )
     
-    # === Step 5: 生成提交文件 ===
-    print("\n--- Step 5: 生成提交文件 ---")
+    # === 生成提交文件 ===
+    print("\n--- Generating Submission File ---")
     
     predictions = [
         {"image": test_image_names[i], "superclass_index": super_preds[i], "subclass_index": sub_preds[i]}
@@ -214,4 +273,3 @@ if __name__ == "__main__":
     print("\n" + "=" * 70)
     print("提交完成!")
     print("=" * 70)
-

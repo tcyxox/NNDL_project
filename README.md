@@ -33,8 +33,4 @@ Sidharth Sharma - ss7202@columbia.edu
 ### Submission
 
 1. Extract Features
-2. Split Feature Dataset
-3. Train Dev
-4. Tune Hyperparameters
-5. Train Full
-6. Create Submission
+2. Submit Results
