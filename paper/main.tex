@@ -197,12 +197,33 @@ The effect of temperature can be understood by examining the limiting cases:
 \end{equation}
 This shows that low-temperature Energy reduces to the negative \textbf{MaxLogit}, measuring the \textbf{Absolute Magnitude} of the strongest prediction.
 
-\subsubsection{Trainable Confidence Estimation Methods}
-Unlike post-hoc methods, these approaches modify the model architecture during training to explicitly learn representations better suited for distinguishing known from unknown.
+\subsubsection{Threshold Calibration Methods}
+For all score-based methods, a threshold $\tau$ must be calibrated on the validation set to distinguish known from unknown samples. We implement two calibration strategies:
 
-\begin{itemize}
-    \item \textbf{Auxiliary Confidence Gating~\cite{devries2018learningconfidenceoutofdistributiondetection}:} Add a parallel confidence branch alongside the main classification branch. The network is trained to output both a class prediction and a scalar confidence score via a sigmoid output. The model learns to output low confidence for samples that are difficult to classify or likely out-of-distribution.
-\end{itemize}
+\paragraph{Quantile-based Threshold (Target Recall):}
+Given a target recall rate $r$ (e.g., $r = 0.95$), we set the threshold as the $(1-r)$-th quantile of known class scores:
+\begin{equation}
+    \tau_{\text{Quantile}} = Q_{1-r}(\{S(\mathbf{x}_i)\}_{i \in \text{known}})
+\end{equation}
+This guarantees exactly $r$ fraction of known samples will have scores above the threshold.
+
+\paragraph{Z-Score Threshold:}
+We model the known class score distribution and set the threshold using a multiplier $k$:
+\begin{equation}
+    \tau_{\text{ZScore}} = \mu - k \cdot \sigma
+\end{equation}
+where $\mu$ and $\sigma$ are the mean and standard deviation of known class scores. Under a Gaussian assumption, $k = 1.645$ corresponds to approximately 95\% recall.
+
+\paragraph{Comparison:}
+The Quantile method is \textbf{distribution-free} and guarantees the target recall regardless of score distribution. The ZScore method assumes approximate normality but can be more stable for small validation sets. In practice, ZScore works well for bounded scores (MSP, MaxSigmoid) but may underperform for unbounded scores (Energy).
+
+% ================================= Not going to Implement =================================
+%\subsubsection{Trainable Confidence Estimation Methods}
+%Unlike post-hoc methods, these approaches modify the model architecture during training to explicitly learn representations better suited for distinguishing known from unknown.
+%
+%\begin{itemize}
+%    \item \textbf{Auxiliary Confidence Gating~\cite{devries2018learningconfidenceoutofdistributiondetection}:} Add a parallel confidence branch alongside the main classification branch. The network is trained to output both a class prediction and a scalar confidence score via a sigmoid output. The model learns to output low confidence for samples that are difficult to classify or likely out-of-distribution.
+%\end{itemize}
 
 \subsubsection{OpenMax Hierarchical Classifier}
 OpenMax~\cite{7780542} is a classic discriminative method in OSR, which is based on \textbf{Feature Distribution} (Weibull Distribution).

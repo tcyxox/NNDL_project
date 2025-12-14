@@ -3,8 +3,7 @@
 ## TODOs
 
 - 递交结果时用 CLIP ViT-L/14 替换 ViT-B/32
-- 论文添加不同的 Threshold 设定方法
-- 对于Auxiliary Confidence Gating，需要在训练数据中也添加未知类
+- Threshold 用已知+未知来计算
 
 ## 基础架构探索
 
