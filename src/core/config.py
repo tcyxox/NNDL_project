@@ -30,7 +30,7 @@ class KnownOnlyThreshold(Enum):
 
 class FullValThreshold(Enum):
     """阈值设定方法 - 需要已知+未知类样本"""
-    Intersection = "intersection"  # 已知/未知分布交叉点
+    EER = "eer"  # Equal Error Rate (已知/未知分布交叉点)
 
 
 # ================= 配置类 =================
@@ -85,7 +85,7 @@ class ExperimentConfig:
 
     # 阈值设定（自动根据验证集是否有未知类选择方法）
     known_only_threshold: KnownOnlyThreshold = KnownOnlyThreshold.ZScore  # 无未知类时
-    full_val_threshold: FullValThreshold = FullValThreshold.Intersection  # 有未知类时
+    full_val_threshold: FullValThreshold = FullValThreshold.EER  # 有未知类时
     target_recall: float = 0.95  # Quantile 方法: target recall，95%
     std_multiplier: float = 1.645  # ZScore 方法: 标准差乘数，1.645
 

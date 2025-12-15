@@ -67,7 +67,7 @@ class ExperimentConfig:
 
     # 阈值设定（自动根据验证集是否有未知类选择方法）
     known_only_threshold: KnownOnlyThreshold = KnownOnlyThreshold.Quantile  # 无未知类时
-    full_val_threshold: FullValThreshold = FullValThreshold.Intersection  # 有未知类时
+    full_val_threshold: FullValThreshold = FullValThreshold.EER  # 有未知类时
     target_recall: float = 0.95  # Quantile 方法: target recall，95%
     std_multiplier: float = 1.645  # ZScore 方法: 标准差乘数，1.645
 
@@ -105,7 +105,7 @@ class ExperimentConfig:
 
     # 阈值设定（自动根据验证集是否有未知类选择方法）
     known_only_threshold: KnownOnlyThreshold = KnownOnlyThreshold.ZScore  # 无未知类时
-    full_val_threshold: FullValThreshold = FullValThreshold.Intersection  # 有未知类时
+    full_val_threshold: FullValThreshold = FullValThreshold.EER  # 有未知类时
     target_recall: float = 0.95  # Quantile 方法: target recall，95%
     std_multiplier: float = 1.645  # ZScore 方法: 标准差乘数，1.645
 
@@ -145,7 +145,7 @@ class ExperimentConfig:
 
     # 阈值设定（自动根据验证集是否有未知类选择方法）
     known_only_threshold: KnownOnlyThreshold = KnownOnlyThreshold.ZScore  # 无未知类时
-    full_val_threshold: FullValThreshold = FullValThreshold.Intersection  # 有未知类时
+    full_val_threshold: FullValThreshold = FullValThreshold.EER  # 有未知类时
     target_recall: float = 0.95  # Quantile 方法: target recall，95%
     std_multiplier: float = 1.645  # ZScore 方法: 标准差乘数，1.645
 
@@ -185,7 +185,7 @@ class ExperimentConfig:
 
     # 阈值设定（自动根据验证集是否有未知类选择方法）
     known_only_threshold: KnownOnlyThreshold = KnownOnlyThreshold.ZScore  # 无未知类时
-    full_val_threshold: FullValThreshold = FullValThreshold.Intersection  # 有未知类时
+    full_val_threshold: FullValThreshold = FullValThreshold.EER  # 有未知类时
     target_recall: float = 0.95  # Quantile 方法: target recall，95%
     std_multiplier: float = 1.645  # ZScore 方法: 标准差乘数，1.645
 
@@ -225,7 +225,7 @@ class ExperimentConfig:
 
     # 阈值设定（自动根据验证集是否有未知类选择方法）
     known_only_threshold: KnownOnlyThreshold = KnownOnlyThreshold.ZScore  # 无未知类时
-    full_val_threshold: FullValThreshold = FullValThreshold.Intersection  # 有未知类时
+    full_val_threshold: FullValThreshold = FullValThreshold.EER  # 有未知类时
     target_recall: float = 0.95  # Quantile 方法: target recall，95%
     std_multiplier: float = 1.645  # ZScore 方法: 标准差乘数，1.645
 
@@ -269,7 +269,7 @@ class ExperimentConfig:
 
     # 阈值设定（自动根据验证集是否有未知类选择方法）
     known_only_threshold: KnownOnlyThreshold = KnownOnlyThreshold.ZScore  # 无未知类时
-    full_val_threshold: FullValThreshold = FullValThreshold.Intersection  # 有未知类时
+    full_val_threshold: FullValThreshold = FullValThreshold.EER  # 有未知类时
     target_recall: float = 0.95  # Quantile 方法: target recall，95%
     std_multiplier: float = 1.645  # ZScore 方法: 标准差乘数，1.645
 ```
@@ -324,7 +324,7 @@ class ExperimentConfig:
 ```py
     # 阈值设定（自动根据验证集是否有未知类选择方法）
     known_only_threshold: KnownOnlyThreshold = KnownOnlyThreshold.Quantile  # 无未知类时
-    full_val_threshold: FullValThreshold = FullValThreshold.Intersection  # 有未知类时
+    full_val_threshold: FullValThreshold = FullValThreshold.EER  # 有未知类时
     target_recall: float = 0.95  # Quantile 方法: target recall
     std_multiplier: float = 1.645  # ZScore 方法: 标准差乘数
 
@@ -399,7 +399,7 @@ super seen, sub overall, sub seen, sub unseen, sub auroc
 
     # 阈值设定（自动根据验证集是否有未知类选择方法）
     known_only_threshold: KnownOnlyThreshold = KnownOnlyThreshold.ZScore  # 无未知类时
-    full_val_threshold: FullValThreshold = FullValThreshold.Intersection  # 有未知类时
+    full_val_threshold: FullValThreshold = FullValThreshold.EER  # 有未知类时
     target_recall: float = 0.95  # Quantile 方法: target recall，95%
     std_multiplier: float = 1.645  # ZScore 方法: 标准差乘数，1.645
 

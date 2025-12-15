@@ -197,7 +197,7 @@ def _apply_full_val_threshold(
         print("警告: 已知或未知样本为空，使用默认阈值")
         return get_default_threshold(score_method)
 
-    if method == FullValThreshold.Intersection:
+    if method == FullValThreshold.EER:
         return find_distribution_intersection(known_scores, unknown_scores)
     
     # 未来可以添加更多方法
