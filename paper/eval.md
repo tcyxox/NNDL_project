@@ -1,8 +1,11 @@
 # Evaluations
 
-## TODOs
+## 递交
 
-- 递交结果时用 CLIP ViT-L/14 替换 ViT-B/32
+递交结果时用 CLIP ViT-L/14 替换 ViT-B/32
+
+## 数据集划分
+
 - 关于数据集划分，有多种主流方法：
   - 对于 Post-hoc 方法：
     - Train 为纯已知类，Val 为纯已知类，Test 为已知类+未知类
@@ -10,11 +13,38 @@
   - 对于 Training-time 方法：
     - Train 为已知类+未知类，Val 为已知类+未知类，Test 为已知类+未知类
 
-目前划分使用的是：Train 为纯已知类，Val 为已知类+未知类，Test 为已知类+未知类。其中，Test 的未知类和 Val 的相同，但并未使用 Val 的未知类进行阈值计算，因此等价于 Val 为纯已知类的情况，只不过 Test 的未知类少了一些，但不影响实验结果的方向性。
+目前因为数据集中 superclass 太少，不划分 novel superclass。
+
+## 全局配置
+
+```py
+@dataclass
+class SplitConfig:
+    novel_ratio: float = 0.1  # 每个包含未知类的 split 的未知类比例
+    train_ratio: float = 0.8
+    val_test_ratio: float = 0.5
+
+
+@dataclass
+class OSRConfig:
+    novel_super_index: int = 3
+    novel_sub_index: int = 87
+
+
+@dataclass
+class ModelConfig:
+    clip_model_id: str = "openai/clip-vit-base-patch32"
+    # clip_model_id: str = "openai/clip-vit-large-patch14"  # 升级到 ViT-L/14
+    feature_dim: int = 512
+    # feature_dim: int = 768  # ViT-L/14 输出 768 维特征
+
+
+@dataclass
+class ExperimentConfig:
+    seed: int = 42  # evaluate 时不使用，评估流程中只有 extract features 用到
+```
 
 ## 基础架构探索
-
-注：Validation Set 不含未知类
 
 ### Baseline: Linear Dual Head + MSP (Temperature = 1) + Quantile (Recall = 95%)
 

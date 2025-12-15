@@ -45,7 +45,7 @@ def split_features(
 
     Args:
         feature_dir: 包含原始特征文件的目录
-        novel_ratio: 设为 novel 的子类比例
+        novel_ratio: 每个包含未知类的 split 的未知类比例
         train_ratio: 已知类中用于训练的比例
         val_test_ratio: 剩余部分中用于验证的比例
         test_only_unknown: 是否仅 test 含未知类（True: train/val 纯已知; False: val/test 都含未知）
@@ -66,13 +66,21 @@ def split_features(
     all_subclasses = torch.unique(sub_labels).numpy()
 
     # 2. 划分 "已知类" 和 "未知类"
+    # novel_ratio 表示每个 split 的未知类比例
+    # 若 test_only_unknown=True: 总未知比例 = novel_ratio（全给 test）
+    # 若 test_only_unknown=False: 总未知比例 = 2 * novel_ratio（val 和 test 各 novel_ratio）
     np.random.shuffle(all_subclasses)
-    num_novel = int(len(all_subclasses) * novel_ratio)
+    if test_only_unknown:
+        total_novel_ratio = novel_ratio  # 仅 test 有未知
+    else:
+        total_novel_ratio = 2 * novel_ratio  # val 和 test 各 novel_ratio
+    
+    num_novel = int(len(all_subclasses) * total_novel_ratio)
     novel_classes = set(all_subclasses[:num_novel])
     known_classes = set(all_subclasses[num_novel:])
 
     if verbose:
-        print(f"类别划分: 已知类 {len(known_classes)} 个, 未知类 {len(novel_classes)} 个")
+        print(f"类别划分: 已知类 {len(known_classes)} 个, 未知类 {len(novel_classes)} 个 (总比例 {total_novel_ratio*100:.0f}%)")
 
     # 3. 构建索引掩码
     is_known = torch.tensor([s.item() in known_classes for s in sub_labels])

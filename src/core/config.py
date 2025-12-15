@@ -48,7 +48,7 @@ class PathsConfig:
 
 @dataclass
 class SplitConfig:
-    novel_ratio: float = 0.2
+    novel_ratio: float = 0.1  # 每个包含未知类的 split 的未知类比例
     train_ratio: float = 0.8
     val_test_ratio: float = 0.5
 
@@ -69,10 +69,10 @@ class ModelConfig:
 
 @dataclass
 class ExperimentConfig:
-    seed: int = 42  # evaluate 时不使用
+    seed: int = 42  # evaluate 时不使用，评估流程中只有 extract features 用到
 
     # 数据划分模式
-    test_only_unknown: bool = False  # True: val 不含未知类; False: val含未知类
+    test_only_unknown: bool = True  # True: val 不含未知类; False: val含未知类
 
     # 训练参数
     batch_size: int = 64
