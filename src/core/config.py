@@ -90,11 +90,11 @@ class ExperimentConfig:
     std_multiplier: float = 1.645  # ZScore 方法: 标准差乘数，1.645
 
     # 方法选择
-    training_loss: TrainingLoss = TrainingLoss.BCE
-    validation_score_method: OODScoreMethod = OODScoreMethod.MaxSigmoid
-    prediction_score_method: OODScoreMethod = OODScoreMethod.MaxSigmoid
-    validation_score_temperature: float = 0.2
-    prediction_score_temperature: float = 0.2
+    training_loss: TrainingLoss = TrainingLoss.CE
+    validation_score_method: OODScoreMethod = OODScoreMethod.MSP
+    prediction_score_method: OODScoreMethod = OODScoreMethod.MSP
+    validation_score_temperature: float = 1.5
+    prediction_score_temperature: float = 1.5
 
 @dataclass
 class Config:

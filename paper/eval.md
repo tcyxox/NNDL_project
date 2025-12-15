@@ -437,10 +437,13 @@ super seen, sub overall, sub seen, sub unseen, sub auroc
 - BCE + Energy (Tt=1.5, Tp=0.02): 
   92.36% ± 3.45%, 78.01% ± 3.02%, 65.55% ± 3.14%, 87.33% ± 5.20%, 0.8566 ± 0.0336
 
+## 问题
+
+根据在professor测试集上的测试，MaxSigmoid 会在对 super seen 上判定的特别高，MSP 则不会。
+
 ## 最终结论
 
-- 最高 AUROC，应该选 CE + MSP (Tt=Tp=1.5)
-- 最高 super seen，选 BCE + MaxSigmoid (Tt=Tp=0.2)（理论最完备）
+选 CE + MSP (Tt=Tp=1.5)
 
 ```py
     # 数据划分模式
@@ -462,11 +465,11 @@ super seen, sub overall, sub seen, sub unseen, sub auroc
     std_multiplier: float = 1.645  # ZScore 方法: 标准差乘数，1.645
 
     # 方法选择
-    training_loss: TrainingLoss = TrainingLoss.BCE
-    validation_score_method: OODScoreMethod = OODScoreMethod.MaxSigmoid
-    prediction_score_method: OODScoreMethod = OODScoreMethod.MaxSigmoid
-    validation_score_temperature: float = 0.2
-    prediction_score_temperature: float = 0.2
+    training_loss: TrainingLoss = TrainingLoss.CE
+    validation_score_method: OODScoreMethod = OODScoreMethod.MSP
+    prediction_score_method: OODScoreMethod = OODScoreMethod.MSP
+    validation_score_temperature: float = 1.5
+    prediction_score_temperature: float = 1.5
 ```
 
 # CAC 
