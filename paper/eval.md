@@ -426,13 +426,46 @@ super seen, sub overall, sub seen, sub unseen, sub auroc
     test_only_unknown: bool = False  # True: val 不含未知类; False: val含未知类
 ```
 
-TODO
 - CE + MSP (T=1.5):
-  97.74% ± 1.81%, 73.83% ± 3.88%, 88.03% ± 1.30%, 59.79% ± 8.48%, 0.8821 ± 0.0234
+  98.62% ± 0.50%, 79.57% ± 1.55%, 72.68% ± 2.61%, 84.90% ± 4.12%, 0.8663 ± 0.0119
 - BCE + MaxSigmoid (T=0.2):
-  99.61% ± 0.35%, 75.30% ± 3.70%, 87.29% ± 0.84%, 63.30% ± 8.03%, 0.8721 ± 0.0365
+  99.85% ± 0.12%, 77.58% ± 3.01%, 71.21% ± 3.37%, 82.53% ± 5.16%, 0.8521 ± 0.0350
 - BCE + Energy (T=0.02):
-  91.89% ± 3.53%, 70.88% ± 1.51%, 87.29% ± 0.89%, 54.50% ± 3.91%, 0.8755 ± 0.0343
+  92.44% ± 3.39%, 77.82% ± 2.84%, 68.48% ± 3.37%, 84.87% ± 4.66%, 0.8566 ± 0.0336
+- BCE + Energy (Tt=1.5, Tp=0.02): 
+  92.36% ± 3.45%, 78.01% ± 3.02%, 65.55% ± 3.14%, 87.33% ± 5.20%, 0.8566 ± 0.0336
+
+## 最终结论
+
+- 最高 AUROC，应该选 CE + MSP (Tt=Tp=1.5)
+- 最高 super seen，选 BCE + MaxSigmoid (Tt=Tp=0.2)（理论最完备）
+
+```py
+    # 数据划分模式
+    test_only_unknown: bool = False  # True: val 不含未知类; False: val含未知类
+
+    # 训练参数
+    batch_size: int = 64
+    learning_rate: float = 1e-3
+    epochs: int = 75
+
+    # 模型选择
+    enable_hierarchical_masking: bool = True  # 推理时 Hierarchical Masking 开关
+    enable_feature_gating: bool = True  # 训练时 SE Feature Gating 开关
+
+    # 阈值设定（自动根据验证集是否有未知类选择方法）
+    known_only_threshold: KnownOnlyThreshold = KnownOnlyThreshold.ZScore  # 无未知类时
+    full_val_threshold: FullValThreshold = FullValThreshold.Intersection  # 有未知类时
+    target_recall: float = 0.95  # Quantile 方法: target recall，95%
+    std_multiplier: float = 1.645  # ZScore 方法: 标准差乘数，1.645
+
+    # 方法选择
+    training_loss: TrainingLoss = TrainingLoss.BCE
+    validation_score_method: OODScoreMethod = OODScoreMethod.MaxSigmoid
+    prediction_score_method: OODScoreMethod = OODScoreMethod.MaxSigmoid
+    validation_score_temperature: float = 0.2
+    prediction_score_temperature: float = 0.2
+```
 
 # CAC 
 ## v1.0
