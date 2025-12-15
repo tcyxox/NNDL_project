@@ -161,33 +161,45 @@ def split_features(
         idx_test_novel = torch.cat([super_novel_indices, ordinary_novel_indices])
     else:
         # 模式B: Val 和 Test 都含未知类
-        # 要求：Super Novel 尽量给 Val (为了校准阈值)
-        # Ordinary Novel 随机分
         
         # 处理 Ordinary Novel
         ord_novel_subclasses = list(additional_novel_classes)
         np.random.shuffle(ord_novel_subclasses)
         
-        # 计算 Test 需要分配多少 novel 类
-        # 总 Novel 比例 = 2 * novel_ratio
-        # Val 和 Test 各分一半左右
-        n_test_novel_target = int(len(all_subclasses) * novel_subclass_ratio)
-        
-        # Super Novel 全给 Val，所以 Test 从 Ordinary Novel 中取
-        n_test_from_ord = min(len(ord_novel_subclasses), n_test_novel_target)
-        
-        test_ord_novel_classes = set(ord_novel_subclasses[:n_test_from_ord])
-        val_ord_novel_classes = set(ord_novel_subclasses[n_test_from_ord:])
-        
-        # 构建索引
-        # Test 只包含 Ordinary Novel
-        is_test_ord_novel = torch.tensor([s.item() in test_ord_novel_classes for s in sub_labels])
-        idx_test_novel = torch.where(is_test_ord_novel)[0]
-        
-        # Val 包含所有 Super Novel 和剩余的 Ordinary Novel
-        is_val_ord_novel = torch.tensor([s.item() in val_ord_novel_classes for s in sub_labels])
-        idx_val_ord_novel = torch.where(is_val_ord_novel)[0]
-        idx_val_novel = torch.cat([super_novel_indices, idx_val_ord_novel])
+        if not force_super_novel:
+            # 原始逻辑：根据 val_test_ratio 划分未知类
+            # 此时 super_novel_indices 为空，只有 ordinary_novel_indices (即所有 novel)
+            n_val_novel_classes = int(len(ord_novel_subclasses) * val_test_ratio)
+            val_ord_novel_classes = set(ord_novel_subclasses[:n_val_novel_classes])
+            test_ord_novel_classes = set(ord_novel_subclasses[n_val_novel_classes:])
+            
+            # 构建索引
+            is_val_ord_novel = torch.tensor([s.item() in val_ord_novel_classes for s in sub_labels])
+            idx_val_novel = torch.where(is_val_ord_novel)[0]
+            
+            is_test_ord_novel = torch.tensor([s.item() in test_ord_novel_classes for s in sub_labels])
+            idx_test_novel = torch.where(is_test_ord_novel)[0]
+            
+        else:
+            # 强制 Super Novel 逻辑：Super Novel 尽量给 Val
+            # 计算 Test 需要分配多少 novel 类
+            n_test_novel_target = int(len(all_subclasses) * novel_subclass_ratio)
+            
+            # Super Novel 全给 Val，所以 Test 从 Ordinary Novel 中取
+            n_test_from_ord = min(len(ord_novel_subclasses), n_test_novel_target)
+            
+            test_ord_novel_classes = set(ord_novel_subclasses[:n_test_from_ord])
+            val_ord_novel_classes = set(ord_novel_subclasses[n_test_from_ord:])
+            
+            # 构建索引
+            # Test 只包含 Ordinary Novel
+            is_test_ord_novel = torch.tensor([s.item() in test_ord_novel_classes for s in sub_labels])
+            idx_test_novel = torch.where(is_test_ord_novel)[0]
+            
+            # Val 包含所有 Super Novel 和剩余的 Ordinary Novel
+            is_val_ord_novel = torch.tensor([s.item() in val_ord_novel_classes for s in sub_labels])
+            idx_val_ord_novel = torch.where(is_val_ord_novel)[0]
+            idx_val_novel = torch.cat([super_novel_indices, idx_val_ord_novel])
         
     if verbose:
         print(f"未知样本分配: Val {len(idx_val_novel)}, Test {len(idx_test_novel)} "
