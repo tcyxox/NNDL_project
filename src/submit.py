@@ -92,7 +92,9 @@ def calibrate_threshold_single_seed(cfg: dict, seed: int):
         val_test_ratio=cfg["val_test_ratio"],
         test_only_unknown=cfg["test_only_unknown"],
         novel_sub_index=cfg["novel_sub_idx"],
-        verbose=False
+        novel_super_index=cfg["novel_super_idx"],
+        verbose=False,
+        force_super_novel=True  # 仅在 submit 时强制开启 Super Novel
     )
     
     # 2. 在 train 上训练模型 (不包含 val/test)

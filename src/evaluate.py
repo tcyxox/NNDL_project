@@ -84,6 +84,7 @@ def run_single_trial(cfg: dict, seed: int, verbose: bool):
         val_test_ratio=cfg["val_test_ratio"],
         test_only_unknown=cfg["test_only_unknown"],
         novel_sub_index=cfg["novel_sub_idx"],
+        novel_super_index=cfg["novel_super_idx"],
         verbose=verbose
     )
     
