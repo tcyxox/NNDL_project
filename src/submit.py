@@ -120,16 +120,19 @@ def calibrate_threshold_single_seed(cfg: dict, seed: int):
     super_map_inv = {v: int(k) for k, v in super_map.items()}
     sub_map_inv = {v: int(k) for k, v in sub_map.items()}
     
-    # 3. 在 val + test 上计算阈值 (模型未见过这些数据)
+    # 3. 在 val + test 上计算阈值 (test 始终包含未知类，所以合并后也包含未知类)
     threshold_features = torch.cat([data.val_features, data.test_features], dim=0)
     threshold_super_labels = torch.cat([data.val_super_labels, data.test_super_labels], dim=0)
     threshold_sub_labels = torch.cat([data.val_sub_labels, data.test_sub_labels], dim=0)
+    
+    # val+test 合并后始终包含未知类（来自 test），所以使用 full_val 方法
+    use_known_only = False
     
     if cfg["enable_feature_gating"]:
         thresh_super, thresh_sub = calculate_threshold_gated_dual_head(
             model, threshold_features, threshold_super_labels, threshold_sub_labels,
             super_map_inv, sub_map_inv, device,
-            False,  # val+test 合并，这里始终包含未知类
+            use_known_only,
             cfg["known_only_threshold"], cfg["full_val_threshold"],
             cfg["target_recall"], cfg["std_multiplier"],
             cfg["validation_score_temperature"], cfg["validation_score_method"]
@@ -137,14 +140,14 @@ def calibrate_threshold_single_seed(cfg: dict, seed: int):
     else:
         thresh_super = calculate_threshold_linear_single_head(
             super_model, threshold_features, threshold_super_labels, super_map_inv, device,
-            False,  # val+test 合并，这里始终包含未知类
+            use_known_only,
             cfg["known_only_threshold"], cfg["full_val_threshold"],
             cfg["target_recall"], cfg["std_multiplier"],
             cfg["validation_score_temperature"], cfg["validation_score_method"]
         )
         thresh_sub = calculate_threshold_linear_single_head(
             sub_model, threshold_features, threshold_sub_labels, sub_map_inv, device,
-            False,  # val+test 合并，这里始终包含未知类
+            use_known_only,
             cfg["known_only_threshold"], cfg["full_val_threshold"],
             cfg["target_recall"], cfg["std_multiplier"],
             cfg["validation_score_temperature"], cfg["validation_score_method"]
