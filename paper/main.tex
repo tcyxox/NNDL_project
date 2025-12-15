@@ -14,6 +14,21 @@
 \usepackage{graphicx}
 \usepackage[colorlinks=true, allcolors=blue]{hyperref}
 \usepackage{amsfonts}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{multicol}
+
+\usepackage{tikz}
+\usetikzlibrary{shapes.geometric, arrows.meta, positioning, fit, backgrounds, calc, shadows}
+
+\definecolor{colInput}{RGB}{230, 230, 230}
+\definecolor{colHead}{RGB}{255, 242, 204}
+\definecolor{colPred}{RGB}{218, 232, 252}
+\definecolor{colAttn}{RGB}{213, 232, 212}
+\definecolor{colNovel}{RGB}{245, 245, 245}
+\definecolor{colLoss}{RGB}{255, 204, 204}
+\definecolor{colContainerGray}{RGB}{242, 242, 242}
+\definecolor{colContainerOrange}{RGB}{255, 235, 215}
 
 \title{Transfer Learning Project}
 \author{%
@@ -49,13 +64,31 @@ OSR contrasts with traditional closed-set recognition, which assumes all testing
 
 \subsection{Dataset Preparation}
 
-\paragraph{Simulate Open-Set:} Simulate an open-set scenario by holding out specific subclasses to serve as novel samples in the validation set.
+To rigorously evaluate the performance of our models under Open Set Recognition (OSR) conditions, we partition the dataset into \textit{Known} and \textit{Novel} categories. We hold out a specific ratio (e.g., 20\%) of subclasses from each superclass to serve as the \textit{Novel} set. We implement three distinct data preparation strategies to simulate different experimental assumptions:
 
-\paragraph{Distribution Shift}
+\paragraph{Strategy 1: Strict Open-Set Validation (Post-hoc).}
+In this setting, both the Training and Validation sets consist exclusively of \textit{Known} samples. The \textit{Novel} samples appear only in the Test set.
 \begin{itemize}
-    \item \textbf{Data Augmentation:} Adopt the suggestion from the brief to use data augmentation (e.g., brightness, contrast, minor geometric transforms) to improve generalization.
-    \item \textbf{Validation Set:} Build a validation set for hyperparameter tuning.
+    \item \textbf{Train/Val:} Known classes only.
+    \item \textbf{Test:} Known + Novel classes.
 \end{itemize}
+This strategy simulates a strict scenario where no outliers are available during the development phase. Thresholds must be determined using statistical methods (e.g., Z-Score, Quantile) based solely on the distribution of known data.
+
+\paragraph{Strategy 2: Guided Open-Set Validation (Post-hoc).}
+Here, the Training set remains pure (\textit{Known} only), but the Validation set includes a mixture of \textit{Known} and \textit{Novel} samples.
+\begin{itemize}
+    \item \textbf{Train:} Known classes only.
+    \item \textbf{Val/Test:} Known + Novel classes.
+\end{itemize}
+This allows for calibrating thresholds by observing the overlap between known and unknown distributions (e.g., finding the intersection point), yielding an upper bound on performance for post-hoc methods.
+
+\paragraph{Strategy 3: Open-Set Training with Synthesis (CAC-Negative).}
+For discriminative training methods like CAC-Negative, we modify the training data preparation to include synthesized outliers.
+\begin{itemize}
+    \item \textbf{Train:} Known classes + Synthesized Pseudo-outliers.
+    \item \textbf{Val/Test:} Known + Real Novel classes.
+\end{itemize}
+Since real novel samples are inaccessible during training, we generate pseudo-outliers via data augmentation techniques (e.g., self-mixing, background extraction) to explicitly supervise the model in compacting the known class space.
 
 \subsection{Framework}
 
@@ -98,20 +131,45 @@ During inference, we apply hierarchical masking to enforce consistency between s
 
 Let $\hat{c}^{\text{super}}$ be the predicted superclass and $\mathcal{S}_c$ be the set of valid subclass indices for superclass $c$. The masked subclass logits are:
 \begin{equation}
-    \tilde{z}^{\text{sub}}_i = 
+    \tilde{z}^{\text{sub}}_i =
     \begin{cases}
         z^{\text{sub}}_i & \text{if } i \in \mathcal{S}_{\hat{c}^{\text{super}}} \\
         -\infty & \text{otherwise}
     \end{cases}
 \end{equation}
 
-\subsection{Models}
+\subsubsection{Threshold Calibration Methods}
 
-\subsubsection{Threshold Scoring Methods}
+To classify a sample $\mathbf{x}$ as known or novel, we define a scoring function $S(\mathbf{x})$ (e.g., MSP, MaxSigmoid, or Energy) where higher values indicate higher confidence in known classes. The decision rule is defined as:
+\begin{equation}
+    \hat{y} =
+    \begin{cases}
+        \text{Known}, & \text{if } S(\mathbf{x}) \geq \tau \\
+        \text{Novel}, & \text{if } S(\mathbf{x}) < \tau
+    \end{cases}
+\end{equation}
+We explore three methods to determine the optimal threshold $\tau$, depending on the availability of novel samples in the validation set.
 
-These methods define a scoring function based on the outputs of a pre-trained closed-set classifier. A threshold is applied to this score to reject novel samples.
+\paragraph{1. Quantile-based Threshold (Non-Parametric).}
+Used in \textit{Strict Open-Set Validation} (Strategy 1). This method assumes no prior knowledge of the unknown distribution. Given a target recall rate $r$ (e.g., $r = 0.95$) for known classes, we set $\tau$ as the $(1-r)$-th quantile of the scores from the known validation set $\mathcal{D}_{\text{val}}^{\text{known}}$:
+\begin{equation}
+    \tau_{\text{Quantile}} = Q_{1-r}(\{S(\mathbf{x}) \mid \mathbf{x} \in \mathcal{D}_{\text{val}}^{\text{known}}\})
+\end{equation}
+This approach is distribution-free and guarantees that exactly $r$ fraction of known samples are retained, but it does not account for the density of novel samples.
 
-For all score-based methods, a sample is classified as novel if its score falls below a threshold calibrated on the validation set, i.e., $S < \tau$.
+\paragraph{2. Z-Score Threshold (Parametric).}
+Also used in \textit{Strict Open-Set Validation}. We assume the scores of known classes follow a Gaussian distribution $\mathcal{N}(\mu, \sigma^2)$. The threshold is determined by a standard deviation multiplier $k$:
+\begin{equation}
+    \tau_{\text{ZScore}} = \mu - k \cdot \sigma
+\end{equation}
+where $\mu$ and $\sigma$ are the mean and standard deviation of $S(\mathbf{x})$ on $\mathcal{D}_{\text{val}}^{\text{known}}$. For a target recall of 95\% under a normal distribution, we set $k=1.645$. This method is generally more robust to sampling noise than the Quantile method, provided the score distribution is approximately normal (e.g., MSP or MaxSigmoid), but may underperform on heavy-tailed distributions (e.g., Energy).
+
+\paragraph{3. Distribution Intersection (Full Validation).}
+Used in \textit{Guided Open-Set Validation} (Strategy 2). When the validation set contains both known and novel samples ($\mathcal{D}_{\text{val}}^{\text{known}} \cup \mathcal{D}_{\text{val}}^{\text{novel}}$), we can explicitly model the boundary between the two distributions. We calculate $\tau$ as the intersection point of the empirical distributions, effectively balancing the False Positive Rate (FPR) and False Negative Rate (FNR):
+\begin{equation}
+    \tau_{\text{Intersect}} = \operatorname*{argmin}_{t} \left| P(S(\mathbf{x}) < t \mid \text{Known}) - P(S(\mathbf{x}) \geq t \mid \text{Novel}) \right|
+\end{equation}
+This method theoretically yields the optimal separation for the observed validation distribution but relies on the assumption that the validation novelties are representative of the test novelties.
 
 \subsubsection{Post-hoc Scoring with Softmax and CE Loss}
 
@@ -121,51 +179,23 @@ For all score-based methods, a sample is classified as novel if its score falls 
     \item Out-of-Distribution Detector (ODIN)~\cite{liang2020enhancingreliabilityoutofdistributionimage}: Improves MSP by applying temperature scaling to the logits before softmax and adding small perturbations to the input image. Logit $\to$ Temperature Scaling $\to$ Softmax $\to$ Threshold Gate.
 \end{itemize}
 
-\paragraph{Maximum Softmax Probability (MSP):}
-Given an input $\mathbf{x}$, the MSP score is defined as the maximum class probability:
-\begin{equation}
-    S_{\text{MSP}}(\mathbf{x}) = \max_{i} \frac{\exp(z_i(\mathbf{x}))}{\sum_{j=1}^{C} \exp(z_j(\mathbf{x}))}
-\end{equation}
-
-\paragraph{ODIN (with Temperature Scaling):}
-ODIN applies temperature scaling $T > 1$ to the logits to separate the softmax score distributions of ID and OOD samples:
+\paragraph{Maximum Softmax Probability (MSP) (with Temperature Scaling):}
+The MSP score is defined as the maximum class probability:
 \begin{equation}
     S_{\text{ODIN}}(\mathbf{x}; T) = \max_{i} \frac{\exp(z_i(\mathbf{x})/T)}{\sum_{j=1}^{C} \exp(z_j(\mathbf{x})/T)}
 \end{equation}
-
-\paragraph{Temperature Limit Analysis:}
-The effect of temperature can be understood by examining the limiting cases:
-
-\textit{ODIN as $T \to \infty$:} As temperature increases, the softmax distribution becomes uniform, and the score approaches a linear function of the logit gap:
 \begin{equation}
     \lim_{T \to \infty} S_{\text{ODIN}}(\mathbf{x}; T) \approx \frac{1}{C} + \frac{1}{C \cdot T} \left( z_{\max}(\mathbf{x}) - \bar{z}(\mathbf{x}) \right)
 \end{equation}
-where $z_{\max}$ is the maximum logit and $\bar{z}$ is the mean logit. This reveals that high-temperature ODIN measures the \textbf{Relative Sharpness} of the logit distribution.
+This reveals that high-temperature ODIN measures the \textbf{Relative Sharpness} of the logit distribution.
 
 \paragraph{Magnitude Information:}
-A known issue with MSP and ODIN is their reliance on the Softmax function. Softmax forces output probabilities to sum to 1, losing the magnitude information of the underlying logits, which often leads to \textbf{overconfidence} on unseen data. Logit-based scoring methods in the next part resolve this problem.
-
-\begin{center}
-\includegraphics[width=\linewidth]{graph/PostHocScoreBasedMethods.png}
-\end{center}
+A known issue with MSP and ODIN is their reliance on the Softmax function. Softmax forces output probabilities to sum to 1, losing the magnitude information of the underlying logits. Logit-based scoring methods in the next part resolve this problem.
 
 \subsubsection{Post-hoc Scoring with Sigmoid and BCE Loss}
 
 \paragraph{Consistency between Threshold Scoring Method and Training Objective:}
-In the MSP framework, the threshold scoring method (based on Softmax probabilities) and the training objective (Cross-Entropy loss based on Softmax) are consistent, as neither preserves magnitude information. However, for Logit-based OOD detection, there is a theoretical inconsistency: the threshold scoring method relies on Logits and their magnitude information, whereas the training objective (CE loss with Softmax) discards this information. Therefore, to ensure consistency and preserve magnitude information, we propose replacing Softmax with \textbf{Class-wise Sigmoids}~\cite{shu2017docdeepopenclassification}.
-
-\paragraph{Formulation:}
-Instead of the standard Softmax normalization, we apply independent sigmoid activations to each class logit, treating the multi-class classification problem as multiple \textbf{one-vs-rest} (\textbf{OvR}) binary classification problems:
-\begin{equation}
-    p_i = \sigma(z_i) = \frac{1}{1 + e^{-z_i}}, \quad i = 1, \ldots, C
-\end{equation}
-where $z_i$ is the logit for class $i$, and $C$ is the number of classes.
-
-The training objective becomes Binary Cross-Entropy (BCE) loss with one-hot encoded targets:
-\begin{equation}
-    \mathcal{L}_{\text{BCE}} = -\frac{1}{C} \sum_{i=1}^{C} \left[ y_i \log(p_i) + (1 - y_i) \log(1 - p_i) \right]
-\end{equation}
-where $y_i \in \{0, 1\}$ is the one-hot encoded ground truth for class $i$.
+While the MSP framework maintains consistency between its scoring method and the Cross-Entropy training objective (as both rely on normalized probabilities and discard magnitude), Logit-based OOD detection methods introduce a \textbf{theoretical inconsistency} by utilizing magnitude information that the standard Softmax-Cross-Entropy objective suppresses. To resolve this and explicitly preserve magnitude information for effective outlier detection, we replace the Softmax normalization with \textbf{class-wise Sigmoid activations} and adopt a \textbf{Binary Cross-Entropy (BCE)} loss. This formulation effectively treats the multi-class classification problem as a collection of independent \textbf{one-vs-rest (OvR)} binary tasks, ensuring that the training objective aligns with the magnitude-sensitive scoring functions~\cite{shu2017docdeepopenclassification}.
 
 \paragraph{Threshold Scoring Methods}
 \begin{itemize}
@@ -179,43 +209,156 @@ where $y_i \in \{0, 1\}$ is the one-hot encoded ground truth for class $i$.
 \end{equation}
 
 \paragraph{Energy Score (with Temperature Scaling):}
-The free energy function $E(\mathbf{x}; T)$ using temperature $T$ is defined as:
-\begin{equation}
-    E(\mathbf{x}; T) = -T \cdot \log \sum_{i=1}^{C} \exp(z_i(\mathbf{x})/T)
-\end{equation}
-Lower energy values indicate higher confidence that the sample belongs to a known class. To maintain consistency with MSP and ODIN (where higher scores indicate known classes), we define the Energy score as the negated energy:
+The energy score is defined as the negative free energy:
 \begin{equation}
     S_{\text{Energy}}(\mathbf{x}; T) = -E(\mathbf{x}; T) = T \cdot \log \sum_{i=1}^{C} \exp(z_i(\mathbf{x})/T)
 \end{equation}
+Lower energy values indicate higher confidence that the sample belongs to a known class.
 
-\paragraph{Temperature Limit Analysis:}
-The effect of temperature can be understood by examining the limiting cases:
-
-\textit{Energy as $T \to 0$:} As temperature decreases, the LogSumExp converges to the maximum:
 \begin{equation}
     \lim_{T \to 0} E(\mathbf{x}; T) = -\max_{i} z_i(\mathbf{x})
 \end{equation}
 This shows that low-temperature Energy reduces to the negative \textbf{MaxLogit}, measuring the \textbf{Absolute Magnitude} of the strongest prediction.
 
-\subsubsection{Threshold Calibration Methods}
-For all score-based methods, a threshold $\tau$ must be calibrated on the validation set to distinguish known from unknown samples. We implement two calibration strategies:
+\resizebox{\textwidth}{!}{
+\begin{tikzpicture}[
+    node distance=1.5cm and 2.2cm,
+    font=\sffamily\small,
+    >={Stealth[length=2.5mm]},
+    % --- Node Styles ---
+    base/.style={
+        draw=black!60,
+        rectangle,
+        align=center,
+        line width=0.6pt,
+        inner sep=8pt
+    },
+    blockInput/.style={base, fill=colInput, minimum height=1.2cm},
+    blockHead/.style={base, fill=colHead, minimum height=1.4cm, minimum width=2.8cm, drop shadow={opacity=0.2}},
+    blockThresh/.style={base, fill=colInput, minimum height=1.4cm, minimum width=2.0cm},
+    blockPred/.style={base, fill=colPred, minimum height=1.1cm, minimum width=2.4cm},
+    blockNovel/.style={base, fill=colNovel, minimum height=0.9cm, minimum width=2.2cm},
+    blockAttn/.style={base, fill=colAttn, minimum height=1.8cm, minimum width=3.8cm},
+    blockMask/.style={base, fill=colPred, minimum height=1.8cm, minimum width=3.8cm},
+    blockLoss/.style={base, fill=colLoss, minimum height=1.6cm, minimum width=2.5cm, rounded corners=3pt, drop shadow={opacity=0.2}, line width=1pt, draw=red!60!black},
+    % --- Line Styles ---
+    lineSolid/.style={->, draw=black!80, line width=0.8pt, rounded corners=5pt},
+    lineDashed/.style={->, draw=black!80, dashed, line width=0.8pt, rounded corners=5pt},
+    lineLoss/.style={->, draw=red!70!black, dashed, line width=1pt, rounded corners=10pt},
+    labelSmall/.style={font=\scriptsize\sffamily, text=black!70, inner sep=2pt, fill=colContainerGray, fill opacity=0.9, text opacity=1}
+]
 
-\paragraph{Quantile-based Threshold (Target Recall):}
-Given a target recall rate $r$ (e.g., $r = 0.95$), we set the threshold as the $(1-r)$-th quantile of known class scores:
-\begin{equation}
-    \tau_{\text{Quantile}} = Q_{1-r}(\{S(\mathbf{x}_i)\}_{i \in \text{known}})
-\end{equation}
-This guarantees exactly $r$ fraction of known samples will have scores above the threshold.
+    % ================= 1. Main Layout =================
 
-\paragraph{Z-Score Threshold:}
-We model the known class score distribution and set the threshold using a multiplier $k$:
-\begin{equation}
-    \tau_{\text{ZScore}} = \mu - k \cdot \sigma
-\end{equation}
-where $\mu$ and $\sigma$ are the mean and standard deviation of known class scores. Under a Gaussian assumption, $k = 1.645$ corresponds to approximately 95\% recall.
+    % Input
+    \node[blockInput] (input) {Input\\Image};
+    \node[blockInput, right=1.2cm of input] (extractor) {Feature Extractor\\(CLIP)};
 
-\paragraph{Comparison:}
-The Quantile method is \textbf{distribution-free} and guarantees the target recall regardless of score distribution. The ZScore method assumes approximate normality but can be more stable for small validation sets. In practice, ZScore works well for bounded scores (MSP, MaxSigmoid) but may underperform for unbounded scores (Energy).
+    % --- Superclass Branch (Top) ---
+    \node[blockHead, right=3.0cm of extractor, yshift=4.0cm] (super_head) {Superclass\\Classification Head};
+    \node[blockThresh, right=3.5cm of super_head] (super_thresh) {Threshold\\Block};
+
+    % Top Outputs (Novel above, Predicted below)
+    \node[blockNovel, above right=0.4cm and 1.5cm of super_thresh] (super_novel) {Novel\\Superclass};
+    \node[blockPred, below right=0.4cm and 1.5cm of super_thresh] (super_pred) {Predicted\\Superclass\\Label};
+
+    % --- Subclass Branch (Bottom) - MIRRORED ---
+    \node[blockHead, right=3.0cm of extractor, yshift=-4.0cm] (sub_head) {Subclass\\Classification Head};
+    \node[blockThresh, right=3.5cm of sub_head] (sub_thresh) {Threshold\\Block};
+
+    % Bottom Outputs - MIRRORED (Predicted above, Novel below)
+    \node[blockPred, above right=0.4cm and 1.5cm of sub_thresh] (sub_pred) {Predicted\\Subclass\\Label};
+    \node[blockNovel, below right=0.4cm and 1.5cm of sub_thresh] (sub_novel) {Novel\\Subclass};
+
+    % --- Constraints (Middle) ---
+    \node[blockAttn] at ($(super_head)!0.5!(sub_head)$) (attn) {SE Feature Gating (Training)\\Soft Constraint};
+    \node[blockMask] at ($(super_thresh)!0.5!(sub_thresh)$) (mask) {Masking (Inference)\\Hard Constraint};
+
+    % --- Joint Loss (Far Right) ---
+    \node[blockLoss] at ($(super_pred.east)!0.5!(sub_pred.east) + (3, 0)$) (loss) {\textbf{Joint Loss}\\$\mathcal{L} = \mathcal{L}_{super} + \mathcal{L}_{sub}$};
+
+
+    % ================= 2. Background Layer =================
+    \begin{scope}[on background layer]
+        % Superclass Container
+        \node[fit=(super_head)(super_thresh)(super_novel)(super_pred),
+              fill=colContainerGray, draw=black!10, rounded corners=10pt, inner sep=18pt] (box_super) {};
+
+        % Subclass Container
+        \node[fit=(sub_head)(sub_thresh)(sub_novel)(sub_pred),
+              fill=colContainerGray, draw=black!10, rounded corners=10pt, inner sep=18pt] (box_sub) {};
+
+        % Constraints Container
+        \node[fit=(attn)(mask),
+              fill=colContainerOrange, draw=orange!30, dashed, rounded corners=10pt, inner sep=15pt] (box_constraints) {};
+    \end{scope}
+
+    % ================= 3. Labels =================
+
+    % Superclass Label (at top)
+    \node[anchor=north, font=\bfseries, text=black!60, xshift=0pt, yshift=-5pt]
+        at (box_super.north) {Superclass Branch};
+
+    % Subclass Label (at bottom)
+    \node[anchor=south, font=\bfseries, text=black!60, xshift=0pt, yshift=5pt]
+        at (box_sub.south) {Subclass Branch};
+
+    % Title for constraints
+    \node[above=0.1cm of box_constraints, font=\bfseries, text=black!80] {Constraints};
+
+
+    % ================= 4. Connections =================
+
+    % Input -> Extractor
+    \draw[lineSolid] (input) -- (extractor);
+
+    % Extractor -> Heads
+    \draw[lineSolid] (extractor.east) -- ++(1.0,0) |- (super_head.west);
+    \draw[lineSolid] (extractor.east) -- ++(1.0,0) |- (sub_head.west);
+
+    % Heads -> Thresholds
+    \draw[lineSolid] (super_head) -- (super_thresh);
+    \draw[lineSolid] (sub_head) -- (sub_thresh);
+
+    % Thresholds -> Outputs
+    % Superclass (Novel above, Predicted below)
+    \draw[lineSolid] (super_thresh.east) -- ++(0.5,0) |- (super_novel.west)
+        node[pos=0.75, above, labelSmall] {Below Threshold};
+    \draw[lineSolid] (super_thresh.east) -- ++(0.5,0) |- (super_pred.west)
+        node[pos=0.75, below, labelSmall] {Above Threshold};
+
+    % Subclass - MIRRORED (Predicted above, Novel below)
+    \draw[lineSolid] (sub_thresh.east) -- ++(0.5,0) |- (sub_pred.west)
+        node[pos=0.75, above, labelSmall] {Above Threshold};
+    \draw[lineSolid] (sub_thresh.east) -- ++(0.5,0) |- (sub_novel.west)
+        node[pos=0.75, below, labelSmall] {Below Threshold};
+
+
+    % ================= 5. Dashed Constraint & Loss Flows =================
+
+    % Attention Flow (symmetric)
+    \draw[lineDashed] (super_head.south) -- (attn.north);
+    \draw[lineDashed] (attn.south) -- (sub_head.north);
+
+    % Masking Flow (symmetric)
+    \draw[lineDashed] (super_pred.south) |- (mask.east);
+    \draw[lineDashed] (mask.south) |- (sub_thresh.north);
+
+    % --- Loss Flow (symmetric) ---
+
+    % From Super Head -> Up -> Right -> Down -> Loss
+    \draw[lineLoss] (super_head.north) -- ++(0, 2.8) -| (loss.north)
+        node[pos=0.25, above, font=\scriptsize\bfseries, text=red!70!black] {Training Signal};
+
+    % From Sub Head -> Down -> Right -> Up -> Loss (mirrored)
+    \draw[lineLoss] (sub_head.south) -- ++(0, -2.8) -| (loss.south)
+        node[pos=0.25, below, font=\scriptsize\bfseries, text=red!70!black] {Training Signal};
+
+    % Main Title
+    \node[above=7.5cm of box_constraints, font=\bfseries\Large] {Hierarchical Post-hoc Score-based OSR Model};
+
+\end{tikzpicture}
+}
 
 % ================================= Not going to Implement =================================
 %\subsubsection{Trainable Confidence Estimation Methods}
@@ -225,30 +368,96 @@ The Quantile method is \textbf{distribution-free} and guarantees the target reca
 %    \item \textbf{Auxiliary Confidence Gating~\cite{devries2018learningconfidenceoutofdistributiondetection}:} Add a parallel confidence branch alongside the main classification branch. The network is trained to output both a class prediction and a scalar confidence score via a sigmoid output. The model learns to output low confidence for samples that are difficult to classify or likely out-of-distribution.
 %\end{itemize}
 
-\subsubsection{OpenMax Hierarchical Classifier}
-OpenMax~\cite{7780542} is a classic discriminative method in OSR, which is based on \textbf{Feature Distribution} (Weibull Distribution).
-\begin{itemize}
-    \item \textbf{Stage 1 - OpenMax for Superclass:} Use OpenMax at the superclass level, it will either classify a sample as known superclass or novel superclass.
-    \item \textbf{Stage 2 - OpenMax for Subclass:} If the sample is identified as novel at the previous level, it will also be classified as novel subclass. Otherwise, we train a separate OpenMax classifier on its corresponding set of known subclasses.
-\end{itemize}
+\subsection{Adapted CAC Method}
+As noted in previous article, Cross-Entropy loss does not guarantee the topological compactness requisite for effective outlier detection; it frequently yields "inflated" feature distributions that encroach upon the open space, resulting in a crowded logit space where unknown classes are difficult to isolate. We postulate that distinguishing known from unknown samples requires more than applying post-hoc measures. To further address the challenge of distinguishing unknown classes in OSR, we utilize the Class Anchor Clustering (CAC) framework~\cite{miller2021class}, a distance-based discriminative method rooted in metric learning.
 
-\subsubsection{Hierarchical Class Anchor Clustering (CAC)}
-CAC is a Discriminative method that is based on \textbf{Metric Learning}.
-\begin{itemize}
-    \item \textbf{Stage 1 - Hierarchical Anchor Design:} Design structured anchors~\cite{miller2021class} by first defining a unique base vector for each superclass. Subclass anchors will then be created by adding small offset vectors to their corresponding superclass base vector.
-    \item \textbf{Stage 2 - Training:} Train the network using CAC loss function with hierarchical anchors forcing the network to learn a semantically meaningful logit space where the cluster layout directly mirrors problem's hierarchy.
-    \item \textbf{Stage 3 - Inference:} Use the distance-based rejection process to classify known subclasses, while distinguishing rejected samples as either ``Unknown Superclass'' or ``Unknown Subclass''.
-\end{itemize}
+In contrast, CAC explicitly regularizes the network to enforce strict intra-class compactness and maximize inter-class separability. Our adoption of CAC is further motivated by the semantic properties of the CLIP encoder. While CLIP’s contrastive pre-training naturally induces implicit clustering via cosine similarity, we employ CAC to rigorously map these semantic representations to a structured logit space where class centers are manually anchored to ensure maximal separation. By aligning the dense semantic clusters from CLIP with fixed, distinct anchors, we establish a robust feature space.
 
-% ================================= Deprecated =================================
-% \subsubsection{Probability Density Estimation + Hierarchical Classifier}
+\begin{equation}
+    \begin{gathered}
+        \mathcal{L}_{\text{CAC}}(\mathbf{x}, y) = \mathcal{L}_{T}(\mathbf{x}, y) + \lambda \mathcal{L}_{A}(\mathbf{x}, y)\\
+        \mathcal{L}_{T}(\mathbf{x}, y) = log(1+\sum_{j\neq y}^{N}e^{d_y - d_j})\\
+        \mathcal{L}_{A}(\mathbf{x}, y) = \|f(\mathbf{x}-c_y)\|_2
+    \end{gathered}
+\end{equation}
 
-% \begin{itemize}
-%     \item \textbf{Stage 1 - Probability Density-based Model for novel superclass:} Use a probability density estimation model which directly learns the probability distribution of the known dataset and addresses the OSR problem for the superclass. Data from a novel superclass should deviate from this distribution, receiving a probability score lower than a threshold, thus labeled as ``novel''.
 
-%     \item \textbf{Stage 2 - Hierarchical Classifier for Known Superclasses:} Samples that are not identified as ``novel'' by the density model are then passed to a hierarchical classifier described in the first method, but without applying the threshold to the superclass predictor.
-% \end{itemize}
-% ================================= Deprecated =================================
+To further enhance the discriminative power of the logit space, we also integrate a SE-attention mechanism in this part. By enabling the model to adaptively emphasize salient information within the CLIP image representations, this approach effectively increases inter-class dispersion and facilitates the formation of compact, well-defined class clusters.
+
+\subsubsection{CAC-Negative}
+
+In this project, we introduce two methodological improvements to the CAC paradigm, the first of which utilizes generated pseudo-outliers. To utilize the inherent sparsity of the logit space produced by CAC, our objective is to further provide explicit supervision regarding the spatial arrangement of non-class data. As equation \ref{eq:OpenMix_CAC_loss} shows, we extend the CAC loss function to include a regularization term that compresses negative samples towards the coordinate origin. This approach not only ensures that outliers are sequestered far from the known class anchors but also mitigates optimization instability by defining a clear embedding objective for the open space.
+
+\begin{equation}
+    \label{eq:OpenMix_CAC_loss}
+    \begin{gathered}
+        \mathcal{L}_{\text{CAC}}(\mathbf{x_{all}}, y_{all}) = \mathcal{L}_{T}(\mathbf{x}, y) + \lambda_A \mathcal{L}_{A}(\mathbf{x}, y) + \lambda_N \mathcal{L}_{N}(\mathbf{x'}) \\
+        \mathcal{L}_{N}(\mathbf{x'}) = \|f(\mathbf{x'})\|_2
+    \end{gathered}
+\end{equation}
+
+Here $\mathbf{x'}$ denotes the pseudo-samples synthesized via two distinct strategies: 1) self-mixing of rotated images, and 2) background extraction, obtained by removing the foreground object.
+
+Table \ref{tab: CAC VS. CAC-Negative} presents a comparative analysis between the origin CAC with SE-Attention and our proposed CAC-Negative framework. The empirical results demonstrate that CAC-Negative consistently outperforms CAC in terms of AUROC and overall accuracy and unseen accuracy, validating the efficacy of incorporating synthesized negative samples for Open Set Recognition.
+
+\textbf{Synergy between SE-Attention and Negative Sampling:} We observe a distinct interaction regarding the SE-Attention mechanism. While SE-Attention offers negligible gains for the original CAC, it yields significant performance improvements when integrated into CAC-Negative. This suggests that the attention mechanism relies on a sufficiently populated feature space to function effectively.
+
+The differential impact of SE-Attention can be explained by the topological characteristics of the embedding space. The original CAC results in a relatively sparse logit space, where SE-Attention struggles to capture meaningful dependencies. In contrast, the introduction of pseudo-negative samples effectively densifies the manifold. This densification enables the SE-Attention mechanism to learn more robust feature recalibrations, allowing it to effectively scatter pseudo-samples and refine the decision boundary.
+
+\textbf{Inefficacy of Explicit Intra-class Clustering ($\lambda$):} Regarding the hyperparameter $\lambda$ (the weight for the loss of anchor clustering term), our experiments indicate that non-zero values deteriorate the performance of the original CAC and provide no substantial benefit to CAC-Negative. Consequently, we set $\lambda=0$. We attribute this to the relatively limited number of known categories (70 classes); simply maximizing inter-class separation appears sufficient for classification, rendering strict intra-class clustering constraints less critical.
+
+\begin{table}[t]
+  \caption{\textit{\textbf{CAC}} VS. \textit{\textbf{CAC-Negative}}.}
+  \label{tab: CAC VS. CAC-Negative}
+  \centering
+  \resizebox{\columnwidth}{!}{
+      \begin{tabular}{lcccc}
+        \toprule
+        \bf Parameter & \bf Overall Acc. & \bf Seen Acc. & \bf Unseen Acc. & \bf AUROC \\
+        \midrule
+        \multicolumn{5}{l}{\textit{\textbf{CAC}}} \\
+        \midrule
+        $\lambda=0, Attn=0$ & 77.80\% ± 0.31\% & 85.49\% ± 0.35\% & 71.24\% ± 0.83\% & 0.8908 ± 0.0009\\
+        $\lambda=0, Attn=4$ & 78.05\% ± 0.57\% & 85.76\% ± 0.36\% & 71.47\% ± 1.02\% & 0.8931 ± 0.0015\\
+        $\lambda=0.1, Attn=4$ & 67.58\% ± 0.27\% & \textbf{86.27\% ± 0.67\%} & 51.64\% ± 0.99\% & 0.8237 ± 0.0031 \\
+        \midrule
+        \multicolumn{5}{l}{\textit{\textbf{CAC-Negative}}} \\
+        \midrule
+        $\lambda_N=0.3, Attn=0$ & 76.84\% ± 0.46\% & 84.71\% ± 0.28\% & 70.13\% ± 0.92\% & 0.8978 ± 0.0025 \\
+        $\lambda_N=0.3, Attn=4$ & 84.68\% ± 0.25\% & 77.49\% ± 0.99\% & 90.80\% ± 0.77\% & 0.9411 ± 0.0021 \\
+        $\lambda_N=0.5, Attn=4$ & \textbf{86.17\% ± 0.30\%} & 77.45\% ± 0.43\% & \textbf{93.61\% ± 0.42\%} & \textbf{0.9526 ± 0.0027} \\
+        \bottomrule
+      \end{tabular}
+  }
+\end{table}
+
+\subsubsection{CAC-OpenMax}
+The second strategic adaptation involves the integration of OpenMax~\cite{7780542}, a post-hoc inference mechanism rooted in Extreme Value Theory (EVT), with the CAC framework. This combination is motivated by the topological structure enforced by CAC: under ideal training conditions, CAC minimizes intra-class variance, compelling known samples to concentrate tightly around their respective class anchors while pushing OOD samples to the periphery. Leveraging this optimized embedding space, OpenMax models the tail distribution of the distances using a Weibull distribution. This allows us to rigorously filter distributional outliers—samples located significantly far from any class prototype—thereby enhancing the model's capability to discriminate between seen and unseen categories.
+
+Table \ref{tab: CAC-post hoc} presents a comparative analysis of varying post-hoc inference mechanisms applied to the CAC framework, specifically benchmarking the threshold-based baseline against ZScore and OpenMax.
+
+\textbf{Performance of OpenMax:} Empirical results demonstrate that OpenMax yields the most superior performance, achieving a AUROC of 0.9281. Crucially, this method significantly boosts Unseen Accuracy (from 71.24% to 88.46%) while incurring only a marginal degradation in Seen Accuracy ($\approx 1\%$), indicating a robust trade-off between closed-set classification and open-set rejection.
+
+\textbf{Inefficacy of ZScore:} Conversely, the ZScore method proves suboptimal for the CAC embedding space, underperforming even the simple threshold baseline. Our experiments reveal that the model is highly sensitive to the parameter $std\_m$. Increasing this threshold effectively expands the acceptance region to encompass the entire logit space, causing the Unseen Accuracy to collapse to zero. This phenomenon corroborates our previous findings: the CAC framework induces highly compact class clusters, rendering standard deviation-based outlier detection overly sensitive and less effective than tail-based estimation.
+
+\begin{table}[t]
+  \caption{Post hoc methods on \textit{\textbf{CAC}}}
+  \label{tab: CAC-post hoc}
+  \centering
+  \resizebox{\columnwidth}{!}{
+      \begin{tabular}{lcccc}
+        \toprule
+        \bf Method & \bf Overall Acc. & \bf Seen Acc. & \bf Unseen Acc. & \bf AUROC \\
+        \midrule
+        \textit{\textbf{threshold}}          & 77.80\% ± 0.31\% & \textbf{85.49\% ± 0.35\%} & 71.24\% ± 0.83\% & 0.8908 ± 0.0009\\
+        \textit{\textbf{ZScore($std\_m=0.1$)}}          & 72.55\% ± 0.24\% & 81.06\% ± 0.29\% & 65.28\% ± 0.40\% & 0.8325 ± 0.0009 \\
+        \textit{\textbf{OpenMax}($\lambda=0.1$)}          & \textbf{86.62\% ± 0.16\%} & 84.47\% ± 0.38\% & \textbf{88.46\% ± 0.11\%} & \textbf{0.9281 ± 0.0026} \\
+        \bottomrule
+      \end{tabular}
+  }
+\end{table}
+
+\section{Experiment}
 
 \subsection{Evaluation}
 
@@ -257,6 +466,42 @@ CAC is a Discriminative method that is based on \textbf{Metric Learning}.
     \item \textbf{Secondary Metrics:} We will monitor all official metrics, including ``Overall Accuracy", ``Seen Accuracy'', and ``Categorical Cross-entropy'' for both class levels.
     \item \textbf{Threshold Tuning:} To determine the gatekeeper's probability threshold and the expert's confidence threshold, we will simulate an open-set scenario (e.g., by holding out subclasses during training) and tune on our local validation set to maximize ``Unseen Accuracy''.
 \end{itemize}
+
+\begin{table}[h]
+  \caption{Template}
+  \label{tab:complex_table}
+  \centering
+  \begin{tabular}{lcccc}
+    \toprule
+    \multirow{2}{*}{\bf Method} & \multicolumn{2}{c}{\bf Standard Metrics} & \multicolumn{2}{c}{\bf Advanced Metrics} \\
+    \cmidrule(r){2-3} \cmidrule(l){4-5}
+    & Acc@1 & Acc@5 & ECE & NLL \\
+    \midrule
+    Vanilla      & 76.5 & 92.1 & 0.15 & 1.20 \\
+    Mixup        & 77.9 & 93.5 & 0.10 & 0.98 \\
+    CutMix       & 78.2 & 93.8 & 0.09 & 0.95 \\
+    \bf Ours     & \bf 79.1 & \bf 94.5 & \bf 0.05 & \bf 0.85 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\begin{table}[t]
+  \caption{Template}
+  \label{tab:wide_comparison}
+  \centering
+  % \small % 小一号字体
+  \begin{tabular}{lcccccccc}
+    \toprule
+    \multirow{2}{*}{\bf Parameter ($\lambda$)} & \multicolumn{4}{c}{\bf Baseline Model} & \multicolumn{4}{c}{\bf Our Model} \\
+    \cmidrule(lr){2-5} \cmidrule(lr){6-9}
+    & Acc. & Prec. & Rec. & F1 & Acc. & Prec. & Rec. & F1 \\
+    \midrule
+    Setting 1 ($\alpha=0.1$) & 85.1 & 84.2 & 83.5 & 83.8 & \bf 86.5 & \bf 85.8 & 84.2 & \bf 85.0 \\
+    Setting 2 ($\alpha=0.5$) & 86.2 & 85.0 & 84.1 & 84.5 & \bf 88.1 & \bf 87.2 & \bf 86.5 & \bf 86.8 \\
+    Setting 3 ($\alpha=0.9$) & 84.5 & 83.8 & 82.0 & 82.9 & \bf 87.0 & \bf 86.5 & \bf 85.0 & \bf 85.7 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
 
 \bibliographystyle{alpha}
 \bibliography{reference}
