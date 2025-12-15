@@ -36,7 +36,7 @@ CONFIG = {
     "prediction_score_temperature": config.experiment.prediction_score_temperature,
     # 数据划分参数
     "test_only_unknown": config.experiment.test_only_unknown,
-    "novel_ratio": config.split.novel_ratio,
+    "novel_ratio": config.split.novel_subclass_ratio,
     "train_ratio": config.split.train_ratio,
     "val_test_ratio": config.split.val_test_ratio,
 }
@@ -79,7 +79,7 @@ def run_single_trial(cfg: dict, seed: int, verbose: bool):
     
     data = split_features(
         feature_dir=cfg["feature_dir"],
-        novel_ratio=cfg["novel_ratio"],
+        novel_subclass_ratio=cfg["novel_ratio"],
         train_ratio=cfg["train_ratio"],
         val_test_ratio=cfg["val_test_ratio"],
         test_only_unknown=cfg["test_only_unknown"],

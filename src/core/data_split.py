@@ -32,7 +32,7 @@ class SplitDataset:
 
 def split_features(
         feature_dir: str,
-        novel_ratio: float,
+        novel_subclass_ratio: float,
         train_ratio: float,
         val_test_ratio: float,
         test_only_unknown: bool,
@@ -47,7 +47,7 @@ def split_features(
 
     Args:
         feature_dir: 包含原始特征文件的目录
-        novel_ratio: 每个包含未知类的 split 的未知类比例
+        novel_subclass_ratio: 每个包含 novel class 的划分的 novel subclass 比例
         train_ratio: 已知类中用于训练的比例
         val_test_ratio: 剩余部分中用于验证的比例
         test_only_unknown: 是否仅 test 含未知类（True: train/val 纯已知; False: val/test 都含未知）
@@ -103,9 +103,9 @@ def split_features(
     # 计算还需要多少个 Novel 子类
     # novel_ratio 表示每个 split 的未知类比例
     if test_only_unknown:
-        total_novel_ratio = novel_ratio
+        total_novel_ratio = novel_subclass_ratio
     else:
-        total_novel_ratio = 2 * novel_ratio
+        total_novel_ratio = 2 * novel_subclass_ratio
     
     num_total_novel = int(len(all_subclasses) * total_novel_ratio)
     num_additional_novel = max(0, num_total_novel - len(novel_super_subclasses))
@@ -171,7 +171,7 @@ def split_features(
         # 计算 Test 需要分配多少 novel 类
         # 总 Novel 比例 = 2 * novel_ratio
         # Val 和 Test 各分一半左右
-        n_test_novel_target = int(len(all_subclasses) * novel_ratio)
+        n_test_novel_target = int(len(all_subclasses) * novel_subclass_ratio)
         
         # Super Novel 全给 Val，所以 Test 从 Ordinary Novel 中取
         n_test_from_ord = min(len(ord_novel_subclasses), n_test_novel_target)

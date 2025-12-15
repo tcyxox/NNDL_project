@@ -48,7 +48,7 @@ class PathsConfig:
 
 @dataclass
 class SplitConfig:
-    novel_ratio: float = 0.1  # 每个包含未知类的 split 的未知类比例
+    novel_subclass_ratio: float = 0.1  # 每个包含 novel class 的划分的 novel subclass 比例
     train_ratio: float = 0.8
     val_test_ratio: float = 0.5
 

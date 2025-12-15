@@ -21,7 +21,7 @@ CONFIG = {
     "label_mapping_path": os.path.join(config.paths.split_images, "osr_label_mapping.json"),
 
     # OSR 划分策略
-    "novel_subclass_ratio": config.split.novel_ratio,           # 每个超类中隐藏 20% 的子类
+    "novel_subclass_ratio": config.split.novel_subclass_ratio,           # 每个超类中隐藏 20% 的子类
     "train_ratio": config.split.train_ratio,                    # 从已知类样本中划出 80% 做训练
     "val_ratio": (1-config.split.train_ratio)*config.split.val_test_ratio,        # 从已知类样本中划出 10% 做验证
     "test_ratio": (1-config.split.train_ratio)*(1-config.split.val_test_ratio),   # 从已知类样本中划出 10% 做测试

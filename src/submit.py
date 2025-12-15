@@ -37,7 +37,7 @@ CONFIG = {
     
     # 数据划分
     "test_only_unknown": config.experiment.test_only_unknown,
-    "novel_ratio": config.split.novel_ratio,
+    "novel_ratio": config.split.novel_subclass_ratio,
     "train_ratio": config.split.train_ratio,
     "val_test_ratio": config.split.val_test_ratio,
     
@@ -87,7 +87,7 @@ def calibrate_threshold_single_seed(cfg: dict, seed: int):
     # 1. 划分数据
     data = split_features(
         feature_dir=cfg["feature_dir"],
-        novel_ratio=cfg["novel_ratio"],
+        novel_subclass_ratio=cfg["novel_ratio"],
         train_ratio=cfg["train_ratio"],
         val_test_ratio=cfg["val_test_ratio"],
         test_only_unknown=cfg["test_only_unknown"],
