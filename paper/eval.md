@@ -59,7 +59,7 @@ class ExperimentConfig:
     epochs: int = 50
 
     # 数据划分模式
-    test_only_unknown: bool = True  # True: val 不含未知类; False: val含未知类
+    val_include_novel: bool = True  # True: val 不含未知类; False: val含未知类
 
     # 模型选择
     enable_hierarchical_masking: bool = False  # 推理时 Hierarchical Masking 开关
@@ -97,7 +97,7 @@ class ExperimentConfig:
     epochs: int = 50
 
     # 数据划分模式
-    test_only_unknown: bool = True  # True: val 不含未知类; False: val含未知类
+    val_include_novel: bool = True  # True: val 不含未知类; False: val含未知类
 
     # 模型选择
     enable_hierarchical_masking: bool = False  # 推理时 Hierarchical Masking 开关
@@ -137,7 +137,7 @@ class ExperimentConfig:
     epochs: int = 50
 
     # 数据划分模式
-    test_only_unknown: bool = True  # True: val 不含未知类; False: val含未知类
+    val_include_novel: bool = True  # True: val 不含未知类; False: val含未知类
 
     # 模型选择
     enable_hierarchical_masking: bool = False  # 推理时 Hierarchical Masking 开关
@@ -177,7 +177,7 @@ class ExperimentConfig:
     epochs: int = 50
 
     # 数据划分模式
-    test_only_unknown: bool = True  # True: val 不含未知类; False: val含未知类
+    val_include_novel: bool = True  # True: val 不含未知类; False: val含未知类
 
     # 模型选择
     enable_hierarchical_masking: bool = True  # 推理时 Hierarchical Masking 开关
@@ -217,7 +217,7 @@ class ExperimentConfig:
     epochs: int = 75
 
     # 数据划分模式
-    test_only_unknown: bool = True  # True: val 不含未知类; False: val含未知类
+    val_include_novel: bool = True  # True: val 不含未知类; False: val含未知类
 
     # 模型选择
     enable_hierarchical_masking: bool = True  # 推理时 Hierarchical Masking 开关
@@ -256,7 +256,7 @@ class ExperimentConfig:
 
 ```py
     # 数据划分模式
-    test_only_unknown: bool = True  # True: val 不含未知类; False: val含未知类
+    val_include_novel: bool = True  # True: val 不含未知类; False: val含未知类
 
     # 训练参数
     batch_size: int = 64
@@ -364,7 +364,7 @@ super seen, sub overall, sub seen, sub unseen, sub auroc
 
 ```py
     # 数据划分模式
-    test_only_unknown: bool = False  # True: val 不含未知类; False: val含未知类
+    val_include_novel: bool = False  # True: val 不含未知类; False: val含未知类
 ```
 
 - CE + MSP (T=1.5):
@@ -386,7 +386,7 @@ super seen, sub overall, sub seen, sub unseen, sub auroc
 
 ```py
     # 数据划分模式
-    test_only_unknown: bool = False  # True: val 不含未知类; False: val含未知类
+    val_include_novel: bool = False  # True: val 不含未知类; False: val含未知类
 
     # 训练参数
     batch_size: int = 64

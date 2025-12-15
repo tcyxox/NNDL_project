@@ -35,7 +35,7 @@ CONFIG = {
     "validation_score_temperature": config.experiment.validation_score_temperature,
     "prediction_score_temperature": config.experiment.prediction_score_temperature,
     # 数据划分参数
-    "test_only_unknown": config.experiment.test_only_unknown,
+    "test_only_unknown": config.experiment.val_include_novel,
     "novel_ratio": config.split.novel_subclass_ratio,
     "train_ratio": config.split.train_ratio,
     "val_test_ratio": config.split.val_test_ratio,
@@ -82,7 +82,7 @@ def run_single_trial(cfg: dict, seed: int, verbose: bool):
         novel_subclass_ratio=cfg["novel_ratio"],
         train_ratio=cfg["train_ratio"],
         val_test_ratio=cfg["val_test_ratio"],
-        test_only_unknown=cfg["test_only_unknown"],
+        val_include_novel=cfg["test_only_unknown"],
         novel_sub_index=cfg["novel_sub_idx"],
         novel_super_index=cfg["novel_super_idx"],
         verbose=verbose
