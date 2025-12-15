@@ -94,7 +94,7 @@ def calibrate_threshold_single_seed(cfg: dict, seed: int):
         novel_sub_index=cfg["novel_sub_idx"],
         novel_super_index=cfg["novel_super_idx"],
         verbose=False,
-        force_super_novel=False  # 仅在 submit 时强制开启 Super Novel
+        force_super_novel=True  # 仅在 submit 时强制开启 Super Novel
     )
     
     # 2. 在 train 上训练模型 (不包含 val/test)
@@ -236,6 +236,42 @@ if __name__ == "__main__":
     # Hierarchical Masking
     if not CONFIG["enable_hierarchical_masking"]:
         super_to_sub = None
+
+    # === Phase 2.5: 在全量训练集上评估模型 (Sanity Check) ===
+    print("\n" + "=" * 50)
+    print("Phase 2.5: Evaluate Final Model on Training Set (Sanity Check)")
+    print("=" * 50)
+    
+    # 预测训练集
+    if CONFIG["enable_feature_gating"]:
+        train_super_preds, train_sub_preds, _, _ = predict_with_gated_dual_head(
+            train_features.to(device), model, super_map_inv, sub_map_inv,
+            avg_thresh_super, avg_thresh_sub,
+            CONFIG["novel_super_idx"], CONFIG["novel_sub_idx"], device,
+            super_to_sub, CONFIG["prediction_score_temperature"], CONFIG["prediction_score_method"]
+        )
+    else:
+        train_super_preds, train_sub_preds, _, _ = predict_with_linear_single_head(
+            train_features.to(device), super_model, sub_model,
+            super_map_inv, sub_map_inv,
+            avg_thresh_super, avg_thresh_sub,
+            CONFIG["novel_super_idx"], CONFIG["novel_sub_idx"], device,
+            super_to_sub, CONFIG["prediction_score_temperature"], CONFIG["prediction_score_method"]
+        )
+    
+    # 计算准确率 (Train set should be 100% known)
+    from sklearn.metrics import accuracy_score
+    train_super_acc = accuracy_score(train_super_labels.numpy(), train_super_preds)
+    train_sub_acc = accuracy_score(train_sub_labels.numpy(), train_sub_preds)
+    
+    # 统计被误判为 Novel 的比例
+    train_super_novel_ratio = np.mean(np.array(train_super_preds) == CONFIG["novel_super_idx"])
+    train_sub_novel_ratio = np.mean(np.array(train_sub_preds) == CONFIG["novel_sub_idx"])
+    
+    print(f"  > Training Superclass Accuracy: {train_super_acc*100:.2f}%")
+    print(f"  > Training Subclass Accuracy:   {train_sub_acc*100:.2f}%")
+    print(f"  > Training Superclass Novel Ratio (Mistake): {train_super_novel_ratio*100:.2f}%")
+    print(f"  > Training Subclass Novel Ratio (Mistake):   {train_sub_novel_ratio*100:.2f}%")
     
     # === Phase 3: 使用平均阈值在真实测试集上推理 ===
     print("\n" + "=" * 50)
