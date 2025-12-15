@@ -1,281 +1,256 @@
 """
-数据集划分工具模块
+New Data Split Module
 
-提供将特征数据划分为 train/val/test 的功能
+Provides functionality to split features into Train/Test and Train/Val (SubTrain/Val)
+supporting Superclass Novelty and Subclass Novelty injection.
 """
 import os
 from dataclasses import dataclass
+from typing import Set, Tuple
 
 import numpy as np
 import torch
 
 
 @dataclass
-class SplitDataset:
-    """划分后的数据集"""
-    # 训练集（仅已知类）
-    train_features: torch.Tensor
-    train_super_labels: torch.Tensor
-    train_sub_labels: torch.Tensor
-    # 验证集（根据模式：仅已知类 或 已知+未知）
-    val_features: torch.Tensor
-    val_super_labels: torch.Tensor
-    val_sub_labels: torch.Tensor
-    # 测试集（已知+未知）
-    test_features: torch.Tensor
-    test_super_labels: torch.Tensor
-    test_sub_labels: torch.Tensor
-    # 元信息
-    known_classes: set
-    novel_classes: set
+class Dataset:
+    features: torch.Tensor
+    super_labels: torch.Tensor
+    sub_labels: torch.Tensor
+
+    def __len__(self):
+        return len(self.features)
+    
+    def to(self, device):
+        return Dataset(
+            self.features.to(device),
+            self.super_labels.to(device),
+            self.sub_labels.to(device)
+        )
 
 
-def split_features(
-        feature_dir: str,
-        novel_subclass_ratio: float,
-        train_ratio: float,
-        val_test_ratio: float,
-        val_include_novel: bool,
-        novel_sub_index: int,
-        novel_super_index: int,
-        verbose: bool,
-        force_super_novel: bool = False,
-        output_dir: str = None
-) -> SplitDataset:
-    """
-    将特征数据划分为 train/val/test 集
+@dataclass
+class SplitOutput:
+    train_set: Dataset  # Or subtrain
+    test_set: Dataset   # Or val
+    known_subclasses: Set[int]
+    novel_subclasses: Set[int]
+    novel_super_classes: Set[int]
 
-    Args:
-        feature_dir: 包含原始特征文件的目录
-        novel_subclass_ratio: 每个包含 novel class 的划分的 novel subclass 比例
-        train_ratio: 已知类中用于训练的比例
-        val_test_ratio: 剩余部分中用于验证的比例
-        val_include_novel: 是否仅 test 含未知类（True: train/val 纯已知; False: val/test 都含未知）
-        novel_sub_index: novel 子类的标签
-        novel_super_index: novel 超类的标签
-        verbose: 是否打印详细信息
-        force_super_novel: 是否强制将一个超类设为 Novel 并分配给 Test (仅用于 submit)
-        output_dir: 可选，若提供则保存划分结果到此目录
 
-    Returns:
-        SplitDataset: 包含所有划分数据的对象
-    """
-    # 1. 加载全量训练数据
-    if verbose:
-        print("正在加载全量特征...")
+def load_full_dataset(feature_dir: str) -> Dataset:
+    """Load the full training dataset from disk."""
     features = torch.load(os.path.join(feature_dir, "train_features.pt"))
     super_labels = torch.load(os.path.join(feature_dir, "train_super_labels.pt"))
     sub_labels = torch.load(os.path.join(feature_dir, "train_sub_labels.pt"))
+    return Dataset(features, super_labels, sub_labels)
 
-    # 构建 sub -> super 映射
+
+def get_sub_to_super_map(sub_labels: torch.Tensor, super_labels: torch.Tensor) -> dict:
+    """Build a mapping from Subclass ID to Superclass ID."""
     unique_subs = torch.unique(sub_labels)
     sub_to_super = {}
     for sub in unique_subs:
-        mask = sub_labels == sub
-        super_cls = super_labels[mask][0].item()
-        sub_to_super[sub.item()] = super_cls
+        # Find first occurrence to get the super label
+        idx = (sub_labels == sub).nonzero(as_tuple=True)[0][0]
+        sub_to_super[sub.item()] = super_labels[idx].item()
+    return sub_to_super
 
-    all_subclasses = unique_subs.numpy()
-    all_superclasses = torch.unique(super_labels).numpy()
 
-    # 2. 划分 "已知类" 和 "未知类"
-    
-    # 初始化变量
-    novel_super_subclasses = set()
-    novel_super_cls = -1
-    
-    # 只有当 force_super_novel=True 时，才强制选择一个 Super Novel Class
-    if force_super_novel:
-        # 策略：选择 ID 最大的那个超类作为 Novel Superclass (或者随机选)
-        novel_super_cls = np.random.choice(all_superclasses)
-        
-        # 找出属于该超类的所有子类
-        novel_super_subclasses = [sub for sub, sup in sub_to_super.items() if sup == novel_super_cls]
-        novel_super_subclasses = set(novel_super_subclasses)
-        
-        if verbose:
-            print(f"强制选定 Super Novel Class: {novel_super_cls} (包含 {len(novel_super_subclasses)} 个子类)")
-
-    # 首先，Novel Superclass 的所有子类必须是 Novel (如果 force_super_novel=True)
-    remaining_subclasses = [s for s in all_subclasses if s not in novel_super_subclasses]
-    np.random.shuffle(remaining_subclasses)
-    
-    # 计算还需要多少个 Novel 子类
-    # novel_ratio 表示每个 split 的未知类比例
-    if val_include_novel:
-        total_novel_ratio = novel_subclass_ratio
-    else:
-        total_novel_ratio = 2 * novel_subclass_ratio
-    
-    num_total_novel = int(len(all_subclasses) * total_novel_ratio)
-    num_additional_novel = max(0, num_total_novel - len(novel_super_subclasses))
-    
-    additional_novel_classes = set(remaining_subclasses[:num_additional_novel])
-    
-    novel_classes = novel_super_subclasses.union(additional_novel_classes)
-    known_classes = set(remaining_subclasses[num_additional_novel:])
-
-    if verbose:
-        if force_super_novel:
-            print(f"类别划分: 已知类 {len(known_classes)} 个, "
-                  f"未知类 {len(novel_classes)} 个 "
-                  f"(其中 Super Novel 子类 {len(novel_super_subclasses)} 个, "
-                  f"普通 Novel 子类 {len(additional_novel_classes)} 个)")
-        else:
-             print(f"类别划分: 已知类 {len(known_classes)} 个, 未知类 {len(novel_classes)} 个 (总比例 {total_novel_ratio*100:.0f}%)")
-
-    # 4. 构建索引掩码
-    is_known = torch.tensor([s.item() in known_classes for s in sub_labels])
-    known_indices = torch.where(is_known)[0]
-    
-    # 将 Novel 样本分为两类：Super Novel 和 Ordinary Novel
-    is_super_novel = torch.tensor([s.item() in novel_super_subclasses for s in sub_labels])
-    is_ordinary_novel = torch.tensor([s.item() in additional_novel_classes for s in sub_labels])
-    
-    super_novel_indices = torch.where(is_super_novel)[0]
-    ordinary_novel_indices = torch.where(is_ordinary_novel)[0]
-
-    # 5. 切分已知类: Train / Val / Test
-    known_perm = torch.randperm(len(known_indices))
-    known_indices = known_indices[known_perm]
-
-    n_known = len(known_indices)
-    n_train = int(n_known * train_ratio)
-    n_val_test = n_known - n_train
-    n_val_known = int(n_val_test * val_test_ratio)
-
-    idx_train = known_indices[:n_train]
-    idx_val_known = known_indices[n_train:n_train + n_val_known]
-    idx_test_known = known_indices[n_train + n_val_known:]
-
-    # 6. 切分未知类
-    # 策略：
-    # 1. Super Novel 样本 -> 优先放入 Test (为了测试 Superclass OOD)
-    # 2. Ordinary Novel 样本 -> 根据配置放入 Test 或 Val+Test
-    
-    if val_include_novel:
-        # 模式A: 仅 Test 含未知类
-        # 这种情况下，Val 必须纯已知，所以 Super Novel 只能去 Test
-        idx_val_novel = torch.tensor([], dtype=torch.long)
-        # 所有未知类（Super + Ordinary）都给 Test
-        idx_test_novel = torch.cat([super_novel_indices, ordinary_novel_indices])
-    else:
-        # 模式B: Val 和 Test 都含未知类
-        
-        # 处理 Ordinary Novel
-        ord_novel_subclasses = list(additional_novel_classes)
-        np.random.shuffle(ord_novel_subclasses)
-        
-        if not force_super_novel:
-            # 原始逻辑：根据 val_test_ratio 划分未知类
-            # 此时 super_novel_indices 为空，只有 ordinary_novel_indices (即所有 novel)
-            n_val_novel_classes = int(len(ord_novel_subclasses) * val_test_ratio)
-            val_ord_novel_classes = set(ord_novel_subclasses[:n_val_novel_classes])
-            test_ord_novel_classes = set(ord_novel_subclasses[n_val_novel_classes:])
-            
-            # 构建索引
-            is_val_ord_novel = torch.tensor([s.item() in val_ord_novel_classes for s in sub_labels])
-            idx_val_novel = torch.where(is_val_ord_novel)[0]
-            
-            is_test_ord_novel = torch.tensor([s.item() in test_ord_novel_classes for s in sub_labels])
-            idx_test_novel = torch.where(is_test_ord_novel)[0]
-            
-        else:
-            # 强制 Super Novel 逻辑：Super Novel 尽量给 Val
-            # 计算 Test 需要分配多少 novel 类
-            n_test_novel_target = int(len(all_subclasses) * novel_subclass_ratio)
-            
-            # Super Novel 全给 Val，所以 Test 从 Ordinary Novel 中取
-            n_test_from_ord = min(len(ord_novel_subclasses), n_test_novel_target)
-            
-            test_ord_novel_classes = set(ord_novel_subclasses[:n_test_from_ord])
-            val_ord_novel_classes = set(ord_novel_subclasses[n_test_from_ord:])
-            
-            # 构建索引
-            # Test 只包含 Ordinary Novel
-            is_test_ord_novel = torch.tensor([s.item() in test_ord_novel_classes for s in sub_labels])
-            idx_test_novel = torch.where(is_test_ord_novel)[0]
-            
-            # Val 包含所有 Super Novel 和剩余的 Ordinary Novel
-            is_val_ord_novel = torch.tensor([s.item() in val_ord_novel_classes for s in sub_labels])
-            idx_val_ord_novel = torch.where(is_val_ord_novel)[0]
-            idx_val_novel = torch.cat([super_novel_indices, idx_val_ord_novel])
-        
-    if verbose:
-        print(f"未知样本分配: Val {len(idx_val_novel)}, Test {len(idx_test_novel)} "
-              f"(含 Super Novel {len(super_novel_indices)})")
-
-    # 7. 组装数据集
-    # 辅助函数：处理标签
-    def process_labels(indices, is_novel_super_override=False):
-        feat = features[indices]
-        sup = super_labels[indices].clone() # Clone to avoid modifying original
-        sub = sub_labels[indices].clone()
-        
-        # 如果样本属于 Super Novel Class，将其 Super Label 设为 novel_super_index
-        # 注意：这里我们已经根据 indices 选好了样本。
-        # 上面逻辑保证了 super_novel_indices 里的样本确实属于那个被选中的 novel superclass。
-        # 我们需要把这些样本的 super label 改成 novel_super_index (比如 3)
-        # 而对于 ordinary novel (属于已知 superclass 但未知 subclass)，super label 保持不变
-        
-        # 方法：检查每个样本的原始 super label 是否等于 novel_super_cls
-        # 如果是，则修改为 novel_super_index
-        # 或者更简单：我们知道 super_novel_indices 里的样本都是 novel_super_cls
-        # 但传入的是一般 indices，混合了各种情况
-        
-        # 在 idx 对应的样本中，找到属于 novel_super_cls 的，修改标签
-        mask_is_super_novel = (sup == novel_super_cls)
-        sup[mask_is_super_novel] = novel_super_index
-        
-        # 处理 Sub Labels: 所有 Novel 的 Sub Label 设为 novel_sub_index
-        # 判断是否是 Novel Class (Super or Ordinary)
-        # 我们可以利用 known_classes 集合
-        is_novel_sub = torch.tensor([s.item() in novel_classes for s in sub])
-        sub[is_novel_sub] = novel_sub_index
-        
-        return feat, sup, sub
-
-    # Train (纯已知类)
-    train_feat, train_super, train_sub = process_labels(idx_train)
-
-    # Val
-    if len(idx_val_novel) > 0:
-        val_indices = torch.cat([idx_val_known, idx_val_novel])
-    else:
-        val_indices = idx_val_known
-    val_feat, val_super, val_sub = process_labels(val_indices)
-    
-    perm_val = torch.randperm(len(val_feat))
-    val_feat, val_super, val_sub = val_feat[perm_val], val_super[perm_val], val_sub[perm_val]
-
-    # Test
-    test_indices = torch.cat([idx_test_known, idx_test_novel])
-    test_feat, test_super, test_sub = process_labels(test_indices)
-    
-    perm_test = torch.randperm(len(test_feat))
-    test_feat, test_super, test_sub = test_feat[perm_test], test_super[perm_test], test_sub[perm_test]
-
-    if verbose:
-        print(f"Train: {len(train_feat)}, Val: {len(val_feat)}, Test: {len(test_feat)}")
-
-    # 7. 可选保存
-    if output_dir:
-        os.makedirs(output_dir, exist_ok=True)
-        for name, feat, sup, sub in [
-            ("train", train_feat, train_super, train_sub),
-            ("val", val_feat, val_super, val_sub),
-            ("test", test_feat, test_super, test_sub)
-        ]:
-            torch.save(feat, os.path.join(output_dir, f"{name}_features.pt"))
-            torch.save(sup, os.path.join(output_dir, f"{name}_super_labels.pt"))
-            torch.save(sub, os.path.join(output_dir, f"{name}_sub_labels.pt"))
-        if verbose:
-            print(f"数据已保存至 {output_dir}")
-
-    return SplitDataset(
-        train_features=train_feat, train_super_labels=train_super, train_sub_labels=train_sub,
-        val_features=val_feat, val_super_labels=val_super, val_sub_labels=val_sub,
-        test_features=test_feat, test_super_labels=test_super, test_sub_labels=test_sub,
-        known_classes=known_classes, novel_classes=novel_classes
+def filter_dataset(dataset: Dataset, indices: np.ndarray) -> Dataset:
+    """Create a new Dataset containing only the specified indices."""
+    # Convert numpy array to torch tensor for indexing
+    idx_tensor = torch.from_numpy(indices)
+    return Dataset(
+        dataset.features[idx_tensor],
+        dataset.super_labels[idx_tensor],
+        dataset.sub_labels[idx_tensor]
     )
 
+
+def split_full_train_to_train_test(
+    full_dataset: Dataset,
+    test_ratio: float = 0.2,
+    test_sub_novel_ratio: float = 0.1,
+    seed: int = 42,
+    verbose: bool = True
+) -> SplitOutput:
+    """
+    Splits the full dataset into Train (Pure Known) and Test (Known + Novel).
+    
+    Args:
+        full_dataset: The complete dataset.
+        test_ratio: Target size ratio for Test set (e.g., 0.2).
+        test_sub_novel_ratio: Ratio of subclasses to treat as Novel (only in Test).
+        seed: Random seed.
+        
+    Returns:
+        SplitOutput containing train_set, test_set, and class info.
+    """
+    np.random.seed(seed)
+    
+    sub_to_super = get_sub_to_super_map(full_dataset.sub_labels, full_dataset.super_labels)
+    all_subclasses = np.array(list(sub_to_super.keys()))
+    
+    # 1. Select Novel Subclasses for Test
+    n_total = len(all_subclasses)
+    n_novel = int(n_total * test_sub_novel_ratio)
+    
+    novel_subclasses = set(np.random.choice(all_subclasses, n_novel, replace=False))
+    known_subclasses = set(all_subclasses) - novel_subclasses
+    
+    # 2. Identify indices
+    sub_labels_np = full_dataset.sub_labels.numpy()
+    
+    # Indices for Novel samples (MUST go to Test)
+    novel_indices = [i for i, x in enumerate(sub_labels_np) if x in novel_subclasses]
+    
+    # Indices for Known samples (Can go to Train or Test)
+    known_indices = [i for i, x in enumerate(sub_labels_np) if x in known_subclasses]
+    
+    # 3. Split Known samples to fill remaining Test capacity
+    # Target Test Size = Total * test_ratio
+    target_test_size = int(len(full_dataset) * test_ratio)
+    needed_known = target_test_size - len(novel_indices)
+    
+    # Ensure we don't need negative amount
+    if needed_known < 0:
+        needed_known = 0
+    
+    # Randomly select known samples for Test
+    np.random.shuffle(known_indices)
+    test_known_indices = known_indices[:needed_known]
+    train_known_indices = known_indices[needed_known:]
+    
+    # Combine indices
+    test_indices = np.array(novel_indices + test_known_indices)
+    train_indices = np.array(train_known_indices)
+    
+    # Shuffle final sets
+    np.random.shuffle(test_indices)
+    np.random.shuffle(train_indices)
+    
+    if verbose:
+        print(f"[Split: Full -> Train/Test] Seed: {seed}")
+        print(f"  Train (Pure Known): {len(train_indices)} samples")
+        print(f"  Test  (Mix):        {len(test_indices)} samples")
+        print(f"  Novel Subclasses:   {len(novel_subclasses)} (Ratio: {test_sub_novel_ratio:.1%})")
+        print(f"  Known Subclasses:   {len(known_subclasses)}")
+    
+    return SplitOutput(
+        train_set=filter_dataset(full_dataset, train_indices),
+        test_set=filter_dataset(full_dataset, test_indices),
+        known_subclasses=known_subclasses,
+        novel_subclasses=novel_subclasses,
+        novel_super_classes=set() # No novel super classes introduced in this stage
+    )
+
+
+def split_train_to_subtrain_val(
+    train_dataset: Dataset,
+    val_ratio: float = 0.2,
+    val_sub_novel_ratio: float = 0.1,
+    val_include_novel: bool = True,
+
+    force_super_novel: bool = False,
+    seed: int = 42,
+    verbose: bool = True
+) -> SplitOutput:
+    """
+    Splits Train (Known) into SubTrain and Val.
+    Val may contain "Novel" classes relative to SubTrain.
+    
+    Args:
+        train_dataset: Input dataset (Result of previous split, pure known relative to outer loop).
+        val_ratio: Target size ratio for Val set.
+        val_sub_novel_ratio: Ratio of subclasses to treat as Novel in Val.
+        val_include_novel: Whether Val should include novel classes.
+        force_super_novel: Whether to force one Superclass to be Novel in Val.
+        seed: Random seed.
+        
+    Returns:
+        SplitOutput containing train_set (SubTrain), test_set (Val), and class info.
+    """
+    np.random.seed(seed)
+    
+    sub_to_super = get_sub_to_super_map(train_dataset.sub_labels, train_dataset.super_labels)
+    all_subclasses = np.array(list(sub_to_super.keys())) # All currently known
+    
+    novel_super_subclasses = set()
+    novel_ordin_subclasses = set()
+    novel_super_classes = set()
+    
+    if val_include_novel:
+        # 1. Super Novel Selection
+        if force_super_novel:
+            all_supers = list(set(sub_to_super.values()))
+            if all_supers: # Safety check
+                target_super = np.random.choice(all_supers)
+                novel_super_classes.add(target_super)
+                
+                # Find all subclasses for this super
+                for sub, sup in sub_to_super.items():
+                    if sup == target_super:
+                        novel_super_subclasses.add(sub)
+        
+        # 2. Subclass Novel Selection (Ordinary)
+        # Goal: reach val_sub_novel_ratio
+        current_n_novel = len(novel_super_subclasses)
+        target_n_novel = int(len(all_subclasses) * val_sub_novel_ratio)
+        
+        needed = target_n_novel - current_n_novel
+        remaining_candidates = [s for s in all_subclasses if s not in novel_super_subclasses]
+        
+        if needed > 0 and len(remaining_candidates) >= needed:
+            picked = np.random.choice(remaining_candidates, needed, replace=False)
+            novel_ordin_subclasses.update(picked)
+        elif needed > 0:
+            # Not enough candidates (unlikely if ratio small), take all
+            novel_ordin_subclasses.update(remaining_candidates)
+            
+    # Combine Novels
+    all_novel_subclasses = novel_super_subclasses.union(novel_ordin_subclasses)
+    known_subclasses = set(all_subclasses) - all_novel_subclasses
+    
+    # Indices
+    sub_labels_np = train_dataset.sub_labels.numpy()
+    
+    novel_indices = [i for i, x in enumerate(sub_labels_np) if x in all_novel_subclasses]
+    known_indices = [i for i, x in enumerate(sub_labels_np) if x in known_subclasses]
+    
+    # Split Knowns to fill Val
+    target_val_size = int(len(train_dataset) * val_ratio)
+    
+    # If val_include_novel is False, novel_indices is empty, we just split knowns
+    needed_known = target_val_size - len(novel_indices)
+    
+    if needed_known < 0:
+        needed_known = 0
+        
+    np.random.shuffle(known_indices)
+    val_known_indices = known_indices[:needed_known]
+    subtrain_known_indices = known_indices[needed_known:]
+    
+    # Val gets Novel + Some Known
+    val_indices = np.array(novel_indices + val_known_indices)
+    subtrain_indices = np.array(subtrain_known_indices)
+    
+    np.random.shuffle(val_indices)
+    np.random.shuffle(subtrain_indices)
+    
+    if verbose:
+        print(f"[Split: Train -> SubTrain/Val] Seed: {seed}")
+        print(f"  SubTrain (Pure Known): {len(subtrain_indices)} samples")
+        print(f"  Val      ({'Mix' if val_include_novel else 'Pure Known'}):          {len(val_indices)} samples")
+        super_novel_info = f"{len(novel_super_classes)} classes" if force_super_novel else "None"
+        print(f"  Super Novel:           {super_novel_info}")
+        print(f"  Sub Novel (Total):     {len(all_novel_subclasses)} classes")
+        print(f"  Known Subclasses:      {len(known_subclasses)}")
+
+    return SplitOutput(
+        train_set=filter_dataset(train_dataset, subtrain_indices), # SubTrain
+        test_set=filter_dataset(train_dataset, val_indices),       # Val
+        known_subclasses=known_subclasses,
+        novel_subclasses=all_novel_subclasses,
+        novel_super_classes=novel_super_classes
+    )
