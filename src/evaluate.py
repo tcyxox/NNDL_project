@@ -130,10 +130,11 @@ def run_single_trial(cfg: dict, seed: int, verbose: bool):
         super_to_sub = None
     
     if cfg["enable_feature_gating"]:
-        # 计算阈值（自动根据是否有未知类选择方法）
+        # 计算阈值（根据 test_only_unknown 选择方法）
         thresh_super, thresh_sub = calculate_threshold_gated_dual_head(
             model, val_features, val_super_labels, val_sub_labels,
             super_map_inv, sub_map_inv, device,
+            cfg["test_only_unknown"],
             cfg["known_only_threshold"], cfg["full_val_threshold"],
             cfg["target_recall"], cfg["std_multiplier"],
             cfg["validation_score_temperature"], cfg["validation_score_method"]
@@ -146,15 +147,17 @@ def run_single_trial(cfg: dict, seed: int, verbose: bool):
             super_to_sub, cfg["prediction_score_temperature"], cfg["prediction_score_method"]
         )
     else:
-        # 计算阈值（自动根据是否有未知类选择方法）
+        # 计算阈值（根据 test_only_unknown 选择方法）
         thresh_super = calculate_threshold_linear_single_head(
             super_model, val_features, val_super_labels, super_map_inv, device,
+            cfg["test_only_unknown"],
             cfg["known_only_threshold"], cfg["full_val_threshold"],
             cfg["target_recall"], cfg["std_multiplier"],
             cfg["validation_score_temperature"], cfg["validation_score_method"]
         )
         thresh_sub = calculate_threshold_linear_single_head(
             sub_model, val_features, val_sub_labels, sub_map_inv, device,
+            cfg["test_only_unknown"],
             cfg["known_only_threshold"], cfg["full_val_threshold"],
             cfg["target_recall"], cfg["std_multiplier"],
             cfg["validation_score_temperature"], cfg["validation_score_method"]

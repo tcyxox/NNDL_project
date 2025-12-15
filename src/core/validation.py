@@ -12,6 +12,7 @@ from .scoring import compute_ood_score, get_default_threshold
 
 def calculate_threshold_linear_single_head(
         model, val_features, val_labels, label_map, device,
+        test_only_unknown: bool,
         known_only_method: KnownOnlyThreshold,
         full_val_method: FullValThreshold,
         target_recall, std_multiplier,
@@ -19,7 +20,7 @@ def calculate_threshold_linear_single_head(
 ):
     """
     在验证集上为 LinearSingleHead 计算 OSR 阈值
-    自动根据验证集是否有未知类样本选择方法
+    根据 test_only_unknown 选择阈值方法
 
     Args:
         model: LinearSingleHead 模型
@@ -27,6 +28,7 @@ def calculate_threshold_linear_single_head(
         val_labels: 验证集标签
         label_map: local_to_global 映射
         device: 'cuda' or 'cpu'
+        test_only_unknown: 是否仅 test 含未知类（决定使用哪种阈值方法）
         known_only_method: KnownOnlyThreshold Enum - 无未知类时使用的方法
         full_val_method: FullValThreshold Enum - 有未知类时使用的方法
         target_recall: 目标召回率 (如 0.95)，用于 Quantile 方法
@@ -42,24 +44,24 @@ def calculate_threshold_linear_single_head(
     # 计算 known/unknown mask
     known_mask = torch.tensor([l.item() in label_map.values() for l in val_labels])
     unknown_mask = ~known_mask
-    has_unknown = unknown_mask.sum() > 0
 
     with torch.no_grad():
         all_logits = model(val_features.to(device))
         all_scores = compute_ood_score(all_logits, temperature, score_method)
 
     known_scores = all_scores[known_mask]
-    unknown_scores = all_scores[unknown_mask] if has_unknown else None
+    unknown_scores = all_scores[unknown_mask]
 
-    if has_unknown:
-        # 有未知类样本，使用 FullVal 方法
-        threshold = _apply_full_val_threshold(
-            full_val_method, known_scores, unknown_scores, score_method
-        )
-    else:
-        # 无未知类样本，使用 KnownOnly 方法
+    # 根据 test_only_unknown 决定使用哪种方法
+    if test_only_unknown:
+        # Val 不含未知类，使用 KnownOnly 方法
         threshold = _apply_known_only_threshold(
             known_only_method, known_scores, target_recall, std_multiplier, score_method
+        )
+    else:
+        # Val 含未知类，使用 FullVal 方法
+        threshold = _apply_full_val_threshold(
+            full_val_method, known_scores, unknown_scores, score_method
         )
 
     return threshold
@@ -68,6 +70,7 @@ def calculate_threshold_linear_single_head(
 def calculate_threshold_gated_dual_head(
         model, val_features, val_super_labels, val_sub_labels,
         super_map_inv, sub_map_inv, device,
+        test_only_unknown: bool,
         known_only_method: KnownOnlyThreshold,
         full_val_method: FullValThreshold,
         target_recall, std_multiplier,
@@ -75,7 +78,7 @@ def calculate_threshold_gated_dual_head(
 ):
     """
     在验证集上为 GatedDualHead 计算 OSR 阈值
-    超类和子类分别根据是否有未知样本选择方法
+    根据 test_only_unknown 选择阈值方法
 
     Args:
         model: GatedDualHead 模型
@@ -85,6 +88,7 @@ def calculate_threshold_gated_dual_head(
         super_map_inv: {local_id: global_id} - 超类映射
         sub_map_inv: {local_id: global_id} - 子类映射
         device: str - 'cuda' or 'cpu'
+        test_only_unknown: 是否仅 test 含未知类（决定使用哪种阈值方法）
         known_only_method: KnownOnlyThreshold Enum - 无未知类时使用的方法
         full_val_method: FullValThreshold Enum - 有未知类时使用的方法
         target_recall: float - 目标召回率 (如 0.95)，用于 Quantile 方法
@@ -103,36 +107,33 @@ def calculate_threshold_gated_dual_head(
     known_sub = torch.tensor([l.item() in sub_map_inv for l in val_sub_labels])
     unknown_super = ~known_super
     unknown_sub = ~known_sub
-    has_unknown_super = unknown_super.sum() > 0
-    has_unknown_sub = unknown_sub.sum() > 0
 
     with torch.no_grad():
         super_logits, sub_logits = model(val_features.to(device))
         super_scores = compute_ood_score(super_logits, temperature, score_method)
         sub_scores = compute_ood_score(sub_logits, temperature, score_method)
 
-    # Superclass threshold
     known_super_scores = super_scores[known_super]
-    if has_unknown_super:
-        unknown_super_scores = super_scores[unknown_super]
-        thresh_super = _apply_full_val_threshold(
-            full_val_method, known_super_scores, unknown_super_scores, score_method
-        )
-    else:
+    known_sub_scores = sub_scores[known_sub]
+    unknown_super_scores = super_scores[unknown_super]
+    unknown_sub_scores = sub_scores[unknown_sub]
+
+    # 根据 test_only_unknown 决定使用哪种方法
+    if test_only_unknown:
+        # Val 不含未知类，使用 KnownOnly 方法
         thresh_super = _apply_known_only_threshold(
             known_only_method, known_super_scores, target_recall, std_multiplier, score_method
         )
-
-    # Subclass threshold
-    known_sub_scores = sub_scores[known_sub]
-    if has_unknown_sub:
-        unknown_sub_scores = sub_scores[unknown_sub]
-        thresh_sub = _apply_full_val_threshold(
-            full_val_method, known_sub_scores, unknown_sub_scores, score_method
-        )
-    else:
         thresh_sub = _apply_known_only_threshold(
             known_only_method, known_sub_scores, target_recall, std_multiplier, score_method
+        )
+    else:
+        # Val 含未知类，使用 FullVal 方法
+        thresh_super = _apply_full_val_threshold(
+            full_val_method, known_super_scores, unknown_super_scores, score_method
+        )
+        thresh_sub = _apply_full_val_threshold(
+            full_val_method, known_sub_scores, unknown_sub_scores, score_method
         )
 
     return thresh_super, thresh_sub

@@ -129,6 +129,7 @@ def calibrate_threshold_single_seed(cfg: dict, seed: int):
         thresh_super, thresh_sub = calculate_threshold_gated_dual_head(
             model, threshold_features, threshold_super_labels, threshold_sub_labels,
             super_map_inv, sub_map_inv, device,
+            False,  # val+test 合并，这里始终包含未知类
             cfg["known_only_threshold"], cfg["full_val_threshold"],
             cfg["target_recall"], cfg["std_multiplier"],
             cfg["validation_score_temperature"], cfg["validation_score_method"]
@@ -136,12 +137,14 @@ def calibrate_threshold_single_seed(cfg: dict, seed: int):
     else:
         thresh_super = calculate_threshold_linear_single_head(
             super_model, threshold_features, threshold_super_labels, super_map_inv, device,
+            False,  # val+test 合并，这里始终包含未知类
             cfg["known_only_threshold"], cfg["full_val_threshold"],
             cfg["target_recall"], cfg["std_multiplier"],
             cfg["validation_score_temperature"], cfg["validation_score_method"]
         )
         thresh_sub = calculate_threshold_linear_single_head(
             sub_model, threshold_features, threshold_sub_labels, sub_map_inv, device,
+            False,  # val+test 合并，这里始终包含未知类
             cfg["known_only_threshold"], cfg["full_val_threshold"],
             cfg["target_recall"], cfg["std_multiplier"],
             cfg["validation_score_temperature"], cfg["validation_score_method"]
