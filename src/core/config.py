@@ -72,7 +72,7 @@ class ExperimentConfig:
     seed: int = 42  # evaluate 时不使用，评估流程中只有 extract features 用到
 
     # 数据划分模式
-    test_only_unknown: bool = True  # True: val 不含未知类; False: val含未知类
+    test_only_unknown: bool = False  # True: val 不含未知类; False: val含未知类
 
     # 训练参数
     batch_size: int = 64
@@ -90,12 +90,11 @@ class ExperimentConfig:
     std_multiplier: float = 1.645  # ZScore 方法: 标准差乘数，1.645
 
     # 方法选择
-    training_loss: TrainingLoss = TrainingLoss.CE
-    validation_score_method: OODScoreMethod = OODScoreMethod.MSP
-    prediction_score_method: OODScoreMethod = OODScoreMethod.MSP
-    validation_score_temperature: float = 1.5
-    prediction_score_temperature: float = 1.5
-
+    training_loss: TrainingLoss = TrainingLoss.BCE
+    validation_score_method: OODScoreMethod = OODScoreMethod.MaxSigmoid
+    prediction_score_method: OODScoreMethod = OODScoreMethod.MaxSigmoid
+    validation_score_temperature: float = 0.2
+    prediction_score_temperature: float = 0.2
 
 @dataclass
 class Config:

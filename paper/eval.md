@@ -46,7 +46,9 @@ class ExperimentConfig:
 
 ## 基础架构探索
 
-### Baseline: Linear Dual Head + MSP (Temperature = 1) + Quantile (Recall = 95%)
+对于阈值设定方法：在正态分布下，Recall = 95% 对应 Z-Score = 1.645，后文都使用该值。
+
+### Baseline: Linear Dual Head + MSP (Temperature = 1) + Quantile
 
 ```py
     # 训练参数
@@ -75,16 +77,16 @@ class ExperimentConfig:
     prediction_score_temperature: float = 1
 ```
 
-  [Superclass] Overall     : 95.54% ± 0.46%
-  [Superclass] Seen        : 95.54% ± 0.46%
+  [Superclass] Overall     : 91.66% ± 3.27%
+  [Superclass] Seen        : 91.66% ± 3.27%
   [Superclass] Unseen      : 0.00% ± 0.00%
-  [Subclass] Overall       : 62.99% ± 1.83%
-  [Subclass] Seen          : 89.33% ± 2.39%
-  [Subclass] Unseen        : 41.50% ± 3.69%
+  [Subclass] Overall       : 65.22% ± 0.51%
+  [Subclass] Seen          : 87.01% ± 2.13%
+  [Subclass] Unseen        : 43.53% ± 2.55%
   [Superclass] AUROC       : nan ± nan
-  [Subclass] AUROC         : 0.8423 ± 0.0140
+  [Subclass] AUROC         : 0.8540 ± 0.0283
 
-### Baseline: Linear Dual Head + MSP (Temperature = 1) + Z-Score (k = 1.645)
+### Baseline: Linear Dual Head + MSP (Temperature = 1) + Z-Score
 
 ```py
     # 训练参数
@@ -113,18 +115,18 @@ class ExperimentConfig:
     prediction_score_temperature: float = 1
 ```
 
-  [Superclass] Overall     : 98.97% ± 0.39%
-  [Superclass] Seen        : 98.97% ± 0.39%
+  [Superclass] Overall     : 98.47% ± 1.07%
+  [Superclass] Seen        : 98.47% ± 1.07%
   [Superclass] Unseen      : 0.00% ± 0.00%
-  [Subclass] Overall       : 67.75% ± 1.94%
-  [Subclass] Seen          : 88.25% ± 0.91%
-  [Subclass] Unseen        : 51.02% ± 3.45%
+  [Subclass] Overall       : 69.99% ± 2.43%
+  [Subclass] Seen          : 88.24% ± 1.58%
+  [Subclass] Unseen        : 51.90% ± 5.56%
   [Superclass] AUROC       : nan ± nan
-  [Subclass] AUROC         : 0.8423 ± 0.0140
+  [Subclass] AUROC         : 0.8540 ± 0.0283
 
 结论：使用 ZScore 设定阈值，是基于分布的统计方法，性能相较于 Baseline 有显著提升。
 
-### Linear Dual Head + MSP + Z-Score (k = 1.645)
+### Linear Dual Head + MSP + Z-Score
 
 ```py
     # 训练参数
@@ -153,18 +155,18 @@ class ExperimentConfig:
     prediction_score_temperature: float = 1.5
 ```
 
-  [Superclass] Overall     : 98.17% ± 0.32%
-  [Superclass] Seen        : 98.17% ± 0.32%
+  [Superclass] Overall     : 97.25% ± 2.28%
+  [Superclass] Seen        : 97.25% ± 2.28%
   [Superclass] Unseen      : 0.00% ± 0.00%
-  [Subclass] Overall       : 71.02% ± 1.98%
-  [Subclass] Seen          : 87.31% ± 1.28%
-  [Subclass] Unseen        : 57.76% ± 3.71%
+  [Subclass] Overall       : 72.99% ± 3.39%
+  [Subclass] Seen          : 87.33% ± 1.59%
+  [Subclass] Unseen        : 58.80% ± 7.47%
   [Superclass] AUROC       : nan ± nan
-  [Subclass] AUROC         : 0.8572 ± 0.0158
+  [Subclass] AUROC         : 0.8679 ± 0.0265
   
 观察：MSP 方法受益于较高温度，T=1.5 时性能最优。高温时，模型关注相对尖锐度
 
-### Linear Dual Head + MSP + Hierarchical Masking + Z-Score (k = 1.645)
+### Linear Dual Head + MSP + Hierarchical Masking + Z-Score
 
 ```py
     # 训练参数
@@ -193,18 +195,18 @@ class ExperimentConfig:
     prediction_score_temperature: float = 1.5
 ```
 
-  [Superclass] Overall     : 98.17% ± 0.32%
-  [Superclass] Seen        : 98.17% ± 0.32%
+  [Superclass] Overall     : 97.25% ± 2.28%
+  [Superclass] Seen        : 97.25% ± 2.28%
   [Superclass] Unseen      : 0.00% ± 0.00%
-  [Subclass] Overall       : 71.02% ± 1.98%
-  [Subclass] Seen          : 87.31% ± 1.28%
-  [Subclass] Unseen        : 57.76% ± 3.71%
+  [Subclass] Overall       : 72.99% ± 3.39%
+  [Subclass] Seen          : 87.33% ± 1.59%
+  [Subclass] Unseen        : 58.80% ± 7.47%
   [Superclass] AUROC       : nan ± nan
-  [Subclass] AUROC         : 0.8572 ± 0.0158
+  [Subclass] AUROC         : 0.8679 ± 0.0265
 
 结论：根据理论，Baseline + Hierarchical Masking >= Baseline 恒成立。
 
-### Gated Dual Head + MSP + Hierarchical Masking + Z-Score (k = 1.645)
+### Gated Dual Head + MSP + Hierarchical Masking + Z-Score
 
 ```py
     # 训练参数
@@ -233,14 +235,14 @@ class ExperimentConfig:
     prediction_score_temperature: float = 1.5
 ```
 
-  [Superclass] Overall     : 98.56% ± 0.35%
-  [Superclass] Seen        : 98.56% ± 0.35%
+  [Superclass] Overall     : 97.74% ± 1.81%
+  [Superclass] Seen        : 97.74% ± 1.81%
   [Superclass] Unseen      : 0.00% ± 0.00%
-  [Subclass] Overall       : 71.35% ± 2.12%
-  [Subclass] Seen          : 87.30% ± 1.66%
-  [Subclass] Unseen        : 58.33% ± 3.90%
+  [Subclass] Overall       : 73.83% ± 3.88%
+  [Subclass] Seen          : 88.03% ± 1.30%
+  [Subclass] Unseen        : 59.79% ± 8.48%
   [Superclass] AUROC       : nan ± nan
-  [Subclass] AUROC         : 0.8663 ± 0.0113
+  [Subclass] AUROC         : 0.8821 ± 0.0234
 
 观察：开启 Feature Gating 后，需要使用更多 epochs 训练。
 
@@ -248,7 +250,7 @@ class ExperimentConfig:
 
 ## 具体方法和参数探索
 
-此后若未特别说明，全部使用 Linear Dual Head + Hierarchical Masking + Z-Score (k = 1.645)
+此后若未特别说明，全部使用 Linear Dual Head + Hierarchical Masking + Z-Score
 
 ```py
     # 数据划分模式
@@ -281,7 +283,7 @@ class ExperimentConfig:
     prediction_score_temperature: float = 1.5
 ```
 
-98.56% ± 0.35%, 71.35% ± 2.12%, 87.30% ± 1.66%, 58.33% ± 3.90%, 0.8663 ± 0.0113
+97.74% ± 1.81%, 73.83% ± 3.88%, 88.03% ± 1.30%, 59.79% ± 8.48%, 0.8821 ± 0.0234
 
 ### 引出 BCE, MaxSigmoid, Energy
 
@@ -302,14 +304,14 @@ class ExperimentConfig:
     prediction_score_temperature: float = 0.2
 ```
 
-  [Superclass] Overall     : 99.72% ± 0.24%
-  [Superclass] Seen        : 99.72% ± 0.24%
+  [Superclass] Overall     : 99.61% ± 0.35%
+  [Superclass] Seen        : 99.61% ± 0.35%
   [Superclass] Unseen      : 0.00% ± 0.00%
-  [Subclass] Overall       : 71.26% ± 3.40%
-  [Subclass] Seen          : 87.35% ± 1.12%
-  [Subclass] Unseen        : 58.14% ± 6.58%
+  [Subclass] Overall       : 75.30% ± 3.70%
+  [Subclass] Seen          : 87.29% ± 0.84%
+  [Subclass] Unseen        : 63.30% ± 8.03%
   [Superclass] AUROC       : nan ± nan
-  [Subclass] AUROC         : 0.8524 ± 0.0270
+  [Subclass] AUROC         : 0.8721 ± 0.0365
 
 观察：MaxSigmoid 受益于较低温度，T=0.2 时综合性能最优，但与标准温度结果相差不大，原因未知。温度越低，seen 性能越好，unseen 性能越差。
 
@@ -318,8 +320,9 @@ class ExperimentConfig:
 ### BCE + Energy + Quantile
 
 ```py
-    # 阈值设定
-    threshold_method: ThresholdMethod = ThresholdMethod.ZScore  # 阈值设定方法
+    # 阈值设定（自动根据验证集是否有未知类选择方法）
+    known_only_threshold: KnownOnlyThreshold = KnownOnlyThreshold.Quantile  # 无未知类时
+    full_val_threshold: FullValThreshold = FullValThreshold.Intersection  # 有未知类时
     target_recall: float = 0.95  # Quantile 方法: target recall
     std_multiplier: float = 1.645  # ZScore 方法: 标准差乘数
 
@@ -331,15 +334,14 @@ class ExperimentConfig:
     prediction_score_temperature: float = 0.05
 ```
 
-Quantile: T=0.02
-  [Superclass] Overall     : 95.34% ± 0.33%
-  [Superclass] Seen        : 95.34% ± 0.33%
+  [Superclass] Overall     : 91.89% ± 3.53%
+  [Superclass] Seen        : 91.89% ± 3.53%
   [Superclass] Unseen      : 0.00% ± 0.00%
-  [Subclass] Overall       : 68.01% ± 2.82%
-  [Subclass] Seen          : 89.01% ± 1.82%
-  [Subclass] Unseen        : 50.86% ± 4.91%
+  [Subclass] Overall       : 70.88% ± 1.51%
+  [Subclass] Seen          : 87.29% ± 0.89%
+  [Subclass] Unseen        : 54.50% ± 3.91%
   [Superclass] AUROC       : nan ± nan
-  [Subclass] AUROC         : 0.8593 ± 0.0251
+  [Subclass] AUROC         : 0.8755 ± 0.0343
 
 观察：
 - Energy 方法由于是无界的，所以 Z-Score 阈值方法不如 Quantile。因此后面讨论 Energy 方法时，都使用 Quantile。
@@ -348,11 +350,11 @@ Quantile: T=0.02
 ## Variant 探索
 
 - CE + MSP (T=1.5):
-98.56% ± 0.35%, 71.35% ± 2.12%, 87.30% ± 1.66%, 58.33% ± 3.90%, 0.8663 ± 0.0113
+97.74% ± 1.81%, 73.83% ± 3.88%, 88.03% ± 1.30%, 59.79% ± 8.48%, 0.8821 ± 0.0234
 - BCE + MaxSigmoid (T=0.2):
-99.72% ± 0.24%, 71.26% ± 3.40%, 87.35% ± 1.12%, 58.14% ± 6.58%, 0.8524 ± 0.0270
+99.61% ± 0.35%, 75.30% ± 3.70%, 87.29% ± 0.84%, 63.30% ± 8.03%, 0.8721 ± 0.0365
 - BCE + Energy (T=0.02):
-95.34% ± 0.33%, 68.01% ± 2.82%, 89.01% ± 1.82%, 50.86% ± 4.91%, 0.8593 ± 0.0251
+91.89% ± 3.53%, 70.88% ± 1.51%, 87.29% ± 0.89%, 54.50% ± 3.91%, 0.8755 ± 0.0343
 
 变种使用不一致的 Threshold & Prediction 温度 (Tt != Tp)
 
@@ -360,16 +362,7 @@ Quantile: T=0.02
 
 观察：提高 Tt 或降低 Tp：seen 准确率上升，unseen 准确率下降。
 
-平衡 seen & unseen：根据试验，不一致的 Tt & Tp 会一定程度损害 super 准确率，当 Tt=1.5, Tp=1.75 时，seen 准确率下降 1%，unseen 准确率上升 4%。
-
-  [Superclass] Overall     : 97.80% ± 0.38%
-  [Superclass] Seen        : 97.80% ± 0.38%
-  [Superclass] Unseen      : 0.00% ± 0.00%
-  [Subclass] Overall       : 75.92% ± 2.14%
-  [Subclass] Seen          : 83.71% ± 2.41%
-  [Subclass] Unseen        : 69.59% ± 3.62%
-  [Superclass] AUROC       : nan ± nan
-  [Subclass] AUROC         : 0.8705 ± 0.0129
+平衡 seen & unseen：根据试验，不一致的 Tt & Tp 会严重损害 super 准确率，因此原配置最佳。
 
 ### BCE + MaxSigmoid
 
@@ -399,25 +392,21 @@ super seen, sub overall, sub seen, sub unseen, sub auroc
 ### 追求一致性：
 
 - CE + MSP (T=1.5):
-98.56% ± 0.35%, 71.35% ± 2.12%, 87.30% ± 1.66%, 58.33% ± 3.90%, 0.8663 ± 0.0113
+97.74% ± 1.81%, 73.83% ± 3.88%, 88.03% ± 1.30%, 59.79% ± 8.48%, 0.8821 ± 0.0234
 - BCE + MaxSigmoid (T=0.2):
-99.72% ± 0.24%, 71.26% ± 3.40%, 87.35% ± 1.12%, 58.14% ± 6.58%, 0.8524 ± 0.0270
+99.61% ± 0.35%, 75.30% ± 3.70%, 87.29% ± 0.84%, 63.30% ± 8.03%, 0.8721 ± 0.0365
 - BCE + Energy (T=0.02):
-95.34% ± 0.33%, 68.01% ± 2.82%, 89.01% ± 1.82%, 50.86% ± 4.91%, 0.8593 ± 0.0251
-
-- 应该选 BCE + MaxSigmoid (T=0.2)。
+91.89% ± 3.53%, 70.88% ± 1.51%, 87.29% ± 0.89%, 54.50% ± 3.91%, 0.8755 ± 0.0343
 
 ### 忽略一致性，追求性能，且尽可能平衡 seen & unseen：
 
-- CE + MSP (Tt=1.5, Tp=1.75):      
-97.80% ± 0.38%, 75.92% ± 2.14%, 83.71% ± 2.41%, 69.59% ± 3.62%, 0.8705 ± 0.0129
-- BCE + MaxSigmoid (T=0.2):
-99.72% ± 0.24%, 71.26% ± 3.40%, 87.35% ± 1.12%, 58.14% ± 6.58%, 0.8524 ± 0.0270
-- BCE + Energy (Tt=2, Tp=0.02): 
-95.34% ± 0.21%, 75.79% ± 2.42%，79.59% ± 1.99%, 72.70% ± 5.18%, 0.8593 ± 0.0251
+- BCE + Energy (Tt=1.5, Tp=0.02): 
+91.87% ± 3.53%, 76.53% ± 2.10%, 82.04% ± 0.85%, 71.03% ± 4.92%, 0.8755 ± 0.0344
 
-- 最高 AUROC，应该选 CE + MSP (Tt=Tp=3.5)
-- 最高 super seen，选 BCE + MaxSigmoid (T=0.2)
+### 总结
+
+- 最高 AUROC，应该选 CE + MSP (Tt=Tp=1.5)
+- 最高 super seen，选 BCE + MaxSigmoid (Tt=Tp=0.2)
 
 ### 关于 Threshold 设定参数
 
@@ -435,38 +424,15 @@ super seen, sub overall, sub seen, sub unseen, sub auroc
 ```py
     # 数据划分模式
     test_only_unknown: bool = False  # True: val 不含未知类; False: val含未知类
-
-    # 训练参数
-    batch_size: int = 64
-    learning_rate: float = 1e-3
-    epochs: int = 75
-
-    # 模型选择
-    enable_hierarchical_masking: bool = True  # 推理时 Hierarchical Masking 开关
-    enable_feature_gating: bool = True  # 训练时 SE Feature Gating 开关
-
-    # 阈值设定（自动根据验证集是否有未知类选择方法）
-    known_only_threshold: KnownOnlyThreshold = KnownOnlyThreshold.ZScore  # 无未知类时
-    full_val_threshold: FullValThreshold = FullValThreshold.Intersection  # 有未知类时
-    target_recall: float = 0.95  # Quantile 方法: target recall，95%
-    std_multiplier: float = 1.645  # ZScore 方法: 标准差乘数，1.645
-
-    # 方法选择
-    training_loss: TrainingLoss = TrainingLoss.CE
-    validation_score_method: OODScoreMethod = OODScoreMethod.MSP
-    prediction_score_method: OODScoreMethod = OODScoreMethod.MSP
-    validation_score_temperature: float = 1.5
-    prediction_score_temperature: float = 1.5
 ```
 
-  [Superclass] Overall     : 98.62% ± 0.50%
-  [Superclass] Seen        : 98.62% ± 0.50%
-  [Superclass] Unseen      : 0.00% ± 0.00%
-  [Subclass] Overall       : 79.57% ± 1.55%
-  [Subclass] Seen          : 72.68% ± 2.61%
-  [Subclass] Unseen        : 84.90% ± 4.12%
-  [Superclass] AUROC       : nan ± nan
-  [Subclass] AUROC         : 0.8663 ± 0.0119
+TODO
+- CE + MSP (T=1.5):
+  97.74% ± 1.81%, 73.83% ± 3.88%, 88.03% ± 1.30%, 59.79% ± 8.48%, 0.8821 ± 0.0234
+- BCE + MaxSigmoid (T=0.2):
+  99.61% ± 0.35%, 75.30% ± 3.70%, 87.29% ± 0.84%, 63.30% ± 8.03%, 0.8721 ± 0.0365
+- BCE + Energy (T=0.02):
+  91.89% ± 3.53%, 70.88% ± 1.51%, 87.29% ± 0.89%, 54.50% ± 3.91%, 0.8755 ± 0.0343
 
 # CAC 
 ## v1.0
