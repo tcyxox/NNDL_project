@@ -22,10 +22,15 @@ class OODScoreMethod(Enum):
     MaxSigmoid = "max_sigmoid"  # Max Sigmoid Probability
 
 
-class ThresholdMethod(Enum):
-    """阈值设定方法"""
+class KnownOnlyThreshold(Enum):
+    """阈值设定方法 - 仅使用已知类样本"""
     Quantile = "quantile"  # 使用 target recall 设定阈值
     ZScore = "zscore"      # 使用 mean - k*std 设定阈值
+
+
+class FullValThreshold(Enum):
+    """阈值设定方法 - 需要已知+未知类样本"""
+    Intersection = "intersection"  # 已知/未知分布交叉点
 
 
 # ================= 配置类 =================
@@ -75,9 +80,9 @@ class ExperimentConfig:
     enable_hierarchical_masking: bool = True  # 推理时 Hierarchical Masking 开关
     enable_feature_gating: bool = True  # 训练时 SE Feature Gating 开关
 
-    # 阈值设定
-    use_full_val_for_threshold: bool = False  # 是否使用完整验证集（已知+未知）计算阈值
-    threshold_method: ThresholdMethod = ThresholdMethod.ZScore  # 阈值设定方法
+    # 阈值设定（自动根据验证集是否有未知类选择方法）
+    known_only_threshold: KnownOnlyThreshold = KnownOnlyThreshold.ZScore  # 无未知类时使用
+    full_val_threshold: FullValThreshold = FullValThreshold.Intersection  # 有未知类时使用
     target_recall: float = 0.95  # Quantile 方法: target recall，95%
     std_multiplier: float = 1.645  # ZScore 方法: 标准差乘数，1.645
 
@@ -99,3 +104,4 @@ class Config:
 
 
 config = Config()
+

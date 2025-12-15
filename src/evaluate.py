@@ -4,7 +4,7 @@ import numpy as np
 import torch
 from sklearn.metrics import accuracy_score, roc_auc_score
 
-from core.config import config, TrainingLoss, OODScoreMethod, ThresholdMethod
+from core.config import config, TrainingLoss, OODScoreMethod, KnownOnlyThreshold, FullValThreshold
 from core.data_split import split_features
 from core.prediction import predict_with_linear_single_head, predict_with_gated_dual_head
 from core.validation import calculate_threshold_linear_single_head, calculate_threshold_gated_dual_head
@@ -23,9 +23,9 @@ CONFIG = {
     # 模型参数
     "enable_feature_gating": config.experiment.enable_feature_gating,
     "enable_hierarchical_masking": config.experiment.enable_hierarchical_masking,
-    # 阈值设定参数
-    "use_full_val_for_threshold": config.experiment.use_full_val_for_threshold,
-    "threshold_method": config.experiment.threshold_method,
+    # 阈值设定参数（自动选择）
+    "known_only_threshold": config.experiment.known_only_threshold,
+    "full_val_threshold": config.experiment.full_val_threshold,
     "target_recall": config.experiment.target_recall,
     "std_multiplier": config.experiment.std_multiplier,
     # 方法参数
@@ -137,12 +137,12 @@ def run_single_trial(cfg: dict, seed: int, verbose: bool, use_val_as_test: bool)
         super_to_sub = None
     
     if cfg["enable_feature_gating"]:
-        # 计算阈值
+        # 计算阈值（自动根据是否有未知类选择方法）
         thresh_super, thresh_sub = calculate_threshold_gated_dual_head(
             model, val_features, val_super_labels, val_sub_labels,
             super_map_inv, sub_map_inv, device,
-            cfg["use_full_val_for_threshold"],
-            cfg["threshold_method"], cfg["target_recall"], cfg["std_multiplier"],
+            cfg["known_only_threshold"], cfg["full_val_threshold"],
+            cfg["target_recall"], cfg["std_multiplier"],
             cfg["validation_score_temperature"], cfg["validation_score_method"]
         )
         
@@ -153,17 +153,17 @@ def run_single_trial(cfg: dict, seed: int, verbose: bool, use_val_as_test: bool)
             super_to_sub, cfg["prediction_score_temperature"], cfg["prediction_score_method"]
         )
     else:
-        # 计算阈值
+        # 计算阈值（自动根据是否有未知类选择方法）
         thresh_super = calculate_threshold_linear_single_head(
             super_model, val_features, val_super_labels, super_map_inv, device,
-            cfg["use_full_val_for_threshold"],
-            cfg["threshold_method"], cfg["target_recall"], cfg["std_multiplier"],
+            cfg["known_only_threshold"], cfg["full_val_threshold"],
+            cfg["target_recall"], cfg["std_multiplier"],
             cfg["validation_score_temperature"], cfg["validation_score_method"]
         )
         thresh_sub = calculate_threshold_linear_single_head(
             sub_model, val_features, val_sub_labels, sub_map_inv, device,
-            cfg["use_full_val_for_threshold"],
-            cfg["threshold_method"], cfg["target_recall"], cfg["std_multiplier"],
+            cfg["known_only_threshold"], cfg["full_val_threshold"],
+            cfg["target_recall"], cfg["std_multiplier"],
             cfg["validation_score_temperature"], cfg["validation_score_method"]
         )
         
@@ -267,14 +267,12 @@ if __name__ == "__main__":
     print("=" * 75)
     print(f"Evaluation Set: {eval_set}")
     print(f"Training Loss: {CONFIG['training_loss'].value} | Epochs: {CONFIG['epochs']}")
-    # 阈值设定方法
-    if CONFIG["threshold_method"] == ThresholdMethod.ZScore:
-        print(f"Threshold: {CONFIG['threshold_method'].value} (std_multiplier={CONFIG['std_multiplier']})")
-    else:
-        print(f"Threshold: {CONFIG['threshold_method'].value} (recall={CONFIG['target_recall']})")
+    # 阈值设定方法（自动选择）
+    print(f"Threshold: known_only={CONFIG['known_only_threshold'].value}, full_val={CONFIG['full_val_threshold'].value}")
     print(f"Validation: {CONFIG['validation_score_method'].value} (T={CONFIG['validation_score_temperature']})")
     print(f"Prediction: {CONFIG['prediction_score_method'].value} (T={CONFIG['prediction_score_temperature']})")
     print("=" * 75)
     
     stats = run_multiple_trials(CONFIG, SEEDS, False, USE_VAL_AS_TEST)
     print_evaluation_report(stats)
+

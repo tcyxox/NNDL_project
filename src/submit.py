@@ -51,9 +51,9 @@ CONFIG = {
     "enable_hierarchical_masking": config.experiment.enable_hierarchical_masking,
     "training_loss": config.experiment.training_loss,
     
-    # 阈值设定参数
-    "use_full_val_for_threshold": config.experiment.use_full_val_for_threshold,
-    "threshold_method": config.experiment.threshold_method,
+    # 阈值设定参数（自动选择）
+    "known_only_threshold": config.experiment.known_only_threshold,
+    "full_val_threshold": config.experiment.full_val_threshold,
     "target_recall": config.experiment.target_recall,
     "std_multiplier": config.experiment.std_multiplier,
     
@@ -128,21 +128,21 @@ def calibrate_threshold_single_seed(cfg: dict, seed: int):
         thresh_super, thresh_sub = calculate_threshold_gated_dual_head(
             model, threshold_features, threshold_super_labels, threshold_sub_labels,
             super_map_inv, sub_map_inv, device,
-            cfg["use_full_val_for_threshold"],
-            cfg["threshold_method"], cfg["target_recall"], cfg["std_multiplier"],
+            cfg["known_only_threshold"], cfg["full_val_threshold"],
+            cfg["target_recall"], cfg["std_multiplier"],
             cfg["validation_score_temperature"], cfg["validation_score_method"]
         )
     else:
         thresh_super = calculate_threshold_linear_single_head(
             super_model, threshold_features, threshold_super_labels, super_map_inv, device,
-            cfg["use_full_val_for_threshold"],
-            cfg["threshold_method"], cfg["target_recall"], cfg["std_multiplier"],
+            cfg["known_only_threshold"], cfg["full_val_threshold"],
+            cfg["target_recall"], cfg["std_multiplier"],
             cfg["validation_score_temperature"], cfg["validation_score_method"]
         )
         thresh_sub = calculate_threshold_linear_single_head(
             sub_model, threshold_features, threshold_sub_labels, sub_map_inv, device,
-            cfg["use_full_val_for_threshold"],
-            cfg["threshold_method"], cfg["target_recall"], cfg["std_multiplier"],
+            cfg["known_only_threshold"], cfg["full_val_threshold"],
+            cfg["target_recall"], cfg["std_multiplier"],
             cfg["validation_score_temperature"], cfg["validation_score_method"]
         )
     
