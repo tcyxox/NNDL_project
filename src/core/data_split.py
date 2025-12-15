@@ -90,15 +90,23 @@ def split_features(
     idx_val_known = known_indices[n_train:n_train + n_val_known]
     idx_test_known = known_indices[n_train + n_val_known:]
 
-    # 5. 切分未知类: Val / Test （训练集不能有！）
-    novel_perm = torch.randperm(len(novel_indices))
-    novel_indices = novel_indices[novel_perm]
-
-    n_novel = len(novel_indices)
-    n_val_novel = int(n_novel * val_test_ratio)
-
-    idx_val_novel = novel_indices[:n_val_novel]
-    idx_test_novel = novel_indices[n_val_novel:]
+    # 5. 切分未知类: Val / Test （按类别划分，而非按样本）
+    # Val 和 Test 使用不同的未知子类，确保泛化评估更严格
+    novel_class_list = list(novel_classes)
+    np.random.shuffle(novel_class_list)
+    n_val_novel_classes = int(len(novel_class_list) * val_test_ratio)
+    val_novel_classes = set(novel_class_list[:n_val_novel_classes])
+    test_novel_classes = set(novel_class_list[n_val_novel_classes:])
+    
+    # 获取属于 val/test 未知类的样本索引
+    is_val_novel = torch.tensor([s.item() in val_novel_classes for s in sub_labels])
+    is_test_novel = torch.tensor([s.item() in test_novel_classes for s in sub_labels])
+    idx_val_novel = torch.where(is_val_novel)[0]
+    idx_test_novel = torch.where(is_test_novel)[0]
+    
+    if verbose:
+        print(f"未知类划分: Val {len(val_novel_classes)} 类 ({len(idx_val_novel)} 样本), "
+              f"Test {len(test_novel_classes)} 类 ({len(idx_test_novel)} 样本)")
 
     # 6. 组装数据集
     # Train (纯已知类)

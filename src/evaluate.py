@@ -71,7 +71,6 @@ def run_single_trial(cfg: dict, seed: int, verbose: bool, use_val_as_test: bool)
         seed: 随机种子（控制数据划分、模型初始化和训练）
         verbose: 是否打印训练进度信息
         use_val_as_test: 如果为 True，则在验证集上评估
-    
     Returns:
         dict: 包含各项评估指标
     """
@@ -85,7 +84,7 @@ def run_single_trial(cfg: dict, seed: int, verbose: bool, use_val_as_test: bool)
         val_test_ratio=cfg["val_test_ratio"],
         novel_sub_index=cfg["novel_sub_idx"],
         output_dir=None,  # 不保存
-        verbose=False
+        verbose=verbose
     )
     
     # 2. 设置训练种子
@@ -216,7 +215,6 @@ def run_multiple_trials(cfg: dict, seeds: list[int], verbose: bool, use_val_as_t
         seeds: 随机种子列表
         verbose: 是否打印进度信息
         use_val_as_test: 如果为 True，则在验证集上评估
-    
     Returns:
         dict: 包含均值和标准差的聚合统计结果
     """
@@ -257,11 +255,12 @@ def print_evaluation_report(stats: dict):
     print(f"  [Subclass] AUROC         : {stats['sub_auroc_mean']:.4f} ± {stats['sub_auroc_std']:.4f}")
 
 if __name__ == "__main__":
-    USE_VAL_AS_TEST = False  # 设置为 True 在验证集上评估，False 在测试集上评估
+    verbose = True
+    use_val_as_test = False  # 设置为 True 在验证集上评估，False 在测试集上评估
     
     mode = "SE Feature Gating" if CONFIG["enable_feature_gating"] else "Independent Training"
     masking = "Enabled" if CONFIG["enable_hierarchical_masking"] else "Disabled"
-    eval_set = "Validation Set" if USE_VAL_AS_TEST else "Test Set"
+    eval_set = "Validation Set" if use_val_as_test else "Test Set"
     print("=" * 75)
     print(f"Multi-seed Evaluation | Mode: {mode} | Masking: {masking} | Trials: {len(SEEDS)}")
     print("=" * 75)
@@ -273,6 +272,6 @@ if __name__ == "__main__":
     print(f"Prediction: {CONFIG['prediction_score_method'].value} (T={CONFIG['prediction_score_temperature']})")
     print("=" * 75)
     
-    stats = run_multiple_trials(CONFIG, SEEDS, False, USE_VAL_AS_TEST)
+    stats = run_multiple_trials(CONFIG, SEEDS, verbose, use_val_as_test)
     print_evaluation_report(stats)
 
