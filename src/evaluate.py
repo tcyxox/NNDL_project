@@ -24,6 +24,7 @@ CONFIG = {
     "enable_feature_gating": config.experiment.enable_feature_gating,
     "enable_hierarchical_masking": config.experiment.enable_hierarchical_masking,
     # 阈值设定参数
+    "use_full_val_for_threshold": config.experiment.use_full_val_for_threshold,
     "threshold_method": config.experiment.threshold_method,
     "target_recall": config.experiment.target_recall,
     "std_multiplier": config.experiment.std_multiplier,
@@ -140,6 +141,7 @@ def run_single_trial(cfg: dict, seed: int, verbose: bool, use_val_as_test: bool)
         thresh_super, thresh_sub = calculate_threshold_gated_dual_head(
             model, val_features, val_super_labels, val_sub_labels,
             super_map_inv, sub_map_inv, device,
+            cfg["use_full_val_for_threshold"],
             cfg["threshold_method"], cfg["target_recall"], cfg["std_multiplier"],
             cfg["validation_score_temperature"], cfg["validation_score_method"]
         )
@@ -154,11 +156,13 @@ def run_single_trial(cfg: dict, seed: int, verbose: bool, use_val_as_test: bool)
         # 计算阈值
         thresh_super = calculate_threshold_linear_single_head(
             super_model, val_features, val_super_labels, super_map_inv, device,
+            cfg["use_full_val_for_threshold"],
             cfg["threshold_method"], cfg["target_recall"], cfg["std_multiplier"],
             cfg["validation_score_temperature"], cfg["validation_score_method"]
         )
         thresh_sub = calculate_threshold_linear_single_head(
             sub_model, val_features, val_sub_labels, sub_map_inv, device,
+            cfg["use_full_val_for_threshold"],
             cfg["threshold_method"], cfg["target_recall"], cfg["std_multiplier"],
             cfg["validation_score_temperature"], cfg["validation_score_method"]
         )

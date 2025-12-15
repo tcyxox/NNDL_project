@@ -12,6 +12,7 @@ from .scoring import compute_ood_score, get_default_threshold
 
 def calculate_threshold_linear_single_head(
         model, val_features, val_labels, label_map, device,
+        use_full_val: bool,
         threshold_method: ThresholdMethod, target_recall, std_multiplier,
         temperature, score_method: OODScoreMethod
 ):
@@ -24,6 +25,7 @@ def calculate_threshold_linear_single_head(
         val_labels: 验证集标签
         label_map: local_to_global 映射
         device: 'cuda' or 'cpu'
+        use_full_val: 是否使用完整验证集（已知+未知）计算阈值
         threshold_method: ThresholdMethod Enum - 阈值设定方法
         target_recall: 目标召回率 (如 0.95)，用于 Quantile 方法
         std_multiplier: 标准差乘数，用于 ZScore 方法
@@ -35,15 +37,20 @@ def calculate_threshold_linear_single_head(
     """
     model.eval()
 
-    known_mask = torch.tensor([l.item() in label_map.values() for l in val_labels])
-    X_known = val_features[known_mask].to(device)
+    if use_full_val:
+        # 使用完整验证集（已知+未知）
+        X_val = val_features.to(device)
+    else:
+        # 仅使用已知类样本
+        known_mask = torch.tensor([l.item() in label_map.values() for l in val_labels])
+        X_val = val_features[known_mask].to(device)
 
-    if len(X_known) == 0:
-        print("警告: 验证集中没有已知类样本，使用默认阈值")
+    if len(X_val) == 0:
+        print("警告: 验证集中没有样本，使用默认阈值")
         return get_default_threshold(score_method)
 
     with torch.no_grad():
-        logits = model(X_known)
+        logits = model(X_val)
         scores = compute_ood_score(logits, temperature, score_method)
         
         if threshold_method == ThresholdMethod.ZScore:
@@ -59,6 +66,7 @@ def calculate_threshold_linear_single_head(
 def calculate_threshold_gated_dual_head(
         model, val_features, val_super_labels, val_sub_labels,
         super_map_inv, sub_map_inv, device,
+        use_full_val: bool,
         threshold_method: ThresholdMethod, target_recall, std_multiplier,
         temperature, score_method: OODScoreMethod
 ):
@@ -73,6 +81,7 @@ def calculate_threshold_gated_dual_head(
         super_map_inv: {local_id: global_id} - 超类映射
         sub_map_inv: {local_id: global_id} - 子类映射
         device: str - 'cuda' or 'cpu'
+        use_full_val: bool - 是否使用完整验证集（已知+未知）计算阈值
         threshold_method: ThresholdMethod Enum - 阈值设定方法
         target_recall: float - 目标召回率 (如 0.95)，用于 Quantile 方法
         std_multiplier: float - 标准差乘数，用于 ZScore 方法
@@ -84,18 +93,23 @@ def calculate_threshold_gated_dual_head(
         thresh_sub: float - 子类阈值
     """
 
-    def _calculate_single_threshold(logits, known_mask, threshold_method, target_recall, std_multiplier, temperature, score_method):
-        if known_mask.sum() > 0:
-            scores = compute_ood_score(logits[known_mask], temperature, score_method)
-            if threshold_method == ThresholdMethod.ZScore:
-                # 使用 mean - k*std 设定阈值
-                threshold = (scores.mean() - std_multiplier * scores.std()).item()
-            else:
-                # 使用 target recall 设定阈值
-                threshold = torch.quantile(scores, 1 - target_recall).item()
+    def _calculate_single_threshold(logits, use_mask, threshold_method, target_recall, std_multiplier, temperature, score_method):
+        if use_mask is None:
+            # 使用完整验证集
+            scores = compute_ood_score(logits, temperature, score_method)
+        elif use_mask.sum() > 0:
+            # 仅使用已知类样本
+            scores = compute_ood_score(logits[use_mask], temperature, score_method)
         else:
             print(f"Warning: No known samples in validation set, using default threshold")
-            threshold = get_default_threshold(score_method)
+            return get_default_threshold(score_method)
+        
+        if threshold_method == ThresholdMethod.ZScore:
+            # 使用 mean - k*std 设定阈值
+            threshold = (scores.mean() - std_multiplier * scores.std()).item()
+        else:
+            # 使用 target recall 设定阈值
+            threshold = torch.quantile(scores, 1 - target_recall).item()
         return threshold
 
     model.eval()
@@ -103,11 +117,17 @@ def calculate_threshold_gated_dual_head(
     with torch.no_grad():
         super_logits, sub_logits = model(val_features.to(device))
 
-    known_super = torch.tensor([l.item() in super_map_inv for l in val_super_labels])
-    thresh_super = _calculate_single_threshold(super_logits, known_super, threshold_method, target_recall, std_multiplier, temperature, score_method)
+    if use_full_val:
+        # 使用完整验证集
+        thresh_super = _calculate_single_threshold(super_logits, None, threshold_method, target_recall, std_multiplier, temperature, score_method)
+        thresh_sub = _calculate_single_threshold(sub_logits, None, threshold_method, target_recall, std_multiplier, temperature, score_method)
+    else:
+        # 仅使用已知类样本
+        known_super = torch.tensor([l.item() in super_map_inv for l in val_super_labels])
+        thresh_super = _calculate_single_threshold(super_logits, known_super, threshold_method, target_recall, std_multiplier, temperature, score_method)
 
-    known_sub = torch.tensor([l.item() in sub_map_inv for l in val_sub_labels])
-    thresh_sub = _calculate_single_threshold(sub_logits, known_sub, threshold_method, target_recall, std_multiplier, temperature, score_method)
+        known_sub = torch.tensor([l.item() in sub_map_inv for l in val_sub_labels])
+        thresh_sub = _calculate_single_threshold(sub_logits, known_sub, threshold_method, target_recall, std_multiplier, temperature, score_method)
 
     return thresh_super, thresh_sub
 

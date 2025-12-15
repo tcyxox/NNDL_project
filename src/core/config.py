@@ -76,6 +76,7 @@ class ExperimentConfig:
     enable_feature_gating: bool = True  # 训练时 SE Feature Gating 开关
 
     # 阈值设定
+    use_full_val_for_threshold: bool = False  # 是否使用完整验证集（已知+未知）计算阈值
     threshold_method: ThresholdMethod = ThresholdMethod.ZScore  # 阈值设定方法
     target_recall: float = 0.95  # Quantile 方法: target recall，95%
     std_multiplier: float = 1.645  # ZScore 方法: 标准差乘数，1.645
