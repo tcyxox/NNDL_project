@@ -121,11 +121,6 @@ where $W_1 \in \mathbb{R}^{(d/r) \times d}$, $W_2 \in \mathbb{R}^{d \times (d/r)
     \mathbf{z}^{\text{sub}} = W^{\text{sub}} \tilde{\mathbf{x}} + \mathbf{b}^{\text{sub}}
 \end{equation}
 
-\textit{Joint Cross-Entropy Loss:}
-\begin{equation}
-    \mathcal{L} = \mathcal{L}_{\text{CE}}(\mathbf{z}^{\text{super}}, y^{\text{super}}) + \mathcal{L}_{\text{CE}}(\mathbf{z}^{\text{sub}}, y^{\text{sub}})
-\end{equation}
-
 \paragraph{Inference with Hierarchical Masking:}
 During inference, we apply hierarchical masking to enforce consistency between superclass and subclass predictions.
 
@@ -170,6 +165,151 @@ Used in \textit{Guided Open-Set Validation} (Strategy 2). When the validation se
     \tau_{\text{Intersect}} = \operatorname*{argmin}_{t} \left| P(S(\mathbf{x}) < t \mid \text{Known}) - P(S(\mathbf{x}) \geq t \mid \text{Novel}) \right|
 \end{equation}
 This method theoretically yields the optimal separation for the observed validation distribution but relies on the assumption that the validation novelties are representative of the test novelties.
+
+\begin{figure}[htbp]
+    \centering
+    \resizebox{\textwidth}{!}{
+    \begin{tikzpicture}[
+        node distance=1.5cm and 2.2cm,
+        font=\sffamily\small,
+        >={Stealth[length=2.5mm]},
+        % --- Node Styles ---
+        base/.style={
+            draw=black!60,
+            rectangle,
+            align=center,
+            line width=0.6pt,
+            inner sep=8pt
+        },
+        blockInput/.style={base, fill=colInput, minimum height=1.2cm},
+        blockHead/.style={base, fill=colHead, minimum height=1.4cm, minimum width=2.8cm, drop shadow={opacity=0.2}},
+        blockThresh/.style={base, fill=colInput, minimum height=1.4cm, minimum width=2.0cm},
+        blockPred/.style={base, fill=colPred, minimum height=1.1cm, minimum width=2.4cm},
+        blockNovel/.style={base, fill=colNovel, minimum height=0.9cm, minimum width=2.2cm},
+        blockAttn/.style={base, fill=colAttn, minimum height=1.8cm, minimum width=3.8cm},
+        blockMask/.style={base, fill=colPred, minimum height=1.8cm, minimum width=3.8cm},
+        blockLoss/.style={base, fill=colLoss, minimum height=1.6cm, minimum width=2.5cm, rounded corners=3pt, drop shadow={opacity=0.2}, line width=1pt, draw=red!60!black},
+        % --- Line Styles ---
+        lineSolid/.style={->, draw=black!80, line width=0.8pt, rounded corners=5pt},
+        lineDashed/.style={->, draw=black!80, dashed, line width=0.8pt, rounded corners=5pt},
+        lineLoss/.style={->, draw=red!70!black, dashed, line width=1pt, rounded corners=10pt},
+        labelSmall/.style={font=\scriptsize\sffamily, text=black!70, inner sep=2pt, fill=colContainerGray, fill opacity=0.9, text opacity=1}
+    ]
+
+        % ================= 1. Main Layout =================
+
+        % Input
+        \node[blockInput] (input) {Input\\Image};
+        \node[blockInput, right=1.2cm of input] (extractor) {Feature Extractor\\(CLIP)};
+
+        % --- Superclass Branch (Top) ---
+        \node[blockHead, right=3.0cm of extractor, yshift=4.0cm] (super_head) {Superclass\\Classification Head};
+        \node[blockThresh, right=3.5cm of super_head] (super_thresh) {Threshold\\Block};
+
+        % Top Outputs (Novel above, Predicted below)
+        \node[blockNovel, above right=0.4cm and 1.5cm of super_thresh] (super_novel) {Novel\\Superclass};
+        \node[blockPred, below right=0.4cm and 1.5cm of super_thresh] (super_pred) {Predicted\\Superclass\\Label};
+
+        % --- Subclass Branch (Bottom) - MIRRORED ---
+        \node[blockHead, right=3.0cm of extractor, yshift=-4.0cm] (sub_head) {Subclass\\Classification Head};
+        \node[blockThresh, right=3.5cm of sub_head] (sub_thresh) {Threshold\\Block};
+
+        % Bottom Outputs - MIRRORED (Predicted above, Novel below)
+        \node[blockPred, above right=0.4cm and 1.5cm of sub_thresh] (sub_pred) {Predicted\\Subclass\\Label};
+        \node[blockNovel, below right=0.4cm and 1.5cm of sub_thresh] (sub_novel) {Novel\\Subclass};
+
+        % --- Constraints (Middle) ---
+        \node[blockAttn] at ($(super_head)!0.5!(sub_head)$) (attn) {SE Feature Gating (Training)\\Soft Constraint};
+        \node[blockMask] at ($(super_thresh)!0.5!(sub_thresh)$) (mask) {Masking (Inference)\\Hard Constraint};
+
+        % --- Joint Loss (Far Right) ---
+        \node[blockLoss] at ($(super_pred.east)!0.5!(sub_pred.east) + (3, 0)$) (loss) {\textbf{Joint Loss}\\$\mathcal{L} = \mathcal{L}_{super} + \mathcal{L}_{sub}$};
+
+
+        % ================= 2. Background Layer =================
+        \begin{scope}[on background layer]
+            % Superclass Container
+            \node[fit=(super_head)(super_thresh)(super_novel)(super_pred),
+                  fill=colContainerGray, draw=black!10, rounded corners=10pt, inner sep=18pt] (box_super) {};
+
+            % Subclass Container
+            \node[fit=(sub_head)(sub_thresh)(sub_novel)(sub_pred),
+                  fill=colContainerGray, draw=black!10, rounded corners=10pt, inner sep=18pt] (box_sub) {};
+
+            % Constraints Container
+            \node[fit=(attn)(mask),
+                  fill=colContainerOrange, draw=orange!30, dashed, rounded corners=10pt, inner sep=15pt] (box_constraints) {};
+        \end{scope}
+
+        % ================= 3. Labels =================
+
+        % Superclass Label (at top)
+        \node[anchor=north, font=\bfseries, text=black!60, xshift=0pt, yshift=-5pt]
+            at (box_super.north) {Superclass Branch};
+
+        % Subclass Label (at bottom)
+        \node[anchor=south, font=\bfseries, text=black!60, xshift=0pt, yshift=5pt]
+            at (box_sub.south) {Subclass Branch};
+
+        % Title for constraints
+        \node[above=0.1cm of box_constraints, font=\bfseries, text=black!80] {Constraints};
+
+
+        % ================= 4. Connections =================
+
+        % Input -> Extractor
+        \draw[lineSolid] (input) -- (extractor);
+
+        % Extractor -> Heads
+        \draw[lineSolid] (extractor.east) -- ++(1.0,0) |- (super_head.west);
+        \draw[lineSolid] (extractor.east) -- ++(1.0,0) |- (sub_head.west);
+
+        % Heads -> Thresholds
+        \draw[lineSolid] (super_head) -- (super_thresh);
+        \draw[lineSolid] (sub_head) -- (sub_thresh);
+
+        % Thresholds -> Outputs
+        % Superclass (Novel above, Predicted below)
+        \draw[lineSolid] (super_thresh.east) -- ++(0.5,0) |- (super_novel.west)
+            node[pos=0.75, above, labelSmall] {Below Threshold};
+        \draw[lineSolid] (super_thresh.east) -- ++(0.5,0) |- (super_pred.west)
+            node[pos=0.75, below, labelSmall] {Above Threshold};
+
+        % Subclass - MIRRORED (Predicted above, Novel below)
+        \draw[lineSolid] (sub_thresh.east) -- ++(0.5,0) |- (sub_pred.west)
+            node[pos=0.75, above, labelSmall] {Above Threshold};
+        \draw[lineSolid] (sub_thresh.east) -- ++(0.5,0) |- (sub_novel.west)
+            node[pos=0.75, below, labelSmall] {Below Threshold};
+
+
+        % ================= 5. Dashed Constraint & Loss Flows =================
+
+        % Attention Flow (symmetric)
+        \draw[lineDashed] (super_head.south) -- (attn.north);
+        \draw[lineDashed] (attn.south) -- (sub_head.north);
+
+        % Masking Flow (symmetric)
+        \draw[lineDashed] (super_pred.south) |- (mask.east);
+        \draw[lineDashed] (mask.south) |- (sub_thresh.north);
+
+        % --- Loss Flow (symmetric) ---
+
+        % From Super Head -> Up -> Right -> Down -> Loss
+        \draw[lineLoss] (super_head.north) -- ++(0, 2.8) -| (loss.north)
+            node[pos=0.25, above, font=\scriptsize\bfseries, text=red!70!black] {Training Signal};
+
+        % From Sub Head -> Down -> Right -> Up -> Loss (mirrored)
+        \draw[lineLoss] (sub_head.south) -- ++(0, -2.8) -| (loss.south)
+            node[pos=0.25, below, font=\scriptsize\bfseries, text=red!70!black] {Training Signal};
+
+        % Main Title (Optional: You can remove this line if you prefer the Caption to be the only title)
+        \node[above=7.5cm of box_constraints, font=\bfseries\Large] {Hierarchical Post-hoc Score-based OSR Model};
+
+    \end{tikzpicture}
+    }
+    \caption{Hierarchical Post-hoc Score-based OSR Model Framework}
+    \label{fig:framework}
+\end{figure}
 
 \subsubsection{Post-hoc Scoring with Softmax and CE Loss}
 
@@ -219,146 +359,6 @@ Lower energy values indicate higher confidence that the sample belongs to a know
     \lim_{T \to 0} E(\mathbf{x}; T) = -\max_{i} z_i(\mathbf{x})
 \end{equation}
 This shows that low-temperature Energy reduces to the negative \textbf{MaxLogit}, measuring the \textbf{Absolute Magnitude} of the strongest prediction.
-
-\resizebox{\textwidth}{!}{
-\begin{tikzpicture}[
-    node distance=1.5cm and 2.2cm,
-    font=\sffamily\small,
-    >={Stealth[length=2.5mm]},
-    % --- Node Styles ---
-    base/.style={
-        draw=black!60,
-        rectangle,
-        align=center,
-        line width=0.6pt,
-        inner sep=8pt
-    },
-    blockInput/.style={base, fill=colInput, minimum height=1.2cm},
-    blockHead/.style={base, fill=colHead, minimum height=1.4cm, minimum width=2.8cm, drop shadow={opacity=0.2}},
-    blockThresh/.style={base, fill=colInput, minimum height=1.4cm, minimum width=2.0cm},
-    blockPred/.style={base, fill=colPred, minimum height=1.1cm, minimum width=2.4cm},
-    blockNovel/.style={base, fill=colNovel, minimum height=0.9cm, minimum width=2.2cm},
-    blockAttn/.style={base, fill=colAttn, minimum height=1.8cm, minimum width=3.8cm},
-    blockMask/.style={base, fill=colPred, minimum height=1.8cm, minimum width=3.8cm},
-    blockLoss/.style={base, fill=colLoss, minimum height=1.6cm, minimum width=2.5cm, rounded corners=3pt, drop shadow={opacity=0.2}, line width=1pt, draw=red!60!black},
-    % --- Line Styles ---
-    lineSolid/.style={->, draw=black!80, line width=0.8pt, rounded corners=5pt},
-    lineDashed/.style={->, draw=black!80, dashed, line width=0.8pt, rounded corners=5pt},
-    lineLoss/.style={->, draw=red!70!black, dashed, line width=1pt, rounded corners=10pt},
-    labelSmall/.style={font=\scriptsize\sffamily, text=black!70, inner sep=2pt, fill=colContainerGray, fill opacity=0.9, text opacity=1}
-]
-
-    % ================= 1. Main Layout =================
-
-    % Input
-    \node[blockInput] (input) {Input\\Image};
-    \node[blockInput, right=1.2cm of input] (extractor) {Feature Extractor\\(CLIP)};
-
-    % --- Superclass Branch (Top) ---
-    \node[blockHead, right=3.0cm of extractor, yshift=4.0cm] (super_head) {Superclass\\Classification Head};
-    \node[blockThresh, right=3.5cm of super_head] (super_thresh) {Threshold\\Block};
-
-    % Top Outputs (Novel above, Predicted below)
-    \node[blockNovel, above right=0.4cm and 1.5cm of super_thresh] (super_novel) {Novel\\Superclass};
-    \node[blockPred, below right=0.4cm and 1.5cm of super_thresh] (super_pred) {Predicted\\Superclass\\Label};
-
-    % --- Subclass Branch (Bottom) - MIRRORED ---
-    \node[blockHead, right=3.0cm of extractor, yshift=-4.0cm] (sub_head) {Subclass\\Classification Head};
-    \node[blockThresh, right=3.5cm of sub_head] (sub_thresh) {Threshold\\Block};
-
-    % Bottom Outputs - MIRRORED (Predicted above, Novel below)
-    \node[blockPred, above right=0.4cm and 1.5cm of sub_thresh] (sub_pred) {Predicted\\Subclass\\Label};
-    \node[blockNovel, below right=0.4cm and 1.5cm of sub_thresh] (sub_novel) {Novel\\Subclass};
-
-    % --- Constraints (Middle) ---
-    \node[blockAttn] at ($(super_head)!0.5!(sub_head)$) (attn) {SE Feature Gating (Training)\\Soft Constraint};
-    \node[blockMask] at ($(super_thresh)!0.5!(sub_thresh)$) (mask) {Masking (Inference)\\Hard Constraint};
-
-    % --- Joint Loss (Far Right) ---
-    \node[blockLoss] at ($(super_pred.east)!0.5!(sub_pred.east) + (3, 0)$) (loss) {\textbf{Joint Loss}\\$\mathcal{L} = \mathcal{L}_{super} + \mathcal{L}_{sub}$};
-
-
-    % ================= 2. Background Layer =================
-    \begin{scope}[on background layer]
-        % Superclass Container
-        \node[fit=(super_head)(super_thresh)(super_novel)(super_pred),
-              fill=colContainerGray, draw=black!10, rounded corners=10pt, inner sep=18pt] (box_super) {};
-
-        % Subclass Container
-        \node[fit=(sub_head)(sub_thresh)(sub_novel)(sub_pred),
-              fill=colContainerGray, draw=black!10, rounded corners=10pt, inner sep=18pt] (box_sub) {};
-
-        % Constraints Container
-        \node[fit=(attn)(mask),
-              fill=colContainerOrange, draw=orange!30, dashed, rounded corners=10pt, inner sep=15pt] (box_constraints) {};
-    \end{scope}
-
-    % ================= 3. Labels =================
-
-    % Superclass Label (at top)
-    \node[anchor=north, font=\bfseries, text=black!60, xshift=0pt, yshift=-5pt]
-        at (box_super.north) {Superclass Branch};
-
-    % Subclass Label (at bottom)
-    \node[anchor=south, font=\bfseries, text=black!60, xshift=0pt, yshift=5pt]
-        at (box_sub.south) {Subclass Branch};
-
-    % Title for constraints
-    \node[above=0.1cm of box_constraints, font=\bfseries, text=black!80] {Constraints};
-
-
-    % ================= 4. Connections =================
-
-    % Input -> Extractor
-    \draw[lineSolid] (input) -- (extractor);
-
-    % Extractor -> Heads
-    \draw[lineSolid] (extractor.east) -- ++(1.0,0) |- (super_head.west);
-    \draw[lineSolid] (extractor.east) -- ++(1.0,0) |- (sub_head.west);
-
-    % Heads -> Thresholds
-    \draw[lineSolid] (super_head) -- (super_thresh);
-    \draw[lineSolid] (sub_head) -- (sub_thresh);
-
-    % Thresholds -> Outputs
-    % Superclass (Novel above, Predicted below)
-    \draw[lineSolid] (super_thresh.east) -- ++(0.5,0) |- (super_novel.west)
-        node[pos=0.75, above, labelSmall] {Below Threshold};
-    \draw[lineSolid] (super_thresh.east) -- ++(0.5,0) |- (super_pred.west)
-        node[pos=0.75, below, labelSmall] {Above Threshold};
-
-    % Subclass - MIRRORED (Predicted above, Novel below)
-    \draw[lineSolid] (sub_thresh.east) -- ++(0.5,0) |- (sub_pred.west)
-        node[pos=0.75, above, labelSmall] {Above Threshold};
-    \draw[lineSolid] (sub_thresh.east) -- ++(0.5,0) |- (sub_novel.west)
-        node[pos=0.75, below, labelSmall] {Below Threshold};
-
-
-    % ================= 5. Dashed Constraint & Loss Flows =================
-
-    % Attention Flow (symmetric)
-    \draw[lineDashed] (super_head.south) -- (attn.north);
-    \draw[lineDashed] (attn.south) -- (sub_head.north);
-
-    % Masking Flow (symmetric)
-    \draw[lineDashed] (super_pred.south) |- (mask.east);
-    \draw[lineDashed] (mask.south) |- (sub_thresh.north);
-
-    % --- Loss Flow (symmetric) ---
-
-    % From Super Head -> Up -> Right -> Down -> Loss
-    \draw[lineLoss] (super_head.north) -- ++(0, 2.8) -| (loss.north)
-        node[pos=0.25, above, font=\scriptsize\bfseries, text=red!70!black] {Training Signal};
-
-    % From Sub Head -> Down -> Right -> Up -> Loss (mirrored)
-    \draw[lineLoss] (sub_head.south) -- ++(0, -2.8) -| (loss.south)
-        node[pos=0.25, below, font=\scriptsize\bfseries, text=red!70!black] {Training Signal};
-
-    % Main Title
-    \node[above=7.5cm of box_constraints, font=\bfseries\Large] {Hierarchical Post-hoc Score-based OSR Model};
-
-\end{tikzpicture}
-}
 
 % ================================= Not going to Implement =================================
 %\subsubsection{Trainable Confidence Estimation Methods}
@@ -459,49 +459,113 @@ Table \ref{tab: CAC-post hoc} presents a comparative analysis of varying post-ho
 
 \section{Experiment}
 
-\subsection{Evaluation}
+We evaluate the proposed models using CLIP ViT-B/32 features, and simulate the OSR scenario by setting some labels to be novel.
 
-\begin{itemize}
-    \item \textbf{Primary Metric:} Our top priority is to significantly improve upon the CLIP baseline's performance on ``Unseen Accuracy''.
-    \item \textbf{Secondary Metrics:} We will monitor all official metrics, including ``Overall Accuracy", ``Seen Accuracy'', and ``Categorical Cross-entropy'' for both class levels.
-    \item \textbf{Threshold Tuning:} To determine the gatekeeper's probability threshold and the expert's confidence threshold, we will simulate an open-set scenario (e.g., by holding out subclasses during training) and tune on our local validation set to maximize ``Unseen Accuracy''.
-\end{itemize}
+\textbf{Note on Metrics:} We focus our reporting on \textbf{Subclass} performance metrics. In our experimental setup, we did not introduce novel superclasses. However, since the Superclass and Subclass classification heads share the same underlying architecture and scoring mechanisms, the optimal methods identified for Subclasses are methodologically generalizable to the Superclass level.
+
+\subsection{Ablation Study: Architecture and Thresholds}
+
+We first establish a baseline using a Linear Dual Head model trained with Cross-Entropy (CE) loss. We investigate the impact of threshold determination methods (Quantile vs. Z-Score), Temperature Scaling, and the proposed SE-style Feature Gating.
+
+As shown in Table \ref{tab:ablation}, the \textbf{Z-Score} method significantly outperforms the non-parametric Quantile method, suggesting that the OOD scores follow a Gaussian-like distribution. Applying \textbf{Temperature Scaling} further improves the distinction between known and unknown samples. Finally, the \textbf{Gated Dual Head} architecture, which utilizes SE-Attention to recalibrate features, achieves the best performance, confirming that hierarchical constraints help shape the feature space.
 
 \begin{table}[h]
-  \caption{Template}
-  \label{tab:complex_table}
+  \caption{Ablation study on model architecture and threshold strategies. (Metric: Subclass Performance)}
+  \label{tab:ablation}
   \centering
-  \begin{tabular}{lcccc}
+  \resizebox{\columnwidth}{!}{
+  \begin{tabular}{lccccc}
     \toprule
-    \multirow{2}{*}{\bf Method} & \multicolumn{2}{c}{\bf Standard Metrics} & \multicolumn{2}{c}{\bf Advanced Metrics} \\
-    \cmidrule(r){2-3} \cmidrule(l){4-5}
-    & Acc@1 & Acc@5 & ECE & NLL \\
+    \bf Model Configuration & \bf Threshold & \bf Overall Acc. & \bf Seen Acc. & \bf Unseen Acc. & \bf AUROC \\
     \midrule
-    Vanilla      & 76.5 & 92.1 & 0.15 & 1.20 \\
-    Mixup        & 77.9 & 93.5 & 0.10 & 0.98 \\
-    CutMix       & 78.2 & 93.8 & 0.09 & 0.95 \\
-    \bf Ours     & \bf 79.1 & \bf 94.5 & \bf 0.05 & \bf 0.85 \\
+    Linear Dual Head (Baseline) & Quantile & 65.22\% ± 0.51\% & 87.01\% ± 2.13\% & 43.53\% ± 2.55\% & 0.8540 ± 0.0283 \\
+    Linear Dual Head & Z-Score & 69.99\% ± 2.43\% & \textbf{88.24\% ± 1.58\%} & 51.90\% ± 5.56\% & 0.8540 ± 0.0283 \\
+    + Temperature ($T=1.5$) & Z-Score & 72.99\% ± 3.39\% & 87.33\% ± 1.59\% & 58.80\% ± 7.47\% & 0.8679 ± 0.0265 \\
+    \textbf{+ Gated Dual Head (Ours)} & \textbf{Z-Score} & \textbf{73.83\% ± 3.88\%} & 88.03\% ± 1.30\% & \textbf{59.79\% ± 8.48\%} & \textbf{0.8821 ± 0.0234} \\
     \bottomrule
   \end{tabular}
+  }
 \end{table}
 
-\begin{table}[t]
-  \caption{Template}
-  \label{tab:wide_comparison}
+\subsection{Impact of Scoring Functions and Loss Objectives}
+
+Table \ref{tab:scoring_comparison} reveals a trade-off between metrics. \textbf{CE + MSP} yields the highest AUROC, indicating the best ranking capability for OOD detection. While \textbf{BCE + MaxSigmoid} achieves the highest Overall and Unseen accuracy, additional experiments highlight a critical limitation: it exhibits excessive confidence on known superclasses. Although introducing novel superclasses into the validation set partially mitigates this bias, the overconfidence persists. In contrast, MSP demonstrates superior robustness without such calibration issues. \textbf{Energy} scores require significantly lower temperatures ($T=0.02$) to be effective but generally underperform in this hierarchical setting compared to probability-based methods.
+
+\begin{table}[h]
+  \caption{Comparison of Scoring Functions and Training Objectives. (Model: Gated Dual Head)}
+  \label{tab:scoring_comparison}
   \centering
-  % \small % 小一号字体
-  \begin{tabular}{lcccccccc}
+  \resizebox{\columnwidth}{!}{
+  \begin{tabular}{lccccc}
     \toprule
-    \multirow{2}{*}{\bf Parameter ($\lambda$)} & \multicolumn{4}{c}{\bf Baseline Model} & \multicolumn{4}{c}{\bf Our Model} \\
-    \cmidrule(lr){2-5} \cmidrule(lr){6-9}
-    & Acc. & Prec. & Rec. & F1 & Acc. & Prec. & Rec. & F1 \\
+    \bf Method (Loss + Score) & \bf Temp ($T$) & \bf Overall Acc. & \bf Seen Acc. & \bf Unseen Acc. & \bf AUROC \\
     \midrule
-    Setting 1 ($\alpha=0.1$) & 85.1 & 84.2 & 83.5 & 83.8 & \bf 86.5 & \bf 85.8 & 84.2 & \bf 85.0 \\
-    Setting 2 ($\alpha=0.5$) & 86.2 & 85.0 & 84.1 & 84.5 & \bf 88.1 & \bf 87.2 & \bf 86.5 & \bf 86.8 \\
-    Setting 3 ($\alpha=0.9$) & 84.5 & 83.8 & 82.0 & 82.9 & \bf 87.0 & \bf 86.5 & \bf 85.0 & \bf 85.7 \\
+    \textbf{CE + MSP} & 1.5 & 73.83\% ± 3.88\% & \textbf{88.03\% ± 1.30\%} & 59.79\% ± 8.48\% & \textbf{0.8821 ± 0.0234} \\
+    \textbf{BCE + MaxSigmoid} & 0.2 & \textbf{75.30\% ± 3.70\%} & 87.29\% ± 0.84\% & \textbf{63.30\% ± 8.03\%} & 0.8721 ± 0.0365 \\
+    BCE + Energy & 0.02 & 70.88\% ± 1.51\% & 87.29\% ± 0.89\% & 54.50\% ± 3.91\% & 0.8755 ± 0.0343 \\
     \bottomrule
   \end{tabular}
+  }
 \end{table}
+
+\subsection{Impact of Validation Strategy}
+
+We analyze the impact of the validation set composition on threshold calibration. In the \textit{Strict} setting, thresholds are derived solely from known data (Z-Score). In the \textit{Guided} setting, the validation set includes unknown samples, allowing for the \textit{Intersection} method.
+
+As expected, access to unknown samples during validation significantly boosts performance. For the CE+MSP model, switching from Strict to Guided validation significantly improve the performance, demonstrating that the distribution of validation outliers generalizes well to the test set.
+
+\begin{table}[h]
+  \caption{Impact of Validation Strategy on Subclass Performance (Model: CE + MSP).}
+  \label{tab:val_strategy}
+  \centering
+  \resizebox{\columnwidth}{!}{
+  \begin{tabular}{lccccc}
+    \toprule
+    \bf Validation Strategy & \bf Threshold Method & \bf Overall Acc. & \bf Seen Acc. & \bf Unseen Acc. & \bf AUROC \\
+    \midrule
+    Strict (Known Only) & Z-Score & 73.83\% ± 3.88\% & \textbf{88.03\% ± 1.30\%} & 59.79\% ± 8.48\% & \textbf{0.8821 ± 0.0234} \\
+    Guided (Known + Novel) & Intersection & \textbf{79.57\% ± 1.55\%} & 72.68\% ± 2.61\% & \textbf{84.90\% ± 4.12\%} & 0.8663 ± 0.0119 \\
+    \bottomrule
+  \end{tabular}
+  }
+\end{table}
+
+
+% \begin{table}[h]
+%   \caption{Template}
+%   \label{tab:complex_table}
+%   \centering
+%   \begin{tabular}{lcccc}
+%     \toprule
+%     \multirow{2}{*}{\bf Method} & \multicolumn{2}{c}{\bf Standard Metrics} & \multicolumn{2}{c}{\bf Advanced Metrics} \\
+%     \cmidrule(r){2-3} \cmidrule(l){4-5}
+%     & Acc@1 & Acc@5 & ECE & NLL \\
+%     \midrule
+%     Vanilla      & 76.5 & 92.1 & 0.15 & 1.20 \\
+%     Mixup        & 77.9 & 93.5 & 0.10 & 0.98 \\
+%     CutMix       & 78.2 & 93.8 & 0.09 & 0.95 \\
+%     \bf Ours     & \bf 79.1 & \bf 94.5 & \bf 0.05 & \bf 0.85 \\
+%     \bottomrule
+%   \end{tabular}
+% \end{table}
+
+% \begin{table}[t]
+%   \caption{Template}
+%   \label{tab:wide_comparison}
+%   \centering
+%   % \small % 小一号字体
+%   \begin{tabular}{lcccccccc}
+%     \toprule
+%     \multirow{2}{*}{\bf Parameter ($\lambda$)} & \multicolumn{4}{c}{\bf Baseline Model} & \multicolumn{4}{c}{\bf Our Model} \\
+%     \cmidrule(lr){2-5} \cmidrule(lr){6-9}
+%     & Acc. & Prec. & Rec. & F1 & Acc. & Prec. & Rec. & F1 \\
+%     \midrule
+%     Setting 1 ($\alpha=0.1$) & 85.1 & 84.2 & 83.5 & 83.8 & \bf 86.5 & \bf 85.8 & 84.2 & \bf 85.0 \\
+%     Setting 2 ($\alpha=0.5$) & 86.2 & 85.0 & 84.1 & 84.5 & \bf 88.1 & \bf 87.2 & \bf 86.5 & \bf 86.8 \\
+%     Setting 3 ($\alpha=0.9$) & 84.5 & 83.8 & 82.0 & 82.9 & \bf 87.0 & \bf 86.5 & \bf 85.0 & \bf 85.7 \\
+%     \bottomrule
+%   \end{tabular}
+% \end{table}
 
 \bibliographystyle{alpha}
 \bibliography{reference}

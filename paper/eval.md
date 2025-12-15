@@ -10,8 +10,8 @@
 
 - 关于数据集划分，有多种主流方法：
   - 对于 Post-hoc 方法：
-    - Train 为纯已知类，Val 为纯已知类，Test 为已知类+未知类
-    - Train 为纯已知类，Val 为已知类+未知类，Test 为已知类+未知类（Test 的未知类理论上应和 Val 的未知类不同）
+    - Strict: Train 为纯已知类，Val 为纯已知类，Test 为已知类+未知类
+    - Guided: Train 为纯已知类，Val 为已知类+未知类，Test 为已知类+未知类（Test 的未知类理论上应和 Val 的未知类不同）
   - 对于 Training-time 方法：
     - Train 为已知类+未知类，Val 为已知类+未知类，Test 为已知类+未知类
 
@@ -46,7 +46,7 @@ class ExperimentConfig:
     seed: int = 42  # evaluate 时不使用，评估流程中只有 extract features 用到
 ```
 
-## 基础架构探索
+## 基础架构探索（Ablation Study 消融实验）
 
 对于阈值设定方法：在正态分布下，Recall = 95% 对应 Z-Score = 1.645，后文都使用该值。
 
@@ -349,77 +349,16 @@ class ExperimentConfig:
 - Energy 方法由于是无界的，所以 Z-Score 阈值方法不如 Quantile。因此后面讨论 Energy 方法时，都使用 Quantile。
 - Energy 方法受益于较低温度，T<=0.05 时性能最优。低温时，模型关注绝对幅值。
 
-## Variant 探索
-
-- CE + MSP (T=1.5):
-97.74% ± 1.81%, 73.83% ± 3.88%, 88.03% ± 1.30%, 59.79% ± 8.48%, 0.8821 ± 0.0234
-- BCE + MaxSigmoid (T=0.2):
-99.61% ± 0.35%, 75.30% ± 3.70%, 87.29% ± 0.84%, 63.30% ± 8.03%, 0.8721 ± 0.0365
-- BCE + Energy (T=0.02):
-91.89% ± 3.53%, 70.88% ± 1.51%, 87.29% ± 0.89%, 54.50% ± 3.91%, 0.8755 ± 0.0343
-
-变种使用不一致的 Threshold & Prediction 温度 (Tt != Tp)
-
-### CE + MSP
-
-观察：提高 Tt 或降低 Tp：seen 准确率上升，unseen 准确率下降。
-
-平衡 seen & unseen：根据试验，不一致的 Tt & Tp 会严重损害 super 准确率，因此原配置最佳。
-
-### BCE + MaxSigmoid
-
-观察：提高 Tt 或降低 Tp：seen 准确率下降，unseen 准确率上升。
-
-平衡 seen & unseen：无法单纯通过调整 Tt & Tp 来取得平衡，因为这两个参数在这里的边际收益递减非常明显，且Tp < 0.2 会导致 AUROC 显著下降。
-
-### BCE + Energy + Quantile
-
-观察：提高 Tt 或降低 Tp：seen 准确率下降，unseen 准确率上升。
-
-平衡 seen & unseen：最佳配置为 Tt = 2, Tp = 0.02，提升幅度为 7%。
-
-  [Superclass] Overall     : 95.34% ± 0.33%
-  [Superclass] Seen        : 95.34% ± 0.33%
-  [Superclass] Unseen      : 0.00% ± 0.00%
-  [Subclass] Overall       : 75.79% ± 2.42%
-  [Subclass] Seen          : 79.59% ± 1.99%
-  [Subclass] Unseen        : 72.70% ± 5.18%
-  [Superclass] AUROC       : nan ± nan
-  [Subclass] AUROC         : 0.8593 ± 0.0251
-
 ## 总结
 
 super seen, sub overall, sub seen, sub unseen, sub auroc
 
-### 追求一致性：
-
 - CE + MSP (T=1.5):
 97.74% ± 1.81%, 73.83% ± 3.88%, 88.03% ± 1.30%, 59.79% ± 8.48%, 0.8821 ± 0.0234
 - BCE + MaxSigmoid (T=0.2):
 99.61% ± 0.35%, 75.30% ± 3.70%, 87.29% ± 0.84%, 63.30% ± 8.03%, 0.8721 ± 0.0365
 - BCE + Energy (T=0.02):
 91.89% ± 3.53%, 70.88% ± 1.51%, 87.29% ± 0.89%, 54.50% ± 3.91%, 0.8755 ± 0.0343
-
-### 忽略一致性，追求性能，且尽可能平衡 seen & unseen：
-
-- BCE + Energy (Tt=1.5, Tp=0.02): 
-91.87% ± 3.53%, 76.53% ± 2.10%, 82.04% ± 0.85%, 71.03% ± 4.92%, 0.8755 ± 0.0344
-
-### 总结
-
-- 最高 AUROC，应该选 CE + MSP (Tt=Tp=1.5)
-- 最高 super seen，选 BCE + MaxSigmoid (Tt=Tp=0.2)
-
-### 关于 Threshold 设定参数
-
-有两种平衡seen和unseen的方法。一种是把 Tt 和 Tp 调成不一样的，另一种是调 Threshold 设定参数。
-
-实验发现：
-- 调 Tt Tp：有些情况可以在不掉 super seen 的情况下，把 sub 调匀。
-- 调 recall rate 一定会掉 super seen，而且掉的很猛。
-- 调 std multiplier 有些情况不掉 super seen，但在有些调 Tt Tp 不掉 super seen 的情况下会掉 super seen。
-
-因此，一定是先把温度调好，再去调 Threshold 设定参数。
 
 ## Validation 包含未知类
 
@@ -439,11 +378,11 @@ super seen, sub overall, sub seen, sub unseen, sub auroc
 
 ## 问题
 
-根据在professor测试集上的测试，MaxSigmoid 会在对 super seen 上判定的特别高，MSP 则不会。
+根据在professor测试集上的测试，MaxSigmoid 会对 super seen 的判定特别自信，在 validation 中加入 novel superclass 可以缓解，但问题依然存在；而 MSP 则基本没有该问题。
 
 ## 最终结论
 
-选 CE + MSP (Tt=Tp=1.5)
+选 CE + MSP (T1.5)
 
 ```py
     # 数据划分模式
