@@ -14,6 +14,8 @@
 
 ## 基础架构探索
 
+注：Validation Set 不含未知类
+
 ### Baseline: Linear Dual Head + MSP (Temperature = 1) + Quantile (Recall = 95%)
 
 ```py
@@ -22,14 +24,18 @@
     learning_rate: float = 1e-3
     epochs: int = 50
 
+    # 数据划分模式
+    test_only_unknown: bool = True  # True: val 不含未知类; False: val含未知类
+
     # 模型选择
     enable_hierarchical_masking: bool = False  # 推理时 Hierarchical Masking 开关
     enable_feature_gating: bool = False  # 训练时 SE Feature Gating 开关
 
-    # 阈值设定
-    threshold_method: ThresholdMethod = ThresholdMethod.Quantile  # 阈值设定方法
-    target_recall: float = 0.95  # Quantile 方法: target recall
-    std_multiplier: float = 1.645  # ZScore 方法: 标准差乘数
+    # 阈值设定（自动根据验证集是否有未知类选择方法）
+    known_only_threshold: KnownOnlyThreshold = KnownOnlyThreshold.Quantile  # 无未知类时
+    full_val_threshold: FullValThreshold = FullValThreshold.Intersection  # 有未知类时
+    target_recall: float = 0.95  # Quantile 方法: target recall，95%
+    std_multiplier: float = 1.645  # ZScore 方法: 标准差乘数，1.645
 
     # 方法选择
     training_loss: TrainingLoss = TrainingLoss.CE
@@ -56,14 +62,18 @@
     learning_rate: float = 1e-3
     epochs: int = 50
 
+    # 数据划分模式
+    test_only_unknown: bool = True  # True: val 不含未知类; False: val含未知类
+
     # 模型选择
     enable_hierarchical_masking: bool = False  # 推理时 Hierarchical Masking 开关
     enable_feature_gating: bool = False  # 训练时 SE Feature Gating 开关
 
-    # 阈值设定
-    threshold_method: ThresholdMethod = ThresholdMethod.ZScore  # 阈值设定方法
-    target_recall: float = 0.95  # Quantile 方法: target recall
-    std_multiplier: float = 1.645  # ZScore 方法: 标准差乘数
+    # 阈值设定（自动根据验证集是否有未知类选择方法）
+    known_only_threshold: KnownOnlyThreshold = KnownOnlyThreshold.ZScore  # 无未知类时
+    full_val_threshold: FullValThreshold = FullValThreshold.Intersection  # 有未知类时
+    target_recall: float = 0.95  # Quantile 方法: target recall，95%
+    std_multiplier: float = 1.645  # ZScore 方法: 标准差乘数，1.645
 
     # 方法选择
     training_loss: TrainingLoss = TrainingLoss.CE
@@ -92,14 +102,18 @@
     learning_rate: float = 1e-3
     epochs: int = 50
 
+    # 数据划分模式
+    test_only_unknown: bool = True  # True: val 不含未知类; False: val含未知类
+
     # 模型选择
     enable_hierarchical_masking: bool = False  # 推理时 Hierarchical Masking 开关
     enable_feature_gating: bool = False  # 训练时 SE Feature Gating 开关
 
-    # 阈值设定
-    threshold_method: ThresholdMethod = ThresholdMethod.ZScore  # 阈值设定方法
-    target_recall: float = 0.95  # Quantile 方法: target recall
-    std_multiplier: float = 1.645  # ZScore 方法: 标准差乘数
+    # 阈值设定（自动根据验证集是否有未知类选择方法）
+    known_only_threshold: KnownOnlyThreshold = KnownOnlyThreshold.ZScore  # 无未知类时
+    full_val_threshold: FullValThreshold = FullValThreshold.Intersection  # 有未知类时
+    target_recall: float = 0.95  # Quantile 方法: target recall，95%
+    std_multiplier: float = 1.645  # ZScore 方法: 标准差乘数，1.645
 
     # 方法选择
     training_loss: TrainingLoss = TrainingLoss.CE
@@ -128,14 +142,18 @@
     learning_rate: float = 1e-3
     epochs: int = 50
 
+    # 数据划分模式
+    test_only_unknown: bool = True  # True: val 不含未知类; False: val含未知类
+
     # 模型选择
     enable_hierarchical_masking: bool = True  # 推理时 Hierarchical Masking 开关
     enable_feature_gating: bool = False  # 训练时 SE Feature Gating 开关
 
-    # 阈值设定
-    threshold_method: ThresholdMethod = ThresholdMethod.ZScore  # 阈值设定方法
-    target_recall: float = 0.95  # Quantile 方法: target recall
-    std_multiplier: float = 1.645  # ZScore 方法: 标准差乘数
+    # 阈值设定（自动根据验证集是否有未知类选择方法）
+    known_only_threshold: KnownOnlyThreshold = KnownOnlyThreshold.ZScore  # 无未知类时
+    full_val_threshold: FullValThreshold = FullValThreshold.Intersection  # 有未知类时
+    target_recall: float = 0.95  # Quantile 方法: target recall，95%
+    std_multiplier: float = 1.645  # ZScore 方法: 标准差乘数，1.645
 
     # 方法选择
     training_loss: TrainingLoss = TrainingLoss.CE
@@ -164,14 +182,18 @@
     learning_rate: float = 1e-3
     epochs: int = 75
 
+    # 数据划分模式
+    test_only_unknown: bool = True  # True: val 不含未知类; False: val含未知类
+
     # 模型选择
     enable_hierarchical_masking: bool = True  # 推理时 Hierarchical Masking 开关
     enable_feature_gating: bool = True  # 训练时 SE Feature Gating 开关
 
-    # 阈值设定
-    threshold_method: ThresholdMethod = ThresholdMethod.ZScore  # 阈值设定方法
-    target_recall: float = 0.95  # Quantile 方法: target recall
-    std_multiplier: float = 1.645  # ZScore 方法: 标准差乘数
+    # 阈值设定（自动根据验证集是否有未知类选择方法）
+    known_only_threshold: KnownOnlyThreshold = KnownOnlyThreshold.ZScore  # 无未知类时
+    full_val_threshold: FullValThreshold = FullValThreshold.Intersection  # 有未知类时
+    target_recall: float = 0.95  # Quantile 方法: target recall，95%
+    std_multiplier: float = 1.645  # ZScore 方法: 标准差乘数，1.645
 
     # 方法选择
     training_loss: TrainingLoss = TrainingLoss.CE
@@ -199,6 +221,9 @@
 此后若未特别说明，全部使用 Linear Dual Head + Hierarchical Masking + Z-Score (k = 1.645)
 
 ```py
+    # 数据划分模式
+    test_only_unknown: bool = True  # True: val 不含未知类; False: val含未知类
+
     # 训练参数
     batch_size: int = 64
     learning_rate: float = 1e-3
@@ -208,10 +233,11 @@
     enable_hierarchical_masking: bool = True  # 推理时 Hierarchical Masking 开关
     enable_feature_gating: bool = True  # 训练时 SE Feature Gating 开关
 
-    # 阈值设定
-    threshold_method: ThresholdMethod = ThresholdMethod.ZScore  # 阈值设定方法
-    target_recall: float = 0.95  # Quantile 方法: target recall
-    std_multiplier: float = 1.645  # ZScore 方法: 标准差乘数
+    # 阈值设定（自动根据验证集是否有未知类选择方法）
+    known_only_threshold: KnownOnlyThreshold = KnownOnlyThreshold.ZScore  # 无未知类时
+    full_val_threshold: FullValThreshold = FullValThreshold.Intersection  # 有未知类时
+    target_recall: float = 0.95  # Quantile 方法: target recall，95%
+    std_multiplier: float = 1.645  # ZScore 方法: 标准差乘数，1.645
 ```
 
 ### Baseline: CE + MSP
