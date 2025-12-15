@@ -47,7 +47,7 @@
 \section{Introduction}
 This project aims to solve a hierarchical classification problem by predicting both a superclass and its corresponding subclass for a given image. The problem has two primary complexities that test model robustness and generalization:
 
-\textbf{Open Set Recognition (OSR):} The test set contains novel superclasses and subclasses not seen during training. The model must identify and reject these ``unknown'' samples as ``novel''.
+\textbf{Open Set Recognition (OSR):} The test set contains novel superclasses and subclasses not seen (out-of-distribution samples) during training. The model must identify and reject these ``unknown'' samples as ``novel''.
 
 \textbf{Distribution Shift:} The test set's class frequencies may differ from the training set. The model must generalize to this new statistical distribution of known classes.
 
@@ -60,43 +60,14 @@ OSR contrasts with traditional closed-set recognition, which assumes all testing
 \textbf{Generative Models:} The generative models is another approach which can be further divided into Instance and Non-Instance Generation-based methods~\cite{geng2020recent}. The former method focuses on generating useful new samples, while the second one focuses on learning the underlying distributions of the known-class data, often using Autoencoders (AEs) or Generative Adversarial Networks (GANs). The principle is that unknown samples will not fit the learned distributions, allowing for their detection based on deviation or high reconstruction error.
 
 
-\section{Method / Algorithm}
-
-\subsection{Dataset Preparation}
-
-To rigorously evaluate the performance of our models under Open Set Recognition (OSR) conditions, we partition the dataset into \textit{Known} and \textit{Novel} categories. We hold out a specific ratio (e.g., 20\%) of subclasses from each superclass to serve as the \textit{Novel} set. We implement three distinct data preparation strategies to simulate different experimental assumptions:
-
-\paragraph{Strategy 1: Strict Open-Set Validation (Post-hoc).}
-In this setting, both the Training and Validation sets consist exclusively of \textit{Known} samples. The \textit{Novel} samples appear only in the Test set.
-\begin{itemize}
-    \item \textbf{Train/Val:} Known classes only.
-    \item \textbf{Test:} Known + Novel classes.
-\end{itemize}
-This strategy simulates a strict scenario where no outliers are available during the development phase. Thresholds must be determined using statistical methods (e.g., Z-Score, Quantile) based solely on the distribution of known data.
-
-\paragraph{Strategy 2: Guided Open-Set Validation (Post-hoc).}
-Here, the Training set remains pure (\textit{Known} only), but the Validation set includes a mixture of \textit{Known} and \textit{Novel} samples.
-\begin{itemize}
-    \item \textbf{Train:} Known classes only.
-    \item \textbf{Val/Test:} Known + Novel classes.
-\end{itemize}
-This allows for calibrating thresholds by observing the overlap between known and unknown distributions (e.g., finding the intersection point), yielding an upper bound on performance for post-hoc methods.
-
-\paragraph{Strategy 3: Open-Set Training with Synthesis (CAC-Negative).}
-For discriminative training methods like CAC-Negative, we modify the training data preparation to include synthesized outliers.
-\begin{itemize}
-    \item \textbf{Train:} Known classes + Synthesized Pseudo-outliers.
-    \item \textbf{Val/Test:} Known + Real Novel classes.
-\end{itemize}
-Since real novel samples are inaccessible during training, we generate pseudo-outliers via data augmentation techniques (e.g., self-mixing, background extraction) to explicitly supervise the model in compacting the known class space.
-
+\section{Methods}
 \subsection{Framework}
 
-Since it is a hierarchical OSR problem, we propose different hierarchical models.
+Since this is a hierarchical OSR problem, we propose different hierarchical models.
 
 \begin{itemize}
     \item \textbf{Model Structure:} Use a pre-trained feature extractor (e.g., CLIP~\cite{radford2021learningtransferablevisualmodels}) followed by a superclass classification head and a subclass classification head, and train the network jointly using a combined loss from both heads.
-    \item \textbf{Hierarchical Constraints:} To ensure the superclass classification impacts the subclass classification, we apply a soft constraint (SE-style Feature Gating~\cite{hu2019squeezeandexcitationnetworks}) during training and a hard constraint (Masking) during inference.
+    \item \textbf{Hierarchical Constraints:} To ensure the superclass classification impacts the subclass classification, we apply a \textbf{SE-style Feature Gating}~\cite{hu2019squeezeandexcitationnetworks}) soft constraint during training and a \textbf{Hierarchical Masking} hard constraint during inference.
 \end{itemize}
 
 \paragraph{Training with SE-style Feature Gating:}
@@ -116,15 +87,14 @@ Given input features $\mathbf{x} \in \mathbb{R}^{d}$ from CLIP, we define:
 \end{align}
 where $W_1 \in \mathbb{R}^{(d/r) \times d}$, $W_2 \in \mathbb{R}^{d \times (d/r)}$, $r=4$ is the reduction ratio, and $\odot$ denotes element-wise multiplication.
 
-\textit{Subclass Head (with attended features):}
-\begin{equation}
-    \mathbf{z}^{\text{sub}} = W^{\text{sub}} \tilde{\mathbf{x}} + \mathbf{b}^{\text{sub}}
-\end{equation}
+% \textit{Subclass Head (with attended features):}
+% \begin{equation}
+%     \mathbf{z}^{\text{sub}} = W^{\text{sub}} \tilde{\mathbf{x}} + \mathbf{b}^{\text{sub}}
+% \end{equation}
 
 \paragraph{Inference with Hierarchical Masking:}
 During inference, we apply hierarchical masking to enforce consistency between superclass and subclass predictions.
 
-Let $\hat{c}^{\text{super}}$ be the predicted superclass and $\mathcal{S}_c$ be the set of valid subclass indices for superclass $c$. The masked subclass logits are:
 \begin{equation}
     \tilde{z}^{\text{sub}}_i =
     \begin{cases}
@@ -133,9 +103,11 @@ Let $\hat{c}^{\text{super}}$ be the predicted superclass and $\mathcal{S}_c$ be 
     \end{cases}
 \end{equation}
 
+\subsection{Post-hoc Methods}
+
 \subsubsection{Threshold Calibration Methods}
 
-To classify a sample $\mathbf{x}$ as known or novel, we define a scoring function $S(\mathbf{x})$ (e.g., MSP, MaxSigmoid, or Energy) where higher values indicate higher confidence in known classes. The decision rule is defined as:
+To classify a sample $\mathbf{x}$ as known or novel, we define a scoring function $S(\mathbf{x})$ where higher values indicate higher confidence in known classes. The decision rule is defined as:
 \begin{equation}
     \hat{y} =
     \begin{cases}
@@ -145,22 +117,22 @@ To classify a sample $\mathbf{x}$ as known or novel, we define a scoring functio
 \end{equation}
 We explore three methods to determine the optimal threshold $\tau$, depending on the availability of novel samples in the validation set.
 
-\paragraph{1. Quantile-based Threshold (Non-Parametric).}
-Used in \textit{Strict Open-Set Validation} (Strategy 1). This method assumes no prior knowledge of the unknown distribution. Given a target recall rate $r$ (e.g., $r = 0.95$) for known classes, we set $\tau$ as the $(1-r)$-th quantile of the scores from the known validation set $\mathcal{D}_{\text{val}}^{\text{known}}$:
+\paragraph{Quantile-based Threshold (Non-Parametric).}
+Used in \textit{Strict Open-Set Validation}. This method assumes no prior knowledge of the unknown distribution. Given a target recall rate $r$ (e.g., $r = 0.95$) for known classes, we set $\tau$ as the $(1-r)$-th quantile of the scores from the known validation set $\mathcal{D}_{\text{val}}^{\text{known}}$:
 \begin{equation}
     \tau_{\text{Quantile}} = Q_{1-r}(\{S(\mathbf{x}) \mid \mathbf{x} \in \mathcal{D}_{\text{val}}^{\text{known}}\})
 \end{equation}
 This approach is distribution-free and guarantees that exactly $r$ fraction of known samples are retained, but it does not account for the density of novel samples.
 
-\paragraph{2. Z-Score Threshold (Parametric).}
+\paragraph{Z-Score Threshold (Parametric).}
 Also used in \textit{Strict Open-Set Validation}. We assume the scores of known classes follow a Gaussian distribution $\mathcal{N}(\mu, \sigma^2)$. The threshold is determined by a standard deviation multiplier $k$:
 \begin{equation}
-    \tau_{\text{ZScore}} = \mu - k \cdot \sigma
+    \tau_{\text{Z-Score}} = \mu - k \cdot \sigma
 \end{equation}
-where $\mu$ and $\sigma$ are the mean and standard deviation of $S(\mathbf{x})$ on $\mathcal{D}_{\text{val}}^{\text{known}}$. For a target recall of 95\% under a normal distribution, we set $k=1.645$. This method is generally more robust to sampling noise than the Quantile method, provided the score distribution is approximately normal (e.g., MSP or MaxSigmoid), but may underperform on heavy-tailed distributions (e.g., Energy).
+where $\mu$ and $\sigma$ are the mean and standard deviation of $S(\mathbf{x})$ on $\mathcal{D}_{\text{val}}^{\text{known}}$. For a target recall of 95\% under a normal distribution, we set $k=1.645$. This method is generally more robust to sampling noise than the Quantile method, provided the score distribution is approximately normal, but may underperform on heavy-tailed distributions.
 
-\paragraph{3. Distribution Intersection (Full Validation).}
-Used in \textit{Guided Open-Set Validation} (Strategy 2). When the validation set contains both known and novel samples ($\mathcal{D}_{\text{val}}^{\text{known}} \cup \mathcal{D}_{\text{val}}^{\text{novel}}$), we can explicitly model the boundary between the two distributions. We calculate $\tau$ as the intersection point of the empirical distributions, effectively balancing the False Positive Rate (FPR) and False Negative Rate (FNR):
+\paragraph{Distribution Intersection (Full Validation).}
+Used in \textit{Guided Open-Set Validation}. When the validation set contains both known and novel samples ($\mathcal{D}_{\text{val}}^{\text{known}} \cup \mathcal{D}_{\text{val}}^{\text{novel}}$), we can explicitly model the boundary between the two distributions. We calculate $\tau$ as the intersection point of the empirical distributions, effectively balancing the FPR and FNR:
 \begin{equation}
     \tau_{\text{Intersect}} = \operatorname*{argmin}_{t} \left| P(S(\mathbf{x}) < t \mid \text{Known}) - P(S(\mathbf{x}) \geq t \mid \text{Novel}) \right|
 \end{equation}
@@ -398,64 +370,9 @@ In this project, we introduce two methodological improvements to the CAC paradig
 
 Here $\mathbf{x'}$ denotes the pseudo-samples synthesized via two distinct strategies: 1) self-mixing of rotated images, and 2) background extraction, obtained by removing the foreground object.
 
-Table \ref{tab: CAC VS. CAC-Negative} presents a comparative analysis between the origin CAC with SE-Attention and our proposed CAC-Negative framework. The empirical results demonstrate that CAC-Negative consistently outperforms CAC in terms of AUROC and overall accuracy and unseen accuracy, validating the efficacy of incorporating synthesized negative samples for Open Set Recognition.
-
-\textbf{Synergy between SE-Attention and Negative Sampling:} We observe a distinct interaction regarding the SE-Attention mechanism. While SE-Attention offers negligible gains for the original CAC, it yields significant performance improvements when integrated into CAC-Negative. This suggests that the attention mechanism relies on a sufficiently populated feature space to function effectively.
-
-The differential impact of SE-Attention can be explained by the topological characteristics of the embedding space. The original CAC results in a relatively sparse logit space, where SE-Attention struggles to capture meaningful dependencies. In contrast, the introduction of pseudo-negative samples effectively densifies the manifold. This densification enables the SE-Attention mechanism to learn more robust feature recalibrations, allowing it to effectively scatter pseudo-samples and refine the decision boundary.
-
-\textbf{Inefficacy of Explicit Intra-class Clustering ($\lambda$):} Regarding the hyperparameter $\lambda$ (the weight for the loss of anchor clustering term), our experiments indicate that non-zero values deteriorate the performance of the original CAC and provide no substantial benefit to CAC-Negative. Consequently, we set $\lambda=0$. We attribute this to the relatively limited number of known categories (70 classes); simply maximizing inter-class separation appears sufficient for classification, rendering strict intra-class clustering constraints less critical.
-
-\begin{table}[t]
-  \caption{\textit{\textbf{CAC}} VS. \textit{\textbf{CAC-Negative}}.}
-  \label{tab: CAC VS. CAC-Negative}
-  \centering
-  \resizebox{\columnwidth}{!}{
-      \begin{tabular}{lcccc}
-        \toprule
-        \bf Parameter & \bf Overall Acc. & \bf Seen Acc. & \bf Unseen Acc. & \bf AUROC \\
-        \midrule
-        \multicolumn{5}{l}{\textit{\textbf{CAC}}} \\
-        \midrule
-        $\lambda=0, Attn=0$ & 77.80\% ± 0.31\% & 85.49\% ± 0.35\% & 71.24\% ± 0.83\% & 0.8908 ± 0.0009\\
-        $\lambda=0, Attn=4$ & 78.05\% ± 0.57\% & 85.76\% ± 0.36\% & 71.47\% ± 1.02\% & 0.8931 ± 0.0015\\
-        $\lambda=0.1, Attn=4$ & 67.58\% ± 0.27\% & \textbf{86.27\% ± 0.67\%} & 51.64\% ± 0.99\% & 0.8237 ± 0.0031 \\
-        \midrule
-        \multicolumn{5}{l}{\textit{\textbf{CAC-Negative}}} \\
-        \midrule
-        $\lambda_N=0.3, Attn=0$ & 76.84\% ± 0.46\% & 84.71\% ± 0.28\% & 70.13\% ± 0.92\% & 0.8978 ± 0.0025 \\
-        $\lambda_N=0.3, Attn=4$ & 84.68\% ± 0.25\% & 77.49\% ± 0.99\% & 90.80\% ± 0.77\% & 0.9411 ± 0.0021 \\
-        $\lambda_N=0.5, Attn=4$ & \textbf{86.17\% ± 0.30\%} & 77.45\% ± 0.43\% & \textbf{93.61\% ± 0.42\%} & \textbf{0.9526 ± 0.0027} \\
-        \bottomrule
-      \end{tabular}
-  }
-\end{table}
 
 \subsubsection{CAC-OpenMax}
 The second strategic adaptation involves the integration of OpenMax~\cite{7780542}, a post-hoc inference mechanism rooted in Extreme Value Theory (EVT), with the CAC framework. This combination is motivated by the topological structure enforced by CAC: under ideal training conditions, CAC minimizes intra-class variance, compelling known samples to concentrate tightly around their respective class anchors while pushing OOD samples to the periphery. Leveraging this optimized embedding space, OpenMax models the tail distribution of the distances using a Weibull distribution. This allows us to rigorously filter distributional outliers—samples located significantly far from any class prototype—thereby enhancing the model's capability to discriminate between seen and unseen categories.
-
-Table \ref{tab: CAC-post hoc} presents a comparative analysis of varying post-hoc inference mechanisms applied to the CAC framework, specifically benchmarking the threshold-based baseline against ZScore and OpenMax.
-
-\textbf{Performance of OpenMax:} Empirical results demonstrate that OpenMax yields the most superior performance, achieving a AUROC of 0.9281. Crucially, this method significantly boosts Unseen Accuracy (from 71.24% to 88.46%) while incurring only a marginal degradation in Seen Accuracy ($\approx 1\%$), indicating a robust trade-off between closed-set classification and open-set rejection.
-
-\textbf{Inefficacy of ZScore:} Conversely, the ZScore method proves suboptimal for the CAC embedding space, underperforming even the simple threshold baseline. Our experiments reveal that the model is highly sensitive to the parameter $std\_m$. Increasing this threshold effectively expands the acceptance region to encompass the entire logit space, causing the Unseen Accuracy to collapse to zero. This phenomenon corroborates our previous findings: the CAC framework induces highly compact class clusters, rendering standard deviation-based outlier detection overly sensitive and less effective than tail-based estimation.
-
-\begin{table}[t]
-  \caption{Post hoc methods on \textit{\textbf{CAC}}}
-  \label{tab: CAC-post hoc}
-  \centering
-  \resizebox{\columnwidth}{!}{
-      \begin{tabular}{lcccc}
-        \toprule
-        \bf Method & \bf Overall Acc. & \bf Seen Acc. & \bf Unseen Acc. & \bf AUROC \\
-        \midrule
-        \textit{\textbf{threshold}}          & 77.80\% ± 0.31\% & \textbf{85.49\% ± 0.35\%} & 71.24\% ± 0.83\% & 0.8908 ± 0.0009\\
-        \textit{\textbf{ZScore($std\_m=0.1$)}}          & 72.55\% ± 0.24\% & 81.06\% ± 0.29\% & 65.28\% ± 0.40\% & 0.8325 ± 0.0009 \\
-        \textit{\textbf{OpenMax}($\lambda=0.1$)}          & \textbf{86.62\% ± 0.16\%} & 84.47\% ± 0.38\% & \textbf{88.46\% ± 0.11\%} & \textbf{0.9281 ± 0.0026} \\
-        \bottomrule
-      \end{tabular}
-  }
-\end{table}
 
 \section{Experiment}
 
@@ -463,11 +380,29 @@ We evaluate the proposed models using CLIP ViT-B/32 features, and simulate the O
 
 \textbf{Note on Metrics:} We focus our reporting on \textbf{Subclass} performance metrics. In our experimental setup, we did not introduce novel superclasses. However, since the Superclass and Subclass classification heads share the same underlying architecture and scoring mechanisms, the optimal methods identified for Subclasses are methodologically generalizable to the Superclass level.
 
+\subsection{Dataset Preparation}
+
+We implement three distinct data preparation strategies to simulate different experimental assumptions. It is achieved by partitioning the dataset into  \textit{Known} and \textit{Novel} categories, and holding out a specific ratio of subclasses to serve as the \textit{Novel} set.
+
+\paragraph{Strict Open-Set Validation:} \textit{Novel} samples appear only in the Test set.
+
+This strategy simulates a strict scenario where no outliers are available during the development phase and is used in \textit{Post-hoc Method}. Thresholds must be determined using statistical methods based solely on the distribution of known data.
+
+\paragraph{Guided Open-Set Validation:} \textit{Novel} samples appear in the Test and Validation set.
+
+This allows for calibrating thresholds by observing the known and unknown distributions and is used in \textit{Post-hoc Method}.
+
+\paragraph{Open-Set Training with Synthesis:}
+For discriminative training methods, we modify the training data preparation to include synthesized outliers. This is used in \textit{Training-time method}.
+\begin{itemize}
+    \item \textbf{Train:} Known classes + Synthesized Pseudo-outliers.
+    \item \textbf{Val/Test:} Known + Real Novel classes.
+\end{itemize}
+Since real novel samples are inaccessible during training, we generate pseudo-outliers via data augmentation techniques (e.g., self-mixing, background extraction) to explicitly supervise the model in compacting the known class space.
+
 \subsection{Ablation Study: Architecture and Thresholds}
 
-We first establish a baseline using a Linear Dual Head model trained with Cross-Entropy (CE) loss. We investigate the impact of threshold determination methods (Quantile vs. Z-Score), Temperature Scaling, and the proposed SE-style Feature Gating.
-
-As shown in Table \ref{tab:ablation}, the \textbf{Z-Score} method significantly outperforms the non-parametric Quantile method, suggesting that the OOD scores follow a Gaussian-like distribution. Applying \textbf{Temperature Scaling} further improves the distinction between known and unknown samples. Finally, the \textbf{Gated Dual Head} architecture, which utilizes SE-Attention to recalibrate features, achieves the best performance, confirming that hierarchical constraints help shape the feature space.
+Table \ref{tab:ablation} presents the ablation study starting from a Linear Dual Head baseline. The parametric \textbf{Z-Score} method significantly outperforms Quantile, implying Gaussian-like score distributions. \textbf{Temperature Scaling} further refines separation, while the \textbf{Gated Dual Head} achieves the best performance, validating that SE-Attention successfully enforces hierarchical constraints.
 
 \begin{table}[h]
   \caption{Ablation study on model architecture and threshold strategies. (Metric: Subclass Performance)}
@@ -489,7 +424,9 @@ As shown in Table \ref{tab:ablation}, the \textbf{Z-Score} method significantly 
 
 \subsection{Impact of Scoring Functions and Loss Objectives}
 
-Table \ref{tab:scoring_comparison} reveals a trade-off between metrics. \textbf{CE + MSP} yields the highest AUROC, indicating the best ranking capability for OOD detection. While \textbf{BCE + MaxSigmoid} achieves the highest Overall and Unseen accuracy, additional experiments highlight a critical limitation: it exhibits excessive confidence on known superclasses. Although introducing novel superclasses into the validation set partially mitigates this bias, the overconfidence persists. In contrast, MSP demonstrates superior robustness without such calibration issues. \textbf{Energy} scores require significantly lower temperatures ($T=0.02$) to be effective but generally underperform in this hierarchical setting compared to probability-based methods.
+Table \ref{tab:scoring_comparison} compares different scoring functions. We employ \textbf{Z-Score} thresholds for the bounded probability-based methods (MSP, MaxSigmoid) and \textbf{Quantile} for the unbounded \textbf{Energy} scores.
+
+The results indicate distinct trade-offs. \textbf{MaxSigmoid} achieves high overall accuracy but suffers from overconfidence, making it difficult to detect novel superclasses. \textbf{Energy} significantly degrades performance on known superclasses (Super Seen accuracy drops to $\approx 91.9\%$). Consequently, \textbf{CE + MSP} is selected as the optimal method, offering the most robust performance with the highest AUROC.
 
 \begin{table}[h]
   \caption{Comparison of Scoring Functions and Training Objectives. (Model: Gated Dual Head)}
@@ -530,6 +467,64 @@ As expected, access to unknown samples during validation significantly boosts pe
   }
 \end{table}
 
+\subsection{Impact of Synthesized Pseudo samples on CAC}
+Table \ref{tab: CAC VS. CAC-Negative} presents a comparative analysis between the origin CAC with SE-Attention and our proposed CAC-Negative. The empirical results demonstrate that CAC-Negative consistently outperforms CAC in terms of AUROC and overall accuracy and unseen accuracy, validating the efficacy of incorporating synthesized negative samples for Open Set Recognition.
+
+\textbf{Synergy between SE-Attention and Negative Sampling:} We observe a distinct interaction regarding the SE-Attention mechanism. While SE-Attention offers negligible gains for the original CAC, it yields significant performance improvements when integrated into CAC-Negative. This suggests that the attention mechanism relies on a sufficiently populated feature space to function effectively.
+
+The differential impact of SE-Attention can be explained by the topological characteristics of the embedding space. The original CAC results in a relatively sparse logit space, where SE-Attention struggles to capture meaningful dependencies. In contrast, the introduction of pseudo-negative samples effectively densifies the manifold. This densification enables the SE-Attention mechanism to learn more robust feature recalibrations, allowing it to effectively scatter pseudo-samples and refine the decision boundary.
+
+\textbf{Inefficacy of Explicit Intra-class Clustering ($\lambda$):} Regarding the hyperparameter $\lambda$ (the weight for the loss of anchor clustering term), our experiments indicate that non-zero values deteriorate the performance of the original CAC and provide no substantial benefit to CAC-Negative. Consequently, we set $\lambda=0$. We attribute this to the relatively limited number of known categories (70 classes); simply maximizing inter-class separation appears sufficient for classification, rendering strict intra-class clustering constraints less critical.
+
+\begin{table}[h]
+  \caption{CAC VS. CAC-Negative.}
+  \label{tab: CAC VS. CAC-Negative}
+  \centering
+  \resizebox{\columnwidth}{!}{
+      \begin{tabular}{lcccc}
+        \toprule
+        \bf Parameter & \bf Overall Acc. & \bf Seen Acc. & \bf Unseen Acc. & \bf AUROC \\
+        \midrule
+        \multicolumn{5}{l}{CAC} \\
+        \midrule
+        $\lambda=0, Attn=0$ & 77.80\% ± 0.31\% & 85.49\% ± 0.35\% & 71.24\% ± 0.83\% & 0.8908 ± 0.0009\\
+        $\lambda=0, Attn=4$ & 78.05\% ± 0.57\% & 85.76\% ± 0.36\% & 71.47\% ± 1.02\% & 0.8931 ± 0.0015\\
+        $\lambda=0.1, Attn=4$ & 67.58\% ± 0.27\% & \textbf{86.27\% ± 0.67\%} & 51.64\% ± 0.99\% & 0.8237 ± 0.0031 \\
+        \midrule
+        \multicolumn{5}{l}{\textbf{CAC-Negative}} \\
+        \midrule
+        $\lambda_N=0.3, Attn=0$ & 76.84\% ± 0.46\% & 84.71\% ± 0.28\% & 70.13\% ± 0.92\% & 0.8978 ± 0.0025 \\
+        $\lambda_N=0.3, Attn=4$ & 84.68\% ± 0.25\% & 77.49\% ± 0.99\% & 90.80\% ± 0.77\% & 0.9411 ± 0.0021 \\
+        $\lambda_N=0.5, Attn=4$ & \textbf{86.17\% ± 0.30\%} & 77.45\% ± 0.43\% & \textbf{93.61\% ± 0.42\%} & \textbf{0.9526 ± 0.0027} \\
+        \bottomrule
+      \end{tabular}
+  }
+\end{table}
+
+\subsection{Impact of Different Post-hoc Methods on CAC}
+
+Table \ref{tab: CAC-post hoc} presents a comparative analysis of varying post-hoc inference mechanisms applied to the CAC framework, specifically benchmarking the threshold-based baseline against Z-Score and OpenMax.
+
+\textbf{Performance of OpenMax:} Empirical results demonstrate that OpenMax yields the most superior performance, achieving an AUROC of 0.9281. Crucially, this method significantly boosts Unseen Accuracy (from 71.24% to 88.46%) while incurring only a marginal degradation in Seen Accuracy ($\approx 1\%$), indicating a robust trade-off between closed-set classification and open-set rejection.
+
+\textbf{Inefficacy of Z-Score:} Conversely, the Z-Score method proves suboptimal for the CAC embedding space, underperforming even the simple threshold baseline. Our experiments reveal that the model is highly sensitive to the parameter $std\_m$. Increasing this threshold effectively expands the acceptance region to encompass the entire logit space, causing the Unseen Accuracy to collapse to zero. This phenomenon corroborates our previous findings: the CAC framework induces highly compact class clusters, rendering standard deviation-based outlier detection overly sensitive and less effective than tail-based estimation.
+
+\begin{table}[h]
+  \caption{Post hoc methods on \textit{\textbf{CAC}}}
+  \label{tab: CAC-post hoc}
+  \centering
+  \resizebox{\columnwidth}{!}{
+      \begin{tabular}{lcccc}
+        \toprule
+        \bf Method & \bf Overall Acc. & \bf Seen Acc. & \bf Unseen Acc. & \bf AUROC \\
+        \midrule
+        threshold          & 77.80\% ± 0.31\% & \textbf{85.49\% ± 0.35\%} & 71.24\% ± 0.83\% & 0.8908 ± 0.0009\\
+        Z-Score($std\_m=0.1$)          & 72.55\% ± 0.24\% & 81.06\% ± 0.29\% & 65.28\% ± 0.40\% & 0.8325 ± 0.0009 \\
+        \textbf{OpenMax}($\lambda=0.1$)          & \textbf{86.62\% ± 0.16\%} & 84.47\% ± 0.38\% & \textbf{88.46\% ± 0.11\%} & \textbf{0.9281 ± 0.0026} \\
+        \bottomrule
+      \end{tabular}
+  }
+\end{table}
 
 % \begin{table}[h]
 %   \caption{Template}
