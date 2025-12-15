@@ -217,11 +217,16 @@ def run_multiple_trials(cfg: dict, seeds: list[int], verbose: bool) -> dict:
     all_results = []
     
     for i, seed in enumerate(seeds):
-        print(f">>> Trial {i+1}/{len(seeds)}, Seed={seed}")
+        print(f"\n{'='*60}")
+        print(f"Trial {i+1}/{len(seeds)} | Seed: {seed}")
+        print("="*60)
         result = run_single_trial(cfg, seed, verbose)
         all_results.append(result)
-        if verbose:
-            print(f"    Subclass Unseen: {result['sub_unseen']*100:.2f}%")
+        
+        # 打印单次结果摘要
+        print(f"\n[Trial Result]")
+        print(f"  Subclass Overall: {result['sub_overall']*100:.2f}%")
+        print(f"  Subclass Seen/Unseen: {result['sub_seen']*100:.2f}% / {result['sub_unseen']*100:.2f}%")
     
     # 聚合统计
     stats = {}
@@ -239,7 +244,7 @@ def run_multiple_trials(cfg: dict, seeds: list[int], verbose: bool) -> dict:
 def print_evaluation_report(stats: dict):
     """打印评估报告"""
     print("\n" + "=" * 60)
-    print("Evaluation Report")
+    print("Final Evaluation Report")
     print("=" * 60)
     print(f"  [Superclass] Overall     : {stats['super_overall_mean']*100:.2f}% ± {stats['super_overall_std']*100:.2f}%")
     print(f"  [Superclass] Seen        : {stats['super_seen_mean']*100:.2f}% ± {stats['super_seen_std']*100:.2f}%")
@@ -249,21 +254,61 @@ def print_evaluation_report(stats: dict):
     print(f"  [Subclass] Unseen        : {stats['sub_unseen_mean']*100:.2f}% ± {stats['sub_unseen_std']*100:.2f}%")
     print(f"  [Superclass] AUROC       : {stats['super_auroc_mean']:.4f} ± {stats['super_auroc_std']:.4f}")
     print(f"  [Subclass] AUROC         : {stats['sub_auroc_mean']:.4f} ± {stats['sub_auroc_std']:.4f}")
+    
+    # 一行摘要，方便复制到 eval.md
+    print("\n[Copy to eval.md]")
+    print(f"{stats['super_seen_mean']*100:.2f}% ± {stats['super_seen_std']*100:.2f}%, "
+          f"{stats['sub_overall_mean']*100:.2f}% ± {stats['sub_overall_std']*100:.2f}%, "
+          f"{stats['sub_seen_mean']*100:.2f}% ± {stats['sub_seen_std']*100:.2f}%, "
+          f"{stats['sub_unseen_mean']*100:.2f}% ± {stats['sub_unseen_std']*100:.2f}%, "
+          f"{stats['sub_auroc_mean']:.4f} ± {stats['sub_auroc_std']:.4f}")
+
+
+def print_global_config(cfg: dict, seeds: list[int]):
+    """打印全局配置"""
+    mode = "SE Feature Gating" if cfg["enable_feature_gating"] else "Independent Training"
+    masking = "Enabled" if cfg["enable_hierarchical_masking"] else "Disabled"
+    split_mode = "Test Only" if cfg["test_only_unknown"] else "Val + Test"
+    
+    print("=" * 60)
+    print("Global Configuration")
+    print("=" * 60)
+    
+    print("\n[Model]")
+    print(f"  Mode: {mode}")
+    print(f"  Hierarchical Masking: {masking}")
+    
+    print("\n[Training]")
+    print(f"  Loss: {cfg['training_loss'].value.upper()}")
+    print(f"  Epochs: {cfg['epochs']}")
+    print(f"  Batch Size: {cfg['batch_size']}")
+    print(f"  Learning Rate: {cfg['learning_rate']}")
+    
+    print("\n[Data Split]")
+    print(f"  Unknown in: {split_mode}")
+    print(f"  Novel Ratio (per split): {cfg['novel_ratio']*100:.0f}%")
+    print(f"  Train Ratio: {cfg['train_ratio']*100:.0f}%")
+    
+    print("\n[Threshold]")
+    if cfg["test_only_unknown"]:
+        print(f"  Method: {cfg['known_only_threshold'].value} (val has no unknown)")
+    else:
+        print(f"  Method: {cfg['full_val_threshold'].value} (val has unknown)")
+    
+    print("\n[OOD Score]")
+    print(f"  Validation: {cfg['validation_score_method'].value} (T={cfg['validation_score_temperature']})")
+    print(f"  Prediction: {cfg['prediction_score_method'].value} (T={cfg['prediction_score_temperature']})")
+    
+    print("\n[Evaluation]")
+    print(f"  Seeds: {seeds}")
+    print(f"  Total Trials: {len(seeds)}")
+
 
 if __name__ == "__main__":
-    verbose = True
+    verbose = False
     
-    mode = "SE Feature Gating" if CONFIG["enable_feature_gating"] else "Independent Training"
-    masking = "Enabled" if CONFIG["enable_hierarchical_masking"] else "Disabled"
-    print("=" * 75)
-    print(f"Multi-seed Evaluation | Mode: {mode} | Masking: {masking} | Trials: {len(SEEDS)}")
-    print("=" * 75)
-    print(f"Training Loss: {CONFIG['training_loss'].value} | Epochs: {CONFIG['epochs']}")
-    # 阈值设定方法（自动选择）
-    print(f"Threshold: known_only={CONFIG['known_only_threshold'].value}, full_val={CONFIG['full_val_threshold'].value}")
-    print(f"Validation: {CONFIG['validation_score_method'].value} (T={CONFIG['validation_score_temperature']})")
-    print(f"Prediction: {CONFIG['prediction_score_method'].value} (T={CONFIG['prediction_score_temperature']})")
-    print("=" * 75)
+    print_global_config(CONFIG, SEEDS)
     
     stats = run_multiple_trials(CONFIG, SEEDS, verbose)
     print_evaluation_report(stats)
+
