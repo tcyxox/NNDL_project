@@ -51,18 +51,26 @@ def calculate_threshold_linear_single_head(
 
     known_scores = all_scores[known_mask]
     unknown_scores = all_scores[unknown_mask]
+    has_unknown = unknown_mask.sum() > 0
 
-    # 根据 test_only_unknown 决定使用哪种方法
+    # 根据 test_only_unknown 决定使用哪种方法，并添加 fallback 逻辑
     if test_only_unknown:
         # Val 不含未知类，使用 KnownOnly 方法
         threshold = _apply_known_only_threshold(
             known_only_method, known_scores, target_recall, std_multiplier, score_method
         )
     else:
-        # Val 含未知类，使用 FullVal 方法
-        threshold = _apply_full_val_threshold(
-            full_val_method, known_scores, unknown_scores, score_method
-        )
+        # Val 应含未知类
+        if has_unknown:
+            threshold = _apply_full_val_threshold(
+                full_val_method, known_scores, unknown_scores, score_method
+            )
+        else:
+            # Fallback: 配置期望有未知类，但实际数据没有，回退到 KnownOnly
+            print("警告: test_only_unknown=False 但 Val 中无未知样本，回退到 KnownOnly 方法")
+            threshold = _apply_known_only_threshold(
+                known_only_method, known_scores, target_recall, std_multiplier, score_method
+            )
 
     return threshold
 
@@ -117,8 +125,10 @@ def calculate_threshold_gated_dual_head(
     known_sub_scores = sub_scores[known_sub]
     unknown_super_scores = super_scores[unknown_super]
     unknown_sub_scores = sub_scores[unknown_sub]
+    has_unknown_super = unknown_super.sum() > 0
+    has_unknown_sub = unknown_sub.sum() > 0
 
-    # 根据 test_only_unknown 决定使用哪种方法
+    # 根据 test_only_unknown 决定使用哪种方法，并添加 fallback 逻辑
     if test_only_unknown:
         # Val 不含未知类，使用 KnownOnly 方法
         thresh_super = _apply_known_only_threshold(
@@ -128,13 +138,28 @@ def calculate_threshold_gated_dual_head(
             known_only_method, known_sub_scores, target_recall, std_multiplier, score_method
         )
     else:
-        # Val 含未知类，使用 FullVal 方法
-        thresh_super = _apply_full_val_threshold(
-            full_val_method, known_super_scores, unknown_super_scores, score_method
-        )
-        thresh_sub = _apply_full_val_threshold(
-            full_val_method, known_sub_scores, unknown_sub_scores, score_method
-        )
+        # Val 应含未知类
+        # Superclass threshold (with fallback)
+        if has_unknown_super:
+            thresh_super = _apply_full_val_threshold(
+                full_val_method, known_super_scores, unknown_super_scores, score_method
+            )
+        else:
+            print("警告: test_only_unknown=False 但 Val 中无未知超类，回退到 KnownOnly 方法")
+            thresh_super = _apply_known_only_threshold(
+                known_only_method, known_super_scores, target_recall, std_multiplier, score_method
+            )
+        
+        # Subclass threshold (with fallback)
+        if has_unknown_sub:
+            thresh_sub = _apply_full_val_threshold(
+                full_val_method, known_sub_scores, unknown_sub_scores, score_method
+            )
+        else:
+            print("警告: test_only_unknown=False 但 Val 中无未知子类，回退到 KnownOnly 方法")
+            thresh_sub = _apply_known_only_threshold(
+                known_only_method, known_sub_scores, target_recall, std_multiplier, score_method
+            )
 
     return thresh_super, thresh_sub
 
