@@ -303,11 +303,31 @@ if __name__ == "__main__":
     # === 生成提交文件 ===
     print("\n--- Generating Submission File ---")
     
-    predictions = [
-        {"image": test_image_names[i], "superclass_index": super_preds[i], "subclass_index": sub_preds[i]}
-        for i in range(len(test_image_names))
-    ]
-    df = pd.DataFrame(predictions)
+    predictions = []
+    for i in range(len(test_image_names)):
+        img_name = test_image_names[i]
+        predictions.append({
+            "image": img_name,
+            "superclass_index": super_preds[i],
+            "subclass_index": sub_preds[i],
+            # 用于排序的辅助列
+            # 用于排序的辅助列
+            "_sort_idx": int(img_name.split('.')[0]) if img_name.split('.')[0].isdigit() else float('inf')
+        })
+    
+    # 根据辅助列排序
+    predictions.sort(key=lambda x: x["_sort_idx"])
+    
+    # 移除辅助列并创建 DataFrame
+    final_predictions = []
+    for p in predictions:
+        final_predictions.append({
+            "image": p["image"],
+            "superclass_index": p["superclass_index"],
+            "subclass_index": p["subclass_index"]
+        })
+        
+    df = pd.DataFrame(final_predictions)
     df.to_csv(CONFIG["output_csv"], index=False)
     
     print(f"  > 提交文件已保存至: {CONFIG['output_csv']}")

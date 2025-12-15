@@ -61,10 +61,10 @@ class OSRConfig:
 
 @dataclass
 class ModelConfig:
-    clip_model_id: str = "openai/clip-vit-base-patch32"
-    # clip_model_id: str = "openai/clip-vit-large-patch14"  # 升级到 ViT-L/14
-    feature_dim: int = 512
-    # feature_dim: int = 768  # ViT-L/14 输出 768 维特征
+    # clip_model_id: str = "openai/clip-vit-base-patch32"
+    clip_model_id: str = "openai/clip-vit-large-patch14"  # 升级到 ViT-L/14
+    # feature_dim: int = 512
+    feature_dim: int = 768  # ViT-L/14 输出 768 维特征
 
 
 @dataclass
