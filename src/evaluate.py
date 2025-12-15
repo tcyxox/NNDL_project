@@ -62,7 +62,7 @@ def calculate_metrics(y_true, y_pred, novel_label):
     return acc_all, acc_known, acc_novel
 
 
-def run_single_trial(cfg: dict, seed: int, verbose: bool, use_val_as_test: bool):
+def run_single_trial(cfg: dict, seed: int, verbose: bool):
     """
     运行单次实验，返回各项指标
     
@@ -70,7 +70,6 @@ def run_single_trial(cfg: dict, seed: int, verbose: bool, use_val_as_test: bool)
         cfg: 配置字典
         seed: 随机种子（控制数据划分、模型初始化和训练）
         verbose: 是否打印训练进度信息
-        use_val_as_test: 如果为 True，则在验证集上评估
     Returns:
         dict: 包含各项评估指标
     """
@@ -97,15 +96,9 @@ def run_single_trial(cfg: dict, seed: int, verbose: bool, use_val_as_test: bool)
     val_features = data.val_features
     val_super_labels = data.val_super_labels
     val_sub_labels = data.val_sub_labels
-    
-    if use_val_as_test:
-        test_features = val_features.to(device)
-        test_super_labels = val_super_labels
-        test_sub_labels = val_sub_labels
-    else:
-        test_features = data.test_features.to(device)
-        test_super_labels = data.test_super_labels
-        test_sub_labels = data.test_sub_labels
+    test_features = data.test_features.to(device)
+    test_super_labels = data.test_super_labels
+    test_sub_labels = data.test_sub_labels
     
     # 3. 训练模型（使用 train 数据）
     result = run_training(
@@ -206,7 +199,7 @@ def run_single_trial(cfg: dict, seed: int, verbose: bool, use_val_as_test: bool)
     }
 
 
-def run_multiple_trials(cfg: dict, seeds: list[int], verbose: bool, use_val_as_test: bool) -> dict:
+def run_multiple_trials(cfg: dict, seeds: list[int], verbose: bool) -> dict:
     """
     运行多种子评估，返回聚合统计结果
     
@@ -214,7 +207,6 @@ def run_multiple_trials(cfg: dict, seeds: list[int], verbose: bool, use_val_as_t
         cfg: 配置字典
         seeds: 随机种子列表
         verbose: 是否打印进度信息
-        use_val_as_test: 如果为 True，则在验证集上评估
     Returns:
         dict: 包含均值和标准差的聚合统计结果
     """
@@ -222,7 +214,7 @@ def run_multiple_trials(cfg: dict, seeds: list[int], verbose: bool, use_val_as_t
     
     for i, seed in enumerate(seeds):
         print(f">>> Trial {i+1}/{len(seeds)}, Seed={seed}")
-        result = run_single_trial(cfg, seed, verbose, use_val_as_test)
+        result = run_single_trial(cfg, seed, verbose)
         all_results.append(result)
         if verbose:
             print(f"    Subclass Unseen: {result['sub_unseen']*100:.2f}%")
@@ -256,15 +248,12 @@ def print_evaluation_report(stats: dict):
 
 if __name__ == "__main__":
     verbose = True
-    use_val_as_test = False  # 设置为 True 在验证集上评估，False 在测试集上评估
     
     mode = "SE Feature Gating" if CONFIG["enable_feature_gating"] else "Independent Training"
     masking = "Enabled" if CONFIG["enable_hierarchical_masking"] else "Disabled"
-    eval_set = "Validation Set" if use_val_as_test else "Test Set"
     print("=" * 75)
     print(f"Multi-seed Evaluation | Mode: {mode} | Masking: {masking} | Trials: {len(SEEDS)}")
     print("=" * 75)
-    print(f"Evaluation Set: {eval_set}")
     print(f"Training Loss: {CONFIG['training_loss'].value} | Epochs: {CONFIG['epochs']}")
     # 阈值设定方法（自动选择）
     print(f"Threshold: known_only={CONFIG['known_only_threshold'].value}, full_val={CONFIG['full_val_threshold'].value}")
@@ -272,6 +261,5 @@ if __name__ == "__main__":
     print(f"Prediction: {CONFIG['prediction_score_method'].value} (T={CONFIG['prediction_score_temperature']})")
     print("=" * 75)
     
-    stats = run_multiple_trials(CONFIG, SEEDS, verbose, use_val_as_test)
+    stats = run_multiple_trials(CONFIG, SEEDS, verbose)
     print_evaluation_report(stats)
-
