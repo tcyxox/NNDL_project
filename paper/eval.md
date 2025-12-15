@@ -286,7 +286,7 @@ Quantile: T=0.02
   [Subclass] AUROC         : 0.8593 ± 0.0251
 
 观察：
-- Energy 方法由于是无界的，所以 Z-Score 阈值方法不如 Quantile。
+- Energy 方法由于是无界的，所以 Z-Score 阈值方法不如 Quantile。因此后面讨论 Energy 方法时，都使用 Quantile。
 - Energy 方法受益于较低温度，T<=0.05 时性能最优。低温时，模型关注绝对幅值。
 
 ## Variant 探索
@@ -373,6 +373,44 @@ super seen, sub overall, sub seen, sub unseen, sub auroc
 - 调 std multiplier 有些情况不掉 super seen，但在有些调 Tt Tp 不掉 super seen 的情况下会掉 super seen。
 
 因此，一定是先把温度调好，再去调 Threshold 设定参数。
+
+## Validation 包含未知类
+
+```py
+    # 数据划分模式
+    test_only_unknown: bool = False  # True: val 不含未知类; False: val含未知类
+
+    # 训练参数
+    batch_size: int = 64
+    learning_rate: float = 1e-3
+    epochs: int = 75
+
+    # 模型选择
+    enable_hierarchical_masking: bool = True  # 推理时 Hierarchical Masking 开关
+    enable_feature_gating: bool = True  # 训练时 SE Feature Gating 开关
+
+    # 阈值设定（自动根据验证集是否有未知类选择方法）
+    known_only_threshold: KnownOnlyThreshold = KnownOnlyThreshold.ZScore  # 无未知类时
+    full_val_threshold: FullValThreshold = FullValThreshold.Intersection  # 有未知类时
+    target_recall: float = 0.95  # Quantile 方法: target recall，95%
+    std_multiplier: float = 1.645  # ZScore 方法: 标准差乘数，1.645
+
+    # 方法选择
+    training_loss: TrainingLoss = TrainingLoss.CE
+    validation_score_method: OODScoreMethod = OODScoreMethod.MSP
+    prediction_score_method: OODScoreMethod = OODScoreMethod.MSP
+    validation_score_temperature: float = 1.5
+    prediction_score_temperature: float = 1.5
+```
+
+  [Superclass] Overall     : 98.62% ± 0.50%
+  [Superclass] Seen        : 98.62% ± 0.50%
+  [Superclass] Unseen      : 0.00% ± 0.00%
+  [Subclass] Overall       : 79.57% ± 1.55%
+  [Subclass] Seen          : 72.68% ± 2.61%
+  [Subclass] Unseen        : 84.90% ± 4.12%
+  [Superclass] AUROC       : nan ± nan
+  [Subclass] AUROC         : 0.8663 ± 0.0119
 
 # CAC 
 ## v1.0

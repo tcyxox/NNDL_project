@@ -71,6 +71,9 @@ class ModelConfig:
 class ExperimentConfig:
     seed: int = 42  # evaluate 时不使用
 
+    # 数据划分模式
+    test_only_unknown: bool = False  # True: val 不含未知类; False: val含未知类
+
     # 训练参数
     batch_size: int = 64
     learning_rate: float = 1e-3
@@ -81,8 +84,8 @@ class ExperimentConfig:
     enable_feature_gating: bool = True  # 训练时 SE Feature Gating 开关
 
     # 阈值设定（自动根据验证集是否有未知类选择方法）
-    known_only_threshold: KnownOnlyThreshold = KnownOnlyThreshold.ZScore  # 无未知类时使用
-    full_val_threshold: FullValThreshold = FullValThreshold.Intersection  # 有未知类时使用
+    known_only_threshold: KnownOnlyThreshold = KnownOnlyThreshold.ZScore  # 无未知类时
+    full_val_threshold: FullValThreshold = FullValThreshold.Intersection  # 有未知类时
     target_recall: float = 0.95  # Quantile 方法: target recall，95%
     std_multiplier: float = 1.645  # ZScore 方法: 标准差乘数，1.645
 

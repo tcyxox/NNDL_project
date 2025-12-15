@@ -17,7 +17,7 @@ class SplitDataset:
     train_features: torch.Tensor
     train_super_labels: torch.Tensor
     train_sub_labels: torch.Tensor
-    # 验证集（已知+未知）
+    # 验证集（根据模式：仅已知类 或 已知+未知）
     val_features: torch.Tensor
     val_super_labels: torch.Tensor
     val_sub_labels: torch.Tensor
@@ -32,12 +32,13 @@ class SplitDataset:
 
 def split_features(
         feature_dir: str,
-        novel_ratio: float = 0.2,
-        train_ratio: float = 0.7,
-        val_test_ratio: float = 0.5,
-        novel_sub_index: int = 87,
-        output_dir: str = None,
-        verbose: bool = True
+        novel_ratio: float,
+        train_ratio: float,
+        val_test_ratio: float,
+        test_only_unknown: bool,
+        novel_sub_index: int,
+        verbose: bool,
+        output_dir: str = None
 ) -> SplitDataset:
     """
     将特征数据划分为 train/val/test 集
@@ -47,9 +48,10 @@ def split_features(
         novel_ratio: 设为 novel 的子类比例
         train_ratio: 已知类中用于训练的比例
         val_test_ratio: 剩余部分中用于验证的比例
-        novel_sub_index: novel 子类的标签 (默认 87)
-        output_dir: 可选，若提供则保存划分结果到此目录
+        test_only_unknown: 是否仅 test 含未知类（True: train/val 纯已知; False: val/test 都含未知）
+        novel_sub_index: novel 子类的标签
         verbose: 是否打印详细信息
+        output_dir: 可选，若提供则保存划分结果到此目录
 
     Returns:
         SplitDataset: 包含所有划分数据的对象
@@ -90,23 +92,33 @@ def split_features(
     idx_val_known = known_indices[n_train:n_train + n_val_known]
     idx_test_known = known_indices[n_train + n_val_known:]
 
-    # 5. 切分未知类: Val / Test （按类别划分，而非按样本）
-    # Val 和 Test 使用不同的未知子类，确保泛化评估更严格
-    novel_class_list = list(novel_classes)
-    np.random.shuffle(novel_class_list)
-    n_val_novel_classes = int(len(novel_class_list) * val_test_ratio)
-    val_novel_classes = set(novel_class_list[:n_val_novel_classes])
-    test_novel_classes = set(novel_class_list[n_val_novel_classes:])
-    
-    # 获取属于 val/test 未知类的样本索引
-    is_val_novel = torch.tensor([s.item() in val_novel_classes for s in sub_labels])
-    is_test_novel = torch.tensor([s.item() in test_novel_classes for s in sub_labels])
-    idx_val_novel = torch.where(is_val_novel)[0]
-    idx_test_novel = torch.where(is_test_novel)[0]
-    
-    if verbose:
-        print(f"未知类划分: Val {len(val_novel_classes)} 类 ({len(idx_val_novel)} 样本), "
-              f"Test {len(test_novel_classes)} 类 ({len(idx_test_novel)} 样本)")
+    # 5. 切分未知类
+    if test_only_unknown:
+        # 模式A: 仅 Test 含未知类，Val 纯已知
+        idx_val_novel = torch.tensor([], dtype=torch.long)
+        idx_test_novel = novel_indices
+        
+        if verbose:
+            print(f"划分模式: 仅 Test 含未知类")
+            print(f"未知类划分: Val 0 类 (0 样本), Test {len(novel_classes)} 类 ({len(idx_test_novel)} 样本)")
+    else:
+        # 模式B: Val 和 Test 都含未知类（按类别划分）
+        novel_class_list = list(novel_classes)
+        np.random.shuffle(novel_class_list)
+        n_val_novel_classes = int(len(novel_class_list) * val_test_ratio)
+        val_novel_classes = set(novel_class_list[:n_val_novel_classes])
+        test_novel_classes = set(novel_class_list[n_val_novel_classes:])
+        
+        # 获取属于 val/test 未知类的样本索引
+        is_val_novel = torch.tensor([s.item() in val_novel_classes for s in sub_labels])
+        is_test_novel = torch.tensor([s.item() in test_novel_classes for s in sub_labels])
+        idx_val_novel = torch.where(is_val_novel)[0]
+        idx_test_novel = torch.where(is_test_novel)[0]
+        
+        if verbose:
+            print(f"划分模式: Val 和 Test 都含未知类")
+            print(f"未知类划分: Val {len(val_novel_classes)} 类 ({len(idx_val_novel)} 样本), "
+                  f"Test {len(test_novel_classes)} 类 ({len(idx_test_novel)} 样本)")
 
     # 6. 组装数据集
     # Train (纯已知类)
@@ -114,13 +126,18 @@ def split_features(
     train_super = super_labels[idx_train]
     train_sub = sub_labels[idx_train]
 
-    # Val (已知 + 未知, novel 子类标签改为 novel_sub_index)
-    val_feat = torch.cat([features[idx_val_known], features[idx_val_novel]])
-    val_super = torch.cat([super_labels[idx_val_known], super_labels[idx_val_novel]])
-    val_sub = torch.cat([
-        sub_labels[idx_val_known],
-        torch.full((len(idx_val_novel),), novel_sub_index, dtype=torch.long)
-    ])
+    # Val (根据模式：纯已知 或 已知+未知)
+    if len(idx_val_novel) > 0:
+        val_feat = torch.cat([features[idx_val_known], features[idx_val_novel]])
+        val_super = torch.cat([super_labels[idx_val_known], super_labels[idx_val_novel]])
+        val_sub = torch.cat([
+            sub_labels[idx_val_known],
+            torch.full((len(idx_val_novel),), novel_sub_index, dtype=torch.long)
+        ])
+    else:
+        val_feat = features[idx_val_known]
+        val_super = super_labels[idx_val_known]
+        val_sub = sub_labels[idx_val_known]
     perm_val = torch.randperm(len(val_feat))
     val_feat, val_super, val_sub = val_feat[perm_val], val_super[perm_val], val_sub[perm_val]
 
@@ -157,3 +174,4 @@ def split_features(
         test_features=test_feat, test_super_labels=test_super, test_sub_labels=test_sub,
         known_classes=known_classes, novel_classes=novel_classes
     )
+

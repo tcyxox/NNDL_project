@@ -36,6 +36,7 @@ CONFIG = {
     "output_csv": os.path.join(config.paths.outputs, "submission_osr.csv"),
     
     # 数据划分
+    "test_only_unknown": config.experiment.test_only_unknown,
     "novel_ratio": config.split.novel_ratio,
     "train_ratio": config.split.train_ratio,
     "val_test_ratio": config.split.val_test_ratio,
@@ -89,8 +90,8 @@ def calibrate_threshold_single_seed(cfg: dict, seed: int):
         novel_ratio=cfg["novel_ratio"],
         train_ratio=cfg["train_ratio"],
         val_test_ratio=cfg["val_test_ratio"],
+        test_only_unknown=cfg["test_only_unknown"],
         novel_sub_index=cfg["novel_sub_idx"],
-        output_dir=None,
         verbose=False
     )
     
