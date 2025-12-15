@@ -131,7 +131,7 @@ Also used in \textit{Strict Open-Set Validation}. We assume the scores of known 
 \end{equation}
 where $\mu$ and $\sigma$ are the mean and standard deviation of $S(\mathbf{x})$ on $\mathcal{D}_{\text{val}}^{\text{known}}$. For a target recall of 95\% under a normal distribution, we set $k=1.645$. This method is generally more robust to sampling noise than the Quantile method, provided the score distribution is approximately normal, but may underperform on heavy-tailed distributions.
 
-\paragraph{Distribution Intersection (Full Validation).}
+\paragraph{Equal Error Rate (EER) Threshold (Full Validation).}
 Used in \textit{Guided Open-Set Validation}. When the validation set contains both known and novel samples ($\mathcal{D}_{\text{val}}^{\text{known}} \cup \mathcal{D}_{\text{val}}^{\text{novel}}$), we can explicitly model the boundary between the two distributions. We calculate $\tau$ as the intersection point of the empirical distributions, effectively balancing the FPR and FNR:
 \begin{equation}
     \tau_{\text{Intersect}} = \operatorname*{argmin}_{t} \left| P(S(\mathbf{x}) < t \mid \text{Known}) - P(S(\mathbf{x}) \geq t \mid \text{Novel}) \right|
@@ -341,7 +341,7 @@ This shows that low-temperature Energy reduces to the negative \textbf{MaxLogit}
 %\end{itemize}
 
 \subsection{Adapted CAC Method}
-As noted in previous article, Cross-Entropy loss does not guarantee the topological compactness requisite for effective outlier detection; it frequently yields "inflated" feature distributions that encroach upon the open space, resulting in a crowded logit space where unknown classes are difficult to isolate. We postulate that distinguishing known from unknown samples requires more than applying post-hoc measures. To further address the challenge of distinguishing unknown classes in OSR, we utilize the Class Anchor Clustering (CAC) framework~\cite{miller2021class}, a distance-based discriminative method rooted in metric learning.
+Besides above post-hoc methods, we postulate that distinguishing known from unknown samples requires more than applying post-hoc measures. To further address the challenge of distinguishing unknown classes in OSR, we utilize the Class Anchor Clustering (CAC) framework~\cite{miller2021class}, a distance-based discriminative method rooted in metric learning.
 
 In contrast, CAC explicitly regularizes the network to enforce strict intra-class compactness and maximize inter-class separability. Our adoption of CAC is further motivated by the semantic properties of the CLIP encoder. While CLIP’s contrastive pre-training naturally induces implicit clustering via cosine similarity, we employ CAC to rigorously map these semantic representations to a structured logit space where class centers are manually anchored to ensure maximal separation. By aligning the dense semantic clusters from CLIP with fixed, distinct anchors, we establish a robust feature space.
 
@@ -447,7 +447,7 @@ The results indicate distinct trade-offs. \textbf{MaxSigmoid} achieves high over
 
 \subsection{Impact of Validation Strategy}
 
-We analyze the impact of the validation set composition on threshold calibration. In the \textit{Strict} setting, thresholds are derived solely from known data (Z-Score). In the \textit{Guided} setting, the validation set includes unknown samples, allowing for the \textit{Intersection} method.
+We analyze the impact of the validation set composition on threshold calibration. In the \textit{Strict} setting, thresholds are derived solely from known data (Z-Score). In the \textit{Guided} setting, the validation set includes unknown samples, allowing for the \textit{EER} method.
 
 As expected, access to unknown samples during validation significantly boosts performance. For the CE+MSP model, switching from Strict to Guided validation significantly improve the performance, demonstrating that the distribution of validation outliers generalizes well to the test set.
 
@@ -461,7 +461,7 @@ As expected, access to unknown samples during validation significantly boosts pe
     \bf Validation Strategy & \bf Threshold Method & \bf Overall Acc. & \bf Seen Acc. & \bf Unseen Acc. & \bf AUROC \\
     \midrule
     Strict (Known Only) & Z-Score & 73.83\% ± 3.88\% & \textbf{88.03\% ± 1.30\%} & 59.79\% ± 8.48\% & \textbf{0.8821 ± 0.0234} \\
-    Guided (Known + Novel) & Intersection & \textbf{79.57\% ± 1.55\%} & 72.68\% ± 2.61\% & \textbf{84.90\% ± 4.12\%} & 0.8663 ± 0.0119 \\
+    Guided (Known + Novel) & EER & \textbf{79.57\% ± 1.55\%} & 72.68\% ± 2.61\% & \textbf{84.90\% ± 4.12\%} & 0.8663 ± 0.0119 \\
     \bottomrule
   \end{tabular}
   }
