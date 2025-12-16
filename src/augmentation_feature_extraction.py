@@ -153,6 +153,8 @@ if __name__ == "__main__":
         # 3. 生成并提取 OpenMix 负样本特征 (Unknown Classes)
         batch_openmix_imgs = []
         for img in batch_pil_images:
+            cv2.imshow("img", img)
+            exit()
             if CONFIG["use_opencutout"] and random.random() < 0.3:
                 batch_openmix_imgs.append(open_cutout(img))
             else:
