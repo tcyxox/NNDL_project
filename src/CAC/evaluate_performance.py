@@ -3,9 +3,10 @@ import numpy as np
 import os
 
 from src.CAC.train_CAC import train_cac_classifier
-from src.CAC.test_CAC import test_cac_openset
+# from src.CAC.test_CAC import test_cac_openset
+from src.CAC.test_CAC_zscore import test_cac_openset
 from src.core.config import *
-from src.core.train import create_label_mapping
+from src.core.training import create_label_mapping
 
 # ================= 配置区域 =================
 CONFIG = {
@@ -17,11 +18,11 @@ CONFIG = {
     "batch_size": config.experiment.batch_size,
     "epochs": 300,
     "alpha": 10,
-    "lambda_w": 0,
+    "lambda_w": 0.1,
     # "anchor_mode": "uniform_hypersphere",
     "anchor_mode": "axis_aligned",
     # "anchor_mode": "negative_shattered",
-    "se_reduction": -1,
+    "se_reduction": 4,
     "novel_sub_index": config.osr.novel_sub_index,
     "target_recall": config.experiment.target_recall,
     "device": "cuda" if torch.cuda.is_available() else "cpu",
@@ -96,13 +97,26 @@ if __name__ == "__main__":
         )
 
         # === 测试 ===
+        # metrics = test_cac_openset(
+        #     model=model,
+        #     test_features=test_features,
+        #     test_labels=test_sub_labels,
+        #     val_features=torch.cat((train_features, val_features), dim=0),
+        #     val_labels=torch.cat((train_sub_labels, val_sub_labels), dim=0),
+        #     label_map=sub_map,
+        #     device=CONFIG["device"],
+        #     target_recall=CONFIG["target_recall"]
+        # )
         metrics = test_cac_openset(
             model=model,
             test_features=test_features,
             test_labels=test_sub_labels,
+            val_features=torch.cat((train_features, val_features), dim=0),
+            val_labels=torch.cat((train_sub_labels, val_sub_labels), dim=0),
             label_map=sub_map,
             device=CONFIG["device"],
-            target_recall=CONFIG["target_recall"]
+            std_multiplier=1.5,  # 传入 k 值
+            temperature=1
         )
 
         all_results.append(metrics)
