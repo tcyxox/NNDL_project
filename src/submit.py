@@ -17,7 +17,7 @@ import pandas as pd
 import torch
 
 from core.config import config
-from core.data_split import split_features
+from core.data_split import load_full_dataset, split_train_to_subtrain_val
 from core.training import run_training
 from core.prediction import (
     predict_with_gated_dual_head,
@@ -35,12 +35,11 @@ CONFIG = {
     "feature_dir": config.paths.features,
     "output_csv": os.path.join(config.paths.outputs, "submission_osr.csv"),
     
-    # 数据划分
+    # 验证集划分 (Inner Loop Params)
     "val_include_novel": config.experiment.val_include_novel,
     "force_super_novel": config.experiment.force_super_novel,
-    "novel_ratio": config.split.novel_subclass_ratio,
-    "train_ratio": config.split.train_ratio,
-    "val_test_ratio": config.split.val_test_ratio,
+    "val_ratio": config.split.val_ratio,
+    "val_sub_novel_ratio": config.split.val_sub_novel_ratio,
     
     # 模型参数
     "feature_dim": config.model.feature_dim,
@@ -78,27 +77,37 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 
 def calibrate_threshold_single_seed(cfg: dict, seed: int):
     """
-    单次阈值校准: 划分数据 -> 在 train 上训练 -> 在 val+test 上计算阈值
+    单次阈值校准: 
+    1. Load Full Data (treated as Inner Train)
+    2. Split to SubTrain + Val (Inner Split)
+    3. Train on SubTrain, Calibrate on Val
     
     Returns:
         (thresh_super, thresh_sub): 超类和子类阈值
     """
     set_seed(seed)
     
-    # 1. 划分数据
-    data = split_features(
-        feature_dir=cfg["feature_dir"],
-        novel_subclass_ratio=cfg["novel_ratio"],
-        train_ratio=cfg["train_ratio"],
-        val_test_ratio=cfg["val_test_ratio"],
+    # 0. Load Full Dataset
+    full_dataset = load_full_dataset(cfg["feature_dir"])
+
+    # 1. 划分数据 (Simulate Inner Loop)
+    # Full Data -> SubTrain + Val
+    split_info = split_train_to_subtrain_val(
+        train_dataset=full_dataset,
+        val_ratio=cfg["val_ratio"],
+        val_sub_novel_ratio=cfg["val_sub_novel_ratio"],
         val_include_novel=cfg["val_include_novel"],
         novel_sub_index=cfg["novel_sub_idx"],
         novel_super_index=cfg["novel_super_idx"],
         force_super_novel=cfg["force_super_novel"],
+        seed=seed,
         verbose=False
     )
     
-    # 2. 在 train 上训练模型 (不包含 val/test)
+    train_set = split_info.train_set # SubTrain
+    val_set = split_info.test_set    # Val
+
+    # 2. 在 SubTrain 上训练模型
     result = run_training(
         feature_dim=cfg["feature_dim"],
         batch_size=cfg["batch_size"],
@@ -107,9 +116,9 @@ def calibrate_threshold_single_seed(cfg: dict, seed: int):
         device=device,
         enable_feature_gating=cfg["enable_feature_gating"],
         training_loss=cfg["training_loss"],
-        train_features=data.train_features,
-        train_super_labels=data.train_super_labels,
-        train_sub_labels=data.train_sub_labels,
+        train_features=train_set.features,
+        train_super_labels=train_set.super_labels,
+        train_sub_labels=train_set.sub_labels,
         output_dir=None,
         verbose=False
     )
@@ -123,14 +132,13 @@ def calibrate_threshold_single_seed(cfg: dict, seed: int):
     super_map_inv = {v: int(k) for k, v in super_map.items()}
     sub_map_inv = {v: int(k) for k, v in sub_map.items()}
     
-    # 3. 在 val + test 上计算阈值 (test 始终包含未知类，所以合并后也包含未知类)
-    threshold_features = torch.cat([data.val_features, data.test_features], dim=0)
-    threshold_super_labels = torch.cat([data.val_super_labels, data.test_super_labels], dim=0)
-    threshold_sub_labels = torch.cat([data.val_sub_labels, data.test_sub_labels], dim=0)
+    # 3. 在 Val 上计算阈值
+    # val_set contains novel classes (if val_include_novel=True)
     
+    # Check if we should use FullVal method or KnownOnly method
     if cfg["enable_feature_gating"]:
         thresh_super, thresh_sub = calculate_threshold_gated_dual_head(
-            model, threshold_features, threshold_super_labels, threshold_sub_labels,
+            model, val_set.features, val_set.super_labels, val_set.sub_labels,
             super_map_inv, sub_map_inv, device,
             cfg["val_include_novel"],
             cfg["known_only_threshold"], cfg["full_val_threshold"],
@@ -139,14 +147,14 @@ def calibrate_threshold_single_seed(cfg: dict, seed: int):
         )
     else:
         thresh_super = calculate_threshold_linear_single_head(
-            super_model, threshold_features, threshold_super_labels, super_map_inv, device,
+            super_model, val_set.features, val_set.super_labels, super_map_inv, device,
             cfg["val_include_novel"],
             cfg["known_only_threshold"], cfg["full_val_threshold"],
             cfg["target_recall"], cfg["std_multiplier"],
             cfg["validation_score_temperature"], cfg["validation_score_method"]
         )
         thresh_sub = calculate_threshold_linear_single_head(
-            sub_model, threshold_features, threshold_sub_labels, sub_map_inv, device,
+            sub_model, val_set.features, val_set.sub_labels, sub_map_inv, device,
             cfg["val_include_novel"],
             cfg["known_only_threshold"], cfg["full_val_threshold"],
             cfg["target_recall"], cfg["std_multiplier"],
@@ -201,9 +209,11 @@ if __name__ == "__main__":
     set_seed(config.experiment.seed)
     
     # 加载完整训练数据 (不做划分)
-    train_features = torch.load(os.path.join(CONFIG["feature_dir"], "train_features.pt"))
-    train_super_labels = torch.load(os.path.join(CONFIG["feature_dir"], "train_super_labels.pt"))
-    train_sub_labels = torch.load(os.path.join(CONFIG["feature_dir"], "train_sub_labels.pt"))
+    # 加载完整训练数据 (不做划分)
+    full_dataset = load_full_dataset(CONFIG["feature_dir"])
+    train_features = full_dataset.features
+    train_super_labels = full_dataset.super_labels
+    train_sub_labels = full_dataset.sub_labels
     
     print(f"  > 完整训练样本数: {len(train_features)}")
     
