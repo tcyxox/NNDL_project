@@ -386,7 +386,7 @@ We implement three distinct data preparation strategies to simulate different ex
 
 \paragraph{Strict Open-Set Calibration:} \textit{Novel} samples appear only in the Test set.
 
-This strategy simulates a strict scenario where no outliers are available during the development phase and is used in \textit{Post-hoc Method}. Thresholds must be determined using statistical methods based solely on the distribution of known data.
+This strategy simulates a strict scenario where no outliers are available during the development phase and is used in Post-hoc Method. Thresholds must be determined using statistical methods based solely on the distribution of known data.
 
 \paragraph{Guided Open-Set Calibration:} \textit{Novel} samples appear in the Test and Validation set.
 
@@ -514,7 +514,7 @@ Table \ref{tab: CAC-post hoc} presents a comparative analysis of varying post-ho
 \textbf{Inefficacy of Z-Score:} Conversely, Z-Score proves suboptimal, failing to outperform even the simple baseline. The method exhibits extreme sensitivity to $std\_m$, where slight increases cause Unseen Accuracy to collapse to zero. This confirms that the highly compact clusters induced by CAC render standard deviation-based metrics overly sensitive and ineffective compared to tail-based estimation.
 
 \begin{table}[h]
-  \caption{Post hoc methods on \textit{\textbf{CAC}}}
+  \caption{Post-hoc methods on \textit{\textbf{CAC}}}
   \label{tab: CAC-post hoc}
   \centering
   \resizebox{\columnwidth}{!}{
@@ -527,6 +527,39 @@ Table \ref{tab: CAC-post hoc} presents a comparative analysis of varying post-ho
         \textbf{OpenMax}($\lambda=0.1$)          & \textbf{86.62\% ± 0.16\%} & 84.47\% ± 0.38\% & \textbf{88.46\% ± 0.11\%} & \textbf{0.9281 ± 0.0026} \\
         \bottomrule
       \end{tabular}
+  }
+\end{table}
+
+\subsection{Final Evaluation on Leaderboard}
+
+\paragraph{Configuration:}
+\begin{itemize}
+    \item \textbf{Feature Extractor:} CLIP ViT-H/14 (1024-dim features)
+    \item \textbf{Architecture:} SE Feature Gating, Hierarchical Masking
+    \item \textbf{Training:} Cross-Entropy loss, 75 epochs, 1e-3 learning rate
+    \item \textbf{Inference:} OpenMax (Weibull tail=5, $\alpha$=3)
+    \item \textbf{Validation Set:} 10\% unknown subclass
+    \item \textbf{Calibration: } Z-Score (k=1.645) for super class, EER for subclass
+\end{itemize}
+
+\begin{table}[h]
+  \caption{Leaderboard Results Comparison}
+  \label{tab:leaderboard}
+  \centering
+  \resizebox{\columnwidth}{!}{
+  \begin{tabular}{lcccccc}
+    \toprule
+    \multirow{2}{*}{\bf Model} & \multicolumn{3}{c}{\bf Superclass Accuracy (\%)} & \multicolumn{3}{c}{\bf Subclass Accuracy (\%)} \\
+    \cmidrule(lr){2-4} \cmidrule(lr){5-7}
+    & Overall & Seen & Unseen & Overall & Seen & Unseen \\
+    \midrule
+    Baseline (CLIP/B-32) & 80.42 & 99.14 & 32.91 & 13.10 & 60.75 & 0.24 \\
+    \midrule
+    Ours (Internal Val) & 99.36 ± 0.34 & 99.36 ± 0.34 & N/A$^\dagger$ & 89.23 ± 2.74 & 89.18 ± 1.41 & 89.36 ± 4.62 \\
+    \textbf{Ours (Leaderboard)} & \textbf{95.33} & \textbf{98.84} & \textbf{86.42} & \textbf{91.91} & \textbf{87.63} & \textbf{93.06} \\
+    \bottomrule
+    \multicolumn{7}{l}{\footnotesize $^\dagger$ Novel superclasses were not simulated in internal validation due to limited superclass count.}
+  \end{tabular}
   }
 \end{table}
 
