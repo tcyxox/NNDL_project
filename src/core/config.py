@@ -73,11 +73,12 @@ class ModelConfig:
 
 @dataclass
 class ExperimentConfig:
+    verbose: bool = True  # 是否打印详细信息
     seed: int = 42  # evaluate 时不使用，评估流程中只有 extract features 用到
 
     # 数据划分模式
     val_include_novel: bool = True  # Val 中是否含未知类
-    force_super_novel: bool = True   # 是否在 Val 中强制引入 Super Novel
+    force_super_novel: bool = False  # 是否在 Val 中强制引入 Super Novel
 
     # 训练参数
     batch_size: int = 64

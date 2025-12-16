@@ -149,7 +149,7 @@ def split_full_train_to_train_test(
     
     return SplitOutput(
         train_set=filter_dataset(full_dataset, train_indices),
-        test_set=filter_dataset(full_dataset, test_indices),
+        test_set=test_set,  # Use already-modified test_set
         known_subclasses=known_subclasses,
         novel_subclasses=novel_subclasses,
         novel_super_classes=set() # No novel super classes introduced in this stage
@@ -162,6 +162,7 @@ def split_train_to_subtrain_val(
     val_sub_novel_ratio: float = 0.1,
     val_include_novel: bool = True,
     force_super_novel: bool = False,
+    target_super_novel: int = None,  # Specify which superclass to use as novel
     novel_sub_index: int = None,
     novel_super_index: int = None,
     seed: int = 42,
@@ -177,6 +178,7 @@ def split_train_to_subtrain_val(
         val_sub_novel_ratio: Ratio of subclasses to treat as Novel in Val.
         val_include_novel: Whether Val should include novel classes.
         force_super_novel: Whether to force one Superclass to be Novel in Val.
+        target_super_novel: Specific superclass index to use as novel (if None, random choice).
         seed: Random seed.
         
     Returns:
@@ -194,9 +196,12 @@ def split_train_to_subtrain_val(
     if val_include_novel:
         # 1. Super Novel Selection
         if force_super_novel:
-            all_supers = list(set(sub_to_super.values()))
+            all_supers = sorted(set(sub_to_super.values()))  # Sorted for determinism
             if all_supers: # Safety check
-                target_super = np.random.choice(all_supers)
+                if target_super_novel is not None and target_super_novel in all_supers:
+                    target_super = target_super_novel
+                else:
+                    target_super = np.random.choice(all_supers)
                 novel_super_classes.add(target_super)
                 
                 # Find all subclasses for this super
@@ -231,19 +236,28 @@ def split_train_to_subtrain_val(
     
     # Split Knowns to fill Val
     target_val_size = int(len(train_dataset) * val_ratio)
+    n_novel = len(novel_indices)
     
-    # If val_include_novel is False, novel_indices is empty, we just split knowns
-    needed_known = target_val_size - len(novel_indices)
-    
-    if needed_known < 0:
-        needed_known = 0
+    if val_include_novel and n_novel > 0:
+        # We have novel samples
+        val_novel_indices = novel_indices  # All novel to Val (keep SubTrain pure)
         
+        # Calculate needed known: max of (fill target) or (50% of novel)
+        # Rule: known must be >= 50% of unknown for proper threshold calibration
+        min_known_for_balance = n_novel // 2
+        needed_for_target = max(0, target_val_size - n_novel)
+        needed_known = max(needed_for_target, min_known_for_balance)
+    else:
+        # No novel in val
+        val_novel_indices = []
+        needed_known = target_val_size
+            
     np.random.shuffle(known_indices)
     val_known_indices = known_indices[:needed_known]
     subtrain_known_indices = known_indices[needed_known:]
     
     # Val gets Novel + Some Known
-    val_indices = np.array(novel_indices + val_known_indices)
+    val_indices = np.array(val_novel_indices + val_known_indices)
     subtrain_indices = np.array(subtrain_known_indices)
     
     np.random.shuffle(val_indices)
@@ -275,7 +289,7 @@ def split_train_to_subtrain_val(
 
     return SplitOutput(
         train_set=filter_dataset(train_dataset, subtrain_indices), # SubTrain
-        test_set=filter_dataset(train_dataset, val_indices),       # Val
+        test_set=test_set,  # Use already-modified val_set
         known_subclasses=known_subclasses,
         novel_subclasses=all_novel_subclasses,
         novel_super_classes=novel_super_classes

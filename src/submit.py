@@ -67,6 +67,9 @@ CONFIG = {
     # OSR 标签
     "novel_super_idx": config.osr.novel_super_index,
     "novel_sub_idx": config.osr.novel_sub_index,
+    
+    # 其他
+    "verbose": config.experiment.verbose,
 }
 
 # 多种子阈值校准配置
@@ -75,93 +78,102 @@ CALIBRATION_SEEDS = [42, 123, 456, 789, 1024]
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
 
-def calibrate_threshold_single_seed(cfg: dict, seed: int):
+def calibrate_thresholds(cfg: dict, seeds: list[int]):
     """
-    单次阈值校准: 
-    1. Load Full Data (treated as Inner Train)
-    2. Split to SubTrain + Val (Inner Split)
-    3. Train on SubTrain, Calibrate on Val
+    Threshold calibration: Iterate through each superclass as novel, calculate average threshold
     
     Returns:
-        (thresh_super, thresh_sub): 超类和子类阈值
+        (avg_thresh_super, avg_thresh_sub): Average thresholds
     """
-    set_seed(seed)
-    
     # 0. Load Full Dataset
     full_dataset = load_full_dataset(cfg["feature_dir"])
+    
+    # Get all unique superclasses
+    all_supers = sorted(torch.unique(full_dataset.super_labels).tolist())
+    
+    all_thresh_super = []
+    all_thresh_sub = []
+    
+    for i, target_super in enumerate(all_supers):
+        # Use seeds cyclically for randomization
+        seed = seeds[i % len(seeds)]
+        set_seed(seed)
+        
+        print(f"\n>>> Calibration Trial {i+1}/{len(all_supers)}, Target Super Novel={target_super}, Seed={seed}")
+        
+        # 1. Split data: Full -> SubTrain + Val, with target_super as novel
+        split_info = split_train_to_subtrain_val(
+            train_dataset=full_dataset,
+            val_ratio=cfg["val_ratio"],
+            val_sub_novel_ratio=cfg["val_sub_novel_ratio"],
+            val_include_novel=cfg["val_include_novel"],
+            force_super_novel=cfg["force_super_novel"],
+            target_super_novel=target_super,
+            novel_sub_index=cfg["novel_sub_idx"],
+            novel_super_index=cfg["novel_super_idx"],
+            seed=seed,
+            verbose=cfg["verbose"]
+        )
+        
+        train_set = split_info.train_set  # SubTrain
+        val_set = split_info.test_set     # Val
 
-    # 1. 划分数据 (Simulate Inner Loop)
-    # Full Data -> SubTrain + Val
-    split_info = split_train_to_subtrain_val(
-        train_dataset=full_dataset,
-        val_ratio=cfg["val_ratio"],
-        val_sub_novel_ratio=cfg["val_sub_novel_ratio"],
-        val_include_novel=cfg["val_include_novel"],
-        novel_sub_index=cfg["novel_sub_idx"],
-        novel_super_index=cfg["novel_super_idx"],
-        force_super_novel=cfg["force_super_novel"],
-        seed=seed,
-        verbose=False
-    )
-    
-    train_set = split_info.train_set # SubTrain
-    val_set = split_info.test_set    # Val
-
-    # 2. 在 SubTrain 上训练模型
-    result = run_training(
-        feature_dim=cfg["feature_dim"],
-        batch_size=cfg["batch_size"],
-        learning_rate=cfg["learning_rate"],
-        epochs=cfg["epochs"],
-        device=device,
-        enable_feature_gating=cfg["enable_feature_gating"],
-        training_loss=cfg["training_loss"],
-        train_features=train_set.features,
-        train_super_labels=train_set.super_labels,
-        train_sub_labels=train_set.sub_labels,
-        output_dir=None,
-        verbose=False
-    )
-    
-    if cfg["enable_feature_gating"]:
-        model, super_map, sub_map, super_to_sub = result
-    else:
-        super_model, sub_model, super_map, sub_map, super_to_sub = result
-    
-    # 创建反向映射
-    super_map_inv = {v: int(k) for k, v in super_map.items()}
-    sub_map_inv = {v: int(k) for k, v in sub_map.items()}
-    
-    # 3. 在 Val 上计算阈值
-    # val_set contains novel classes (if val_include_novel=True)
-    
-    # Check if we should use FullVal method or KnownOnly method
-    if cfg["enable_feature_gating"]:
-        thresh_super, thresh_sub = calculate_threshold_gated_dual_head(
-            model, val_set.features, val_set.super_labels, val_set.sub_labels,
-            super_map_inv, sub_map_inv, device,
-            cfg["val_include_novel"],
-            cfg["known_only_threshold"], cfg["full_val_threshold"],
-            cfg["target_recall"], cfg["std_multiplier"],
-            cfg["validation_score_temperature"], cfg["validation_score_method"]
+        # 2. Train on SubTrain
+        result = run_training(
+            feature_dim=cfg["feature_dim"],
+            batch_size=cfg["batch_size"],
+            learning_rate=cfg["learning_rate"],
+            epochs=cfg["epochs"],
+            device=device,
+            enable_feature_gating=cfg["enable_feature_gating"],
+            training_loss=cfg["training_loss"],
+            train_features=train_set.features,
+            train_super_labels=train_set.super_labels,
+            train_sub_labels=train_set.sub_labels,
+            output_dir=None,
+            verbose=cfg["verbose"]
         )
-    else:
-        thresh_super = calculate_threshold_linear_single_head(
-            super_model, val_set.features, val_set.super_labels, super_map_inv, device,
-            cfg["val_include_novel"],
-            cfg["known_only_threshold"], cfg["full_val_threshold"],
-            cfg["target_recall"], cfg["std_multiplier"],
-            cfg["validation_score_temperature"], cfg["validation_score_method"]
-        )
-        thresh_sub = calculate_threshold_linear_single_head(
-            sub_model, val_set.features, val_set.sub_labels, sub_map_inv, device,
-            cfg["val_include_novel"],
-            cfg["known_only_threshold"], cfg["full_val_threshold"],
-            cfg["target_recall"], cfg["std_multiplier"],
-            cfg["validation_score_temperature"], cfg["validation_score_method"]
-        )
+        
+        if cfg["enable_feature_gating"]:
+            model, super_map, sub_map, super_to_sub = result
+        else:
+            super_model, sub_model, super_map, sub_map, super_to_sub = result
+        
+        # Create inverse mapping
+        super_map_inv = {v: int(k) for k, v in super_map.items()}
+        sub_map_inv = {v: int(k) for k, v in sub_map.items()}
+        
+        # 3. Calculate threshold on Val
+        if cfg["enable_feature_gating"]:
+            thresh_super, thresh_sub = calculate_threshold_gated_dual_head(
+                model, val_set.features, val_set.super_labels, val_set.sub_labels,
+                super_map_inv, sub_map_inv, device,
+                cfg["val_include_novel"],
+                cfg["known_only_threshold"], cfg["full_val_threshold"],
+                cfg["target_recall"], cfg["std_multiplier"],
+                cfg["validation_score_temperature"], cfg["validation_score_method"]
+            )
+        else:
+            thresh_super = calculate_threshold_linear_single_head(
+                super_model, val_set.features, val_set.super_labels, super_map_inv, device,
+                cfg["val_include_novel"],
+                cfg["known_only_threshold"], cfg["full_val_threshold"],
+                cfg["target_recall"], cfg["std_multiplier"],
+                cfg["validation_score_temperature"], cfg["validation_score_method"]
+            )
+            thresh_sub = calculate_threshold_linear_single_head(
+                sub_model, val_set.features, val_set.sub_labels, sub_map_inv, device,
+                cfg["val_include_novel"],
+                cfg["known_only_threshold"], cfg["full_val_threshold"],
+                cfg["target_recall"], cfg["std_multiplier"],
+                cfg["validation_score_temperature"], cfg["validation_score_method"]
+            )
+        
+        all_thresh_super.append(thresh_super)
+        all_thresh_sub.append(thresh_sub)
+        print(f"    Super: {thresh_super:.4f}, Sub: {thresh_sub:.4f}")
     
-    return thresh_super, thresh_sub
+    return np.mean(all_thresh_super), np.mean(all_thresh_sub), np.std(all_thresh_super), np.std(all_thresh_sub)
 
 
 if __name__ == "__main__":
@@ -176,30 +188,16 @@ if __name__ == "__main__":
     print(f"Prediction: {CONFIG['prediction_score_method'].value} (T={CONFIG['prediction_score_temperature']})")
     print("=" * 70)
     
-    # === Phase 1: 多种子阈值校准 ===
+    # === Phase 1: Threshold Calibration (iterate through superclasses) ===
     print("\n" + "=" * 50)
-    print("Phase 1: Multi-seed Threshold Calibration")
+    print("Phase 1: Threshold Calibration (iterate through superclasses)")
     print("=" * 50)
     
-    all_thresh_super = []
-    all_thresh_sub = []
+    avg_thresh_super, avg_thresh_sub, std_thresh_super, std_thresh_sub = calibrate_thresholds(CONFIG, CALIBRATION_SEEDS)
     
-    for i, seed in enumerate(CALIBRATION_SEEDS):
-        print(f"\n>>> Calibration Trial {i+1}/{len(CALIBRATION_SEEDS)}, Seed={seed}")
-        thresh_super, thresh_sub = calibrate_threshold_single_seed(CONFIG, seed)
-        all_thresh_super.append(thresh_super)
-        all_thresh_sub.append(thresh_sub)
-        print(f"    Super: {thresh_super:.4f}, Sub: {thresh_sub:.4f}")
-    
-    # 取平均阈值
-    avg_thresh_super = np.mean(all_thresh_super)
-    avg_thresh_sub = np.mean(all_thresh_sub)
-    std_thresh_super = np.std(all_thresh_super)
-    std_thresh_sub = np.std(all_thresh_sub)
-    
-    print(f"\n>>> 阈值统计:")
-    print(f"    Superclass: {avg_thresh_super:.4f} ± {std_thresh_super:.4f}")
-    print(f"    Subclass:   {avg_thresh_sub:.4f} ± {std_thresh_sub:.4f}")
+    print(f"\n>>> Threshold Statistics:")
+    print(f"    Superclass: {avg_thresh_super:.4f} +/- {std_thresh_super:.4f}")
+    print(f"    Subclass:   {avg_thresh_sub:.4f} +/- {std_thresh_sub:.4f}")
     
     # === Phase 2: 训练最终模型 (全量数据) ===
     print("\n" + "=" * 50)
@@ -229,7 +227,7 @@ if __name__ == "__main__":
         train_super_labels=train_super_labels,
         train_sub_labels=train_sub_labels,
         output_dir=None,
-        verbose=True
+        verbose=config.experiment.verbose
     )
     
     if CONFIG["enable_feature_gating"]:

@@ -362,6 +362,8 @@ super seen, sub overall, sub seen, sub unseen, sub auroc
 
 ## Validation 包含未知类
 
+此时，会自动选择 EER 方法。
+
 ```py
     # 数据划分模式
     val_include_novel: bool = False  # True: val 不含未知类; False: val含未知类
@@ -379,6 +381,30 @@ super seen, sub overall, sub seen, sub unseen, sub auroc
 ## 问题
 
 根据在professor测试集上的测试，MaxSigmoid 会对 super seen 的判定特别自信，在 validation 中加入 novel superclass 可以缓解，但问题依然存在；而 MSP 则基本没有该问题。
+
+## 标准验证流程
+
+以上是快速验证，为了得到最好的方法。以下对最好的方法进行准确评估。
+
+流程如下：
+
+术语：full train完整训练集，train剔除test的训练集，sub train剔除test再剔除val的训练集
+
+1. 输入full train, test_sub_novel_ratio=10%, test_ratio=20%。在full train上划出10%的subclass作为novel交给test，然后在剩余的90%里部分划20%-10%=10%给test。现在test有了基本平衡数量的known和sub novel，并且总占比约为20%。输出train, test。
+2. 输入train, test, val_sub_novel_ratio=10%, val_ratio=20%, val_include_nodel=true, force_super_novel=true/false，seeds=[...]，进入阈值计算循环
+  1. 如果force_super_novel为true，随机选择一个superclass设为novel交给val。计算sub novel距离10%缺多少比例，补足该比例交给val。如果此时sub known不足sub novel的50%，则补足交给val。然后剩余的部分划20%-10%=10%给val。现在val有了基本平衡数量的known和novel，并且总占比约为20%（如果这个novel super没有占过超过10%）。输出subtrain, val。（如果val_include_novel为false，没有其它步骤，直接划20%给val）
+  2. 在subtrain上训练
+  3. 用subtrain在val上推理并计算阈值
+3. 取平均阈值
+4. 在train上训练
+5. 在test上推理并得到统计
+
+1-5按照seed=[]进行外轮循环，得到最终报告。
+
+经过测试，如果force_super_novel为true，会导致sub novel占比过大，使得阈值设定出现问题，sub unseen准确率急剧下降。因此force_super_novel为false。
+
+- CE + MSP (T1.5):
+  97.07% ± 3.05%, 83.02% ± 3.69%, 84.84% ± 2.84%, 80.74% ± 8.65%, 0.9117 ± 0.0318
 
 ## 最终结论
 

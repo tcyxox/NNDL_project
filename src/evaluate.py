@@ -1,50 +1,90 @@
+"""
+嵌套验证评估脚本 (Nested Validation Evaluation)
+
+流程 (模拟真实提交场景):
+  外层循环 (Outer Loop): 生成最终报告
+    1. 从 Full Train 划分出 Train (Pure Known) + Test (Mix with Sub Novel)
+    
+    内层循环 (Inner Loop): 阈值校准
+      2.1 从 Train 划分出 SubTrain (Pure Known) + Val (Mix with Super+Sub Novel)
+      2.2 在 SubTrain 上训练
+      2.3 在 Val 上计算阈值
+    3. 取平均阈值
+    
+    4. 在 Train 上训练最终模型
+    5. 在 Test 上推理并记录统计
+
+  外层循环汇总多个 seed 的结果，生成最终报告
+"""
 import os
 
 import numpy as np
 import torch
 from sklearn.metrics import accuracy_score, roc_auc_score
 
-from core.config import config, TrainingLoss, OODScoreMethod, KnownOnlyThreshold, FullValThreshold
-from core.dataset import split_features
+from core.config import config
+from core.dataset import (
+    load_full_dataset,
+    split_full_train_to_train_test,
+    split_train_to_subtrain_val
+)
 from core.prediction import predict_with_linear_single_head, predict_with_gated_dual_head
 from core.calibration import calculate_threshold_linear_single_head, calculate_threshold_gated_dual_head
 from core.training import run_training
 from core.utils import set_seed
 
+# ===================== 配置 =====================
 CONFIG = {
-    "feature_dir": config.paths.features,  # 原始特征目录（用于 split_features）
+    # 数据路径
+    "feature_dir": config.paths.features,
     "output_dir": config.paths.dev,
+    
+    # 模型参数
     "feature_dim": config.model.feature_dim,
     "learning_rate": config.experiment.learning_rate,
     "batch_size": config.experiment.batch_size,
     "epochs": config.experiment.epochs,
-    "novel_super_idx": config.osr.novel_super_index,
-    "novel_sub_idx": config.osr.novel_sub_index,
-    # 模型参数
+    
+    # 模型选择
     "enable_feature_gating": config.experiment.enable_feature_gating,
     "enable_hierarchical_masking": config.experiment.enable_hierarchical_masking,
-    # 阈值设定参数（自动选择）
+    
+    # 阈值设定参数
     "known_only_threshold": config.experiment.known_only_threshold,
     "full_val_threshold": config.experiment.full_val_threshold,
     "target_recall": config.experiment.target_recall,
     "std_multiplier": config.experiment.std_multiplier,
+    
     # 方法参数
     "training_loss": config.experiment.training_loss,
     "validation_score_method": config.experiment.validation_score_method,
     "prediction_score_method": config.experiment.prediction_score_method,
     "validation_score_temperature": config.experiment.validation_score_temperature,
     "prediction_score_temperature": config.experiment.prediction_score_temperature,
-    # 数据划分参数
+    
+    # OSR 标签
+    "novel_super_idx": config.osr.novel_super_index,
+    "novel_sub_idx": config.osr.novel_sub_index,
+    
+    # Outer Split: Full -> Train (Pure Known) + Test (Mix)
+    "test_ratio": config.split.test_ratio,
+    "test_sub_novel_ratio": config.split.test_sub_novel_ratio,
+    
+    # Inner Split: Train -> SubTrain (Pure Known) + Val (Mix)
+    "val_ratio": config.split.val_ratio,
+    "val_sub_novel_ratio": config.split.val_sub_novel_ratio,
     "val_include_novel": config.experiment.val_include_novel,
-    "novel_ratio": config.split.novel_subclass_ratio,
-    "train_ratio": config.split.train_ratio,
-    "val_test_ratio": config.split.val_test_ratio,
+    "force_super_novel": config.experiment.force_super_novel,
+    
+    # 其他
+    "verbose": config.experiment.verbose,
 }
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
 # 多种子评估配置
-SEEDS = [42, 123, 456, 789, 1024]
+OUTER_SEEDS = [42, 123, 456, 789, 1024]
+INNER_SEEDS = [42, 123, 456, 789, 1024]
 
 
 def calculate_metrics(y_true, y_pred, novel_label):
@@ -63,46 +103,152 @@ def calculate_metrics(y_true, y_pred, novel_label):
     return acc_all, acc_known, acc_novel
 
 
-def run_single_trial(cfg: dict, seed: int, verbose: bool):
+def calibrate_threshold_inner_loop(cfg: dict, train_dataset, seeds: list[int]):
     """
-    运行单次实验，返回各项指标
+    Inner loop: Iterate through each superclass as novel, calculate average threshold
+    
+    Args:
+        cfg: Config dict
+        train_dataset: Train dataset from outer split (Pure Known)
+        seeds: Seeds for randomization (used cyclically)
+        
+    Returns:
+        (avg_thresh_super, avg_thresh_sub): Average thresholds
+    """
+    all_thresh_super = []
+    all_thresh_sub = []
+    
+    # Get all unique superclasses in train_dataset
+    all_supers = sorted(torch.unique(train_dataset.super_labels).tolist())
+    n_supers = len(all_supers)
+    
+    for i, target_super in enumerate(all_supers):
+        # Use seeds cyclically for randomization
+        seed = seeds[i % len(seeds)]
+        set_seed(seed)
+        
+        # 1. Split Train -> SubTrain + Val, with target_super as novel
+        inner_split = split_train_to_subtrain_val(
+            train_dataset=train_dataset,
+            val_ratio=cfg["val_ratio"],
+            val_sub_novel_ratio=cfg["val_sub_novel_ratio"],
+            val_include_novel=cfg["val_include_novel"],
+            force_super_novel=cfg["force_super_novel"],
+            target_super_novel=target_super,  # Specify which super to use as novel
+            novel_sub_index=cfg["novel_sub_idx"],
+            novel_super_index=cfg["novel_super_idx"],
+            seed=seed,
+            verbose=cfg["verbose"]
+        )
+        
+        subtrain_set = inner_split.train_set
+        val_set = inner_split.test_set
+        
+        # 2. Train on SubTrain
+        result = run_training(
+            feature_dim=cfg["feature_dim"],
+            batch_size=cfg["batch_size"],
+            learning_rate=cfg["learning_rate"],
+            epochs=cfg["epochs"],
+            device=device,
+            enable_feature_gating=cfg["enable_feature_gating"],
+            training_loss=cfg["training_loss"],
+            train_features=subtrain_set.features,
+            train_super_labels=subtrain_set.super_labels,
+            train_sub_labels=subtrain_set.sub_labels,
+            output_dir=None,
+            verbose=cfg["verbose"]
+        )
+        
+        if cfg["enable_feature_gating"]:
+            model, super_map, sub_map, super_to_sub = result
+        else:
+            super_model, sub_model, super_map, sub_map, super_to_sub = result
+        
+        # Create inverse mapping
+        super_map_inv = {v: int(k) for k, v in super_map.items()}
+        sub_map_inv = {v: int(k) for k, v in sub_map.items()}
+        
+        # 3. Calculate threshold on Val
+        if cfg["enable_feature_gating"]:
+            thresh_super, thresh_sub = calculate_threshold_gated_dual_head(
+                model, val_set.features, val_set.super_labels, val_set.sub_labels,
+                super_map_inv, sub_map_inv, device,
+                cfg["val_include_novel"],
+                cfg["known_only_threshold"], cfg["full_val_threshold"],
+                cfg["target_recall"], cfg["std_multiplier"],
+                cfg["validation_score_temperature"], cfg["validation_score_method"]
+            )
+        else:
+            thresh_super = calculate_threshold_linear_single_head(
+                super_model, val_set.features, val_set.super_labels, super_map_inv, device,
+                cfg["val_include_novel"],
+                cfg["known_only_threshold"], cfg["full_val_threshold"],
+                cfg["target_recall"], cfg["std_multiplier"],
+                cfg["validation_score_temperature"], cfg["validation_score_method"]
+            )
+            thresh_sub = calculate_threshold_linear_single_head(
+                sub_model, val_set.features, val_set.sub_labels, sub_map_inv, device,
+                cfg["val_include_novel"],
+                cfg["known_only_threshold"], cfg["full_val_threshold"],
+                cfg["target_recall"], cfg["std_multiplier"],
+                cfg["validation_score_temperature"], cfg["validation_score_method"]
+            )
+        
+        all_thresh_super.append(thresh_super)
+        all_thresh_sub.append(thresh_sub)
+    
+    # Return average threshold
+    return np.mean(all_thresh_super), np.mean(all_thresh_sub)
+
+
+def run_single_outer_trial(cfg: dict, outer_seed: int, inner_seeds: list[int]):
+    """
+    运行单次外层实验 (Outer Trial)
+    
+    流程:
+      1. 外层划分: Full -> Train + Test
+      2. 内层循环: 阈值校准
+      3. 在 Train 上训练最终模型
+      4. 在 Test 上推理
     
     Args:
         cfg: 配置字典
-        seed: 随机种子（控制数据划分、模型初始化和训练）
-        verbose: 是否打印训练进度信息
+        outer_seed: 外层种子
+        inner_seeds: 内层种子列表
+        
     Returns:
         dict: 包含各项评估指标
     """
-    # 1. 数据划分
-    set_seed(seed)
+    # 1. 外层划分: Full -> Train (Pure Known) + Test (Mix)
+    set_seed(outer_seed)
     
-    data = split_features(
-        feature_dir=cfg["feature_dir"],
-        novel_subclass_ratio=cfg["novel_ratio"],
-        train_ratio=cfg["train_ratio"],
-        val_test_ratio=cfg["val_test_ratio"],
-        val_include_novel=cfg["val_include_novel"],
+    full_dataset = load_full_dataset(cfg["feature_dir"])
+    
+    outer_split = split_full_train_to_train_test(
+        full_dataset=full_dataset,
+        test_ratio=cfg["test_ratio"],
+        test_sub_novel_ratio=cfg["test_sub_novel_ratio"],
         novel_sub_index=cfg["novel_sub_idx"],
-        novel_super_index=cfg["novel_super_idx"],
-        verbose=verbose
+        seed=outer_seed,
+        verbose=cfg["verbose"]
     )
     
-    # 2. 设置训练种子
-    set_seed(seed)
+    train_dataset = outer_split.train_set  # Pure Known
+    test_dataset = outer_split.test_set    # Mix (Known + Novel)
     
-    # 获取数据
-    train_features = data.train_features
-    train_super_labels = data.train_super_labels
-    train_sub_labels = data.train_sub_labels
-    val_features = data.val_features
-    val_super_labels = data.val_super_labels
-    val_sub_labels = data.val_sub_labels
-    test_features = data.test_features.to(device)
-    test_super_labels = data.test_super_labels
-    test_sub_labels = data.test_sub_labels
+    # 2. 内层循环: 阈值校准
+    if cfg["verbose"]:
+        print(f"\n  [Inner Loop] Calibrating threshold with {len(inner_seeds)} seeds...")
+    avg_thresh_super, avg_thresh_sub = calibrate_threshold_inner_loop(
+        cfg, train_dataset, inner_seeds
+    )
+    if cfg["verbose"]:
+        print(f"    Avg Threshold: Super={avg_thresh_super:.4f}, Sub={avg_thresh_sub:.4f}")
     
-    # 3. 训练模型（使用 train 数据）
+    # 3. 在 Train 上训练最终模型
+    set_seed(outer_seed)
+    
     result = run_training(
         feature_dim=cfg["feature_dim"],
         batch_size=cfg["batch_size"],
@@ -111,10 +257,11 @@ def run_single_trial(cfg: dict, seed: int, verbose: bool):
         device=device,
         enable_feature_gating=cfg["enable_feature_gating"],
         training_loss=cfg["training_loss"],
-        train_features=train_features,
-        train_super_labels=train_super_labels,
-        train_sub_labels=train_sub_labels,
-        verbose=verbose
+        train_features=train_dataset.features,
+        train_super_labels=train_dataset.super_labels,
+        train_sub_labels=train_dataset.sub_labels,
+        output_dir=None,
+        verbose=cfg["verbose"]
     )
     
     if cfg["enable_feature_gating"]:
@@ -130,45 +277,22 @@ def run_single_trial(cfg: dict, seed: int, verbose: bool):
     if not cfg["enable_hierarchical_masking"]:
         super_to_sub = None
     
+    # 4. 在 Test 上推理
+    test_features = test_dataset.features.to(device)
+    test_super_labels = test_dataset.super_labels
+    test_sub_labels = test_dataset.sub_labels
+    
     if cfg["enable_feature_gating"]:
-        # 计算阈值
-        thresh_super, thresh_sub = calculate_threshold_gated_dual_head(
-            model, val_features, val_super_labels, val_sub_labels,
-            super_map_inv, sub_map_inv, device,
-            cfg["val_include_novel"],
-            cfg["known_only_threshold"], cfg["full_val_threshold"],
-            cfg["target_recall"], cfg["std_multiplier"],
-            cfg["validation_score_temperature"], cfg["validation_score_method"]
-        )
-        
-        # 推理
         super_preds, sub_preds, super_scores, sub_scores = predict_with_gated_dual_head(
             test_features, model, super_map_inv, sub_map_inv,
-            thresh_super, thresh_sub, cfg["novel_super_idx"], cfg["novel_sub_idx"], device,
+            avg_thresh_super, avg_thresh_sub, cfg["novel_super_idx"], cfg["novel_sub_idx"], device,
             super_to_sub, cfg["prediction_score_temperature"], cfg["prediction_score_method"]
         )
     else:
-        # 计算阈值
-        thresh_super = calculate_threshold_linear_single_head(
-            super_model, val_features, val_super_labels, super_map_inv, device,
-            cfg["val_include_novel"],
-            cfg["known_only_threshold"], cfg["full_val_threshold"],
-            cfg["target_recall"], cfg["std_multiplier"],
-            cfg["validation_score_temperature"], cfg["validation_score_method"]
-        )
-        thresh_sub = calculate_threshold_linear_single_head(
-            sub_model, val_features, val_sub_labels, sub_map_inv, device,
-            cfg["val_include_novel"],
-            cfg["known_only_threshold"], cfg["full_val_threshold"],
-            cfg["target_recall"], cfg["std_multiplier"],
-            cfg["validation_score_temperature"], cfg["validation_score_method"]
-        )
-        
-        # 推理
         super_preds, sub_preds, super_scores, sub_scores = predict_with_linear_single_head(
             test_features, super_model, sub_model,
             super_map_inv, sub_map_inv,
-            thresh_super, thresh_sub, cfg["novel_super_idx"], cfg["novel_sub_idx"], device,
+            avg_thresh_super, avg_thresh_sub, cfg["novel_super_idx"], cfg["novel_sub_idx"], device,
             super_to_sub, cfg["prediction_score_temperature"], cfg["prediction_score_method"]
         )
     
@@ -181,11 +305,9 @@ def run_single_trial(cfg: dict, seed: int, verbose: bool):
     )
     
     # 计算 AUROC
-    # 对于 AUROC，我们需要二分类标签：1=已知类, 0=未知类
     super_binary_labels = (test_super_labels.numpy() != cfg["novel_super_idx"]).astype(int)
     sub_binary_labels = (test_sub_labels.numpy() != cfg["novel_sub_idx"]).astype(int)
 
-    # 需要检查是否存在两个类别，否则 AUROC 无定义
     if len(np.unique(super_binary_labels)) > 1:
         super_auroc = roc_auc_score(super_binary_labels, super_scores)
     else:
@@ -203,24 +325,17 @@ def run_single_trial(cfg: dict, seed: int, verbose: bool):
     }
 
 
-def run_multiple_trials(cfg: dict, seeds: list[int], verbose: bool) -> dict:
+def run_evaluation(cfg: dict, outer_seeds: list[int], inner_seeds: list[int]) -> dict:
     """
-    运行多种子评估，返回聚合统计结果
-    
-    Args:
-        cfg: 配置字典
-        seeds: 随机种子列表
-        verbose: 是否打印进度信息
-    Returns:
-        dict: 包含均值和标准差的聚合统计结果
+    运行完整评估，返回聚合统计结果
     """
     all_results = []
     
-    for i, seed in enumerate(seeds):
+    for i, outer_seed in enumerate(outer_seeds):
         print(f"\n{'='*60}")
-        print(f"Trial {i+1}/{len(seeds)} | Seed: {seed}")
+        print(f"Outer Trial {i+1}/{len(outer_seeds)} | Seed: {outer_seed}")
         print("="*60)
-        result = run_single_trial(cfg, seed, verbose)
+        result = run_single_outer_trial(cfg, outer_seed, inner_seeds)
         all_results.append(result)
         
         # 打印单次结果摘要
@@ -235,7 +350,6 @@ def run_multiple_trials(cfg: dict, seeds: list[int], verbose: bool) -> dict:
         stats[f"{key}_mean"] = np.mean(values)
         stats[f"{key}_std"] = np.std(values)
     
-    # 保留原始结果
     stats["raw_results"] = all_results
     
     return stats
@@ -264,14 +378,13 @@ def print_evaluation_report(stats: dict):
           f"{stats['sub_auroc_mean']:.4f} ± {stats['sub_auroc_std']:.4f}")
 
 
-def print_global_config(cfg: dict, seeds: list[int]):
+def print_global_config(cfg: dict, outer_seeds: list[int], inner_seeds: list[int]):
     """打印全局配置"""
     mode = "SE Feature Gating" if cfg["enable_feature_gating"] else "Independent Training"
     masking = "Enabled" if cfg["enable_hierarchical_masking"] else "Disabled"
-    split_mode = "Val + Test" if cfg["val_include_novel"] else "Test Only"
     
     print("=" * 60)
-    print("Global Configuration")
+    print("Global Configuration (Nested Validation)")
     print("=" * 60)
     
     print("\n[Model]")
@@ -284,10 +397,15 @@ def print_global_config(cfg: dict, seeds: list[int]):
     print(f"  Batch Size: {cfg['batch_size']}")
     print(f"  Learning Rate: {cfg['learning_rate']}")
     
-    print("\n[Data Split]")
-    print(f"  Unknown in: {split_mode}")
-    print(f"  Novel Ratio (per split): {cfg['novel_ratio']*100:.0f}%")
-    print(f"  Train Ratio: {cfg['train_ratio']*100:.0f}%")
+    print("\n[Outer Split: Full -> Train + Test]")
+    print(f"  Test Ratio: {cfg['test_ratio']*100:.0f}%")
+    print(f"  Test Sub Novel Ratio: {cfg['test_sub_novel_ratio']*100:.0f}%")
+    
+    print("\n[Inner Split: Train -> SubTrain + Val]")
+    print(f"  Val Ratio: {cfg['val_ratio']*100:.0f}%")
+    print(f"  Val Sub Novel Ratio: {cfg['val_sub_novel_ratio']*100:.0f}%")
+    print(f"  Val Include Novel: {cfg['val_include_novel']}")
+    print(f"  Force Super Novel: {cfg['force_super_novel']}")
     
     print("\n[Threshold]")
     if cfg["val_include_novel"]:
@@ -300,15 +418,14 @@ def print_global_config(cfg: dict, seeds: list[int]):
     print(f"  Prediction: {cfg['prediction_score_method'].value} (T={cfg['prediction_score_temperature']})")
     
     print("\n[Evaluation]")
-    print(f"  Seeds: {seeds}")
-    print(f"  Total Trials: {len(seeds)}")
+    print(f"  Outer Seeds: {outer_seeds}")
+    print(f"  Inner Seeds (for randomization): {inner_seeds}")
+    print(f"  Total Outer Trials: {len(outer_seeds)}")
+    print(f"  Inner Trials per Outer: Iterate all superclasses (3)")
 
 
 if __name__ == "__main__":
-    verbose = False
+    print_global_config(CONFIG, OUTER_SEEDS, INNER_SEEDS)
     
-    print_global_config(CONFIG, SEEDS)
-    
-    stats = run_multiple_trials(CONFIG, SEEDS, verbose)
+    stats = run_evaluation(CONFIG, OUTER_SEEDS, INNER_SEEDS)
     print_evaluation_report(stats)
-

@@ -111,8 +111,8 @@ def calculate_threshold_gated_dual_head(
     model.eval()
 
     # 计算 known/unknown masks
-    known_super = torch.tensor([l.item() in super_map_inv for l in val_super_labels])
-    known_sub = torch.tensor([l.item() in sub_map_inv for l in val_sub_labels])
+    known_super = torch.tensor([l.item() in super_map_inv.values() for l in val_super_labels])
+    known_sub = torch.tensor([l.item() in sub_map_inv.values() for l in val_sub_labels])
     unknown_super = ~known_super
     unknown_sub = ~known_sub
 
