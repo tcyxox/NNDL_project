@@ -118,21 +118,21 @@ To classify a sample $\mathbf{x}$ as known or novel, we define a scoring functio
 We explore three methods to determine the optimal threshold $\tau$, depending on the availability of novel samples in the validation set.
 
 \paragraph{Quantile-based Threshold (Non-Parametric).}
-Used in \textit{Strict Open-Set Validation}. This method assumes no prior knowledge of the unknown distribution. Given a target recall rate $r$ (e.g., $r = 0.95$) for known classes, we set $\tau$ as the $(1-r)$-th quantile of the scores from the known validation set $\mathcal{D}_{\text{val}}^{\text{known}}$:
+Used in \textit{Strict Open-Set Calibration}. This method assumes no prior knowledge of the unknown distribution. Given a target recall rate $r$ (e.g., $r = 0.95$) for known classes, we set $\tau$ as the $(1-r)$-th quantile of the scores from the known validation set $\mathcal{D}_{\text{val}}^{\text{known}}$:
 \begin{equation}
     \tau_{\text{Quantile}} = Q_{1-r}(\{S(\mathbf{x}) \mid \mathbf{x} \in \mathcal{D}_{\text{val}}^{\text{known}}\})
 \end{equation}
 This approach is distribution-free and guarantees that exactly $r$ fraction of known samples are retained, but it does not account for the density of novel samples.
 
 \paragraph{Z-Score Threshold (Parametric).}
-Also used in \textit{Strict Open-Set Validation}. We assume the scores of known classes follow a Gaussian distribution $\mathcal{N}(\mu, \sigma^2)$. The threshold is determined by a standard deviation multiplier $k$:
+Also used in \textit{Strict Open-Set Calibration}. We assume the scores of known classes follow a Gaussian distribution $\mathcal{N}(\mu, \sigma^2)$. The threshold is determined by a standard deviation multiplier $k$:
 \begin{equation}
     \tau_{\text{Z-Score}} = \mu - k \cdot \sigma
 \end{equation}
 where $\mu$ and $\sigma$ are the mean and standard deviation of $S(\mathbf{x})$ on $\mathcal{D}_{\text{val}}^{\text{known}}$. For a target recall of 95\% under a normal distribution, we set $k=1.645$. This method is generally more robust to sampling noise than the Quantile method, provided the score distribution is approximately normal, but may underperform on heavy-tailed distributions.
 
 \paragraph{Equal Error Rate (EER) Threshold (Full Validation).}
-Used in \textit{Guided Open-Set Validation}. When the validation set contains both known and novel samples ($\mathcal{D}_{\text{val}}^{\text{known}} \cup \mathcal{D}_{\text{val}}^{\text{novel}}$), we can explicitly model the boundary between the two distributions. We calculate $\tau$ as the intersection point of the empirical distributions, effectively balancing the FPR and FNR:
+Used in \textit{Guided Open-Set Calibration}. When the validation set contains both known and novel samples ($\mathcal{D}_{\text{val}}^{\text{known}} \cup \mathcal{D}_{\text{val}}^{\text{novel}}$), we can explicitly model the boundary between the two distributions. We calculate $\tau$ as the intersection point of the empirical distributions, effectively balancing the FPR and FNR:
 \begin{equation}
     \tau_{\text{Intersect}} = \operatorname*{argmin}_{t} \left| P(S(\mathbf{x}) < t \mid \text{Known}) - P(S(\mathbf{x}) \geq t \mid \text{Novel}) \right|
 \end{equation}
@@ -384,11 +384,11 @@ We evaluate the proposed models using CLIP ViT-B/32 features, and simulate the O
 
 We implement three distinct data preparation strategies to simulate different experimental assumptions. It is achieved by partitioning the dataset into  \textit{Known} and \textit{Novel} categories, and holding out a specific ratio of subclasses to serve as the \textit{Novel} set.
 
-\paragraph{Strict Open-Set Validation:} \textit{Novel} samples appear only in the Test set.
+\paragraph{Strict Open-Set Calibration:} \textit{Novel} samples appear only in the Test set.
 
 This strategy simulates a strict scenario where no outliers are available during the development phase and is used in \textit{Post-hoc Method}. Thresholds must be determined using statistical methods based solely on the distribution of known data.
 
-\paragraph{Guided Open-Set Validation:} \textit{Novel} samples appear in the Test and Validation set.
+\paragraph{Guided Open-Set Calibration:} \textit{Novel} samples appear in the Test and Validation set.
 
 This allows for calibrating thresholds by observing the known and unknown distributions and is used in \textit{Post-hoc Method}.
 
@@ -426,7 +426,7 @@ Table \ref{tab:ablation} presents the ablation study starting from a Linear Dual
 
 Table \ref{tab:scoring_comparison} compares different scoring functions. We employ \textbf{Z-Score} thresholds for the bounded probability-based methods (MSP, MaxSigmoid) and \textbf{Quantile} for the unbounded \textbf{Energy} scores.
 
-The results indicate distinct trade-offs. \textbf{MaxSigmoid} achieves high overall accuracy but suffers from overconfidence, making it difficult to detect novel superclasses. \textbf{Energy} significantly degrades performance on known superclasses (Super Seen accuracy drops to $\approx 91.9\%$). Consequently, \textbf{CE + MSP} is selected as the optimal method, offering the most robust performance with the highest AUROC.
+The results indicate distinct trade-offs. \textbf{MaxSigmoid} achieves high overall accuracy but suffers from overconfidence, making it difficult to detect novel superclasses. \textbf{Energy} significantly degrades performance on known superclasses. Consequently, \textbf{CE + MSP} is selected as the optimal method, offering the most robust performance with the highest AUROC.
 
 \begin{table}[h]
   \caption{Comparison of Scoring Functions and Training Objectives. (Model: Gated Dual Head)}
@@ -445,27 +445,31 @@ The results indicate distinct trade-offs. \textbf{MaxSigmoid} achieves high over
   }
 \end{table}
 
-\subsection{Impact of Validation Strategy}
+\subsection{Impact of Calibration Strategy}
 
-We analyze the impact of the validation set composition on threshold calibration. In the \textit{Strict} setting, thresholds are derived solely from known data (Z-Score). In the \textit{Guided} setting, the validation set includes unknown samples, allowing for the \textit{EER} method.
+In the \textit{Strict} setting, thresholds are derived solely from known data (Z-Score). In the \textit{Guided} setting, the validation set includes unknown samples, allowing for the \textit{EER} method.
 
-As expected, access to unknown samples during validation significantly boosts performance. For the CE+MSP model, switching from Strict to Guided validation significantly improve the performance, demonstrating that the distribution of validation outliers generalizes well to the test set.
+We employ a nested calibration protocol for rigorous evaluation: (1) an outer loop splits the full training set into train and test sets with novel subclasses reserved for test; (2) an inner loop further partitions the train set into sub-train and validation sets for threshold calibration; (3) thresholds are averaged across inner iterations, and the final model is retrained on the full train set before testing. This approach mirrors the real submission pipeline while avoiding data leakage.
+
+As shown in Table~\ref{tab:val_strategy}, the Guided strategy with EER thresholding achieves superior performance, demonstrating that the distribution of validation outliers generalizes well to the test set.
 
 \begin{table}[h]
-  \caption{Impact of Validation Strategy on Subclass Performance (Model: CE + MSP).}
+  \caption{Impact of Calibration Strategy on Subclass Performance (Model: CE + MSP).}
   \label{tab:val_strategy}
   \centering
   \resizebox{\columnwidth}{!}{
   \begin{tabular}{lccccc}
     \toprule
-    \bf Validation Strategy & \bf Threshold Method & \bf Overall Acc. & \bf Seen Acc. & \bf Unseen Acc. & \bf AUROC \\
+    \bf Calibration Strategy & \bf Threshold Method & \bf Overall Acc. & \bf Seen Acc. & \bf Unseen Acc. & \bf AUROC \\
     \midrule
-    Strict (Known Only) & Z-Score & 73.83\% ± 3.88\% & \textbf{88.03\% ± 1.30\%} & 59.79\% ± 8.48\% & \textbf{0.8821 ± 0.0234} \\
-    Guided (Known + Novel) & EER & \textbf{79.57\% ± 1.55\%} & 72.68\% ± 2.61\% & \textbf{84.90\% ± 4.12\%} & 0.8663 ± 0.0119 \\
+    Strict (Known Only) & Z-Score & 73.83\% ± 3.88\% & 88.03\% ± 1.30\% & 59.79\% ± 8.48\% & 0.8821 ± 0.0234 \\
+    Guided (Quick Eval) & EER & 79.57\% ± 1.55\% & 72.68\% ± 2.61\% & 84.90\% ± 4.12\% & 0.8663 ± 0.0119 \\
+    Guided + Nested Calibration & EER & \textbf{83.02\% ± 3.69\%} & \textbf{84.84\% ± 2.84\%} & \textbf{80.74\% ± 8.65\%} & \textbf{0.9117 ± 0.0318} \\
     \bottomrule
   \end{tabular}
   }
 \end{table}
+
 
 \subsection{Impact of Synthesized Pseudo samples on CAC}
 Table \ref{tab: CAC VS. CAC-Negative} presents a comparative analysis between the origin CAC with SE-Attention and our proposed CAC-Negative. The empirical results demonstrate that CAC-Negative consistently outperforms CAC in terms of AUROC, overall accuracy and unseen accuracy, validating the efficacy of incorporating synthesized negative samples for Open Set Recognition.
