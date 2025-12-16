@@ -72,6 +72,7 @@ def split_full_train_to_train_test(
     full_dataset: Dataset,
     test_ratio: float = 0.2,
     test_sub_novel_ratio: float = 0.1,
+    novel_sub_index: int = None,
     seed: int = 42,
     verbose: bool = True
 ) -> SplitOutput:
@@ -130,6 +131,15 @@ def split_full_train_to_train_test(
     np.random.shuffle(test_indices)
     np.random.shuffle(train_indices)
     
+    test_set = filter_dataset(full_dataset, test_indices)
+
+    # Apply masking if index provided
+    if novel_sub_index is not None:
+        idx_np = test_set.sub_labels.numpy()
+        mask = np.isin(idx_np, list(novel_subclasses))
+        if mask.any():
+            test_set.sub_labels[torch.from_numpy(mask)] = novel_sub_index
+
     if verbose:
         print(f"[Split: Full -> Train/Test] Seed: {seed}")
         print(f"  Train (Pure Known): {len(train_indices)} samples")
@@ -151,8 +161,9 @@ def split_train_to_subtrain_val(
     val_ratio: float = 0.2,
     val_sub_novel_ratio: float = 0.1,
     val_include_novel: bool = True,
-
     force_super_novel: bool = False,
+    novel_sub_index: int = None,
+    novel_super_index: int = None,
     seed: int = 42,
     verbose: bool = True
 ) -> SplitOutput:
@@ -237,6 +248,21 @@ def split_train_to_subtrain_val(
     
     np.random.shuffle(val_indices)
     np.random.shuffle(subtrain_indices)
+
+    test_set = filter_dataset(train_dataset, val_indices) # Val set
+
+    # Apply masking
+    if novel_sub_index is not None and len(all_novel_subclasses) > 0:
+        idx_np = test_set.sub_labels.numpy()
+        mask = np.isin(idx_np, list(all_novel_subclasses))
+        if mask.any():
+            test_set.sub_labels[torch.from_numpy(mask)] = novel_sub_index
+            
+    if novel_super_index is not None and len(novel_super_classes) > 0:
+        idx_np = test_set.super_labels.numpy()
+        mask = np.isin(idx_np, list(novel_super_classes))
+        if mask.any():
+            test_set.super_labels[torch.from_numpy(mask)] = novel_super_index
     
     if verbose:
         print(f"[Split: Train -> SubTrain/Val] Seed: {seed}")
