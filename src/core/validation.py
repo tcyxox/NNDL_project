@@ -12,7 +12,7 @@ from .scoring import compute_ood_score, get_default_threshold
 
 def calculate_threshold_linear_single_head(
         model, val_features, val_labels, label_map, device,
-        test_only_unknown: bool,
+        val_include_novel: bool,
         known_only_method: KnownOnlyThreshold,
         full_val_method: FullValThreshold,
         target_recall, std_multiplier,
@@ -20,7 +20,7 @@ def calculate_threshold_linear_single_head(
 ):
     """
     在验证集上为 LinearSingleHead 计算 OSR 阈值
-    根据 test_only_unknown 选择阈值方法
+    根据 val_include_novel 选择阈值方法
 
     Args:
         model: LinearSingleHead 模型
@@ -28,7 +28,7 @@ def calculate_threshold_linear_single_head(
         val_labels: 验证集标签
         label_map: local_to_global 映射
         device: 'cuda' or 'cpu'
-        test_only_unknown: 是否仅 test 含未知类（决定使用哪种阈值方法）
+        val_include_novel: val 是否包含 novel class（决定使用哪种阈值方法）
         known_only_method: KnownOnlyThreshold Enum - 无未知类时使用的方法
         full_val_method: FullValThreshold Enum - 有未知类时使用的方法
         target_recall: 目标召回率 (如 0.95)，用于 Quantile 方法
@@ -53,8 +53,8 @@ def calculate_threshold_linear_single_head(
     unknown_scores = all_scores[unknown_mask]
     has_unknown = unknown_mask.sum() > 0
 
-    # 根据 test_only_unknown 决定使用哪种方法，并添加 fallback 逻辑
-    if test_only_unknown:
+    # 根据 val_include_novel 决定使用哪种方法，并添加 fallback 逻辑
+    if not val_include_novel:
         # Val 不含未知类，使用 KnownOnly 方法
         threshold = _apply_known_only_threshold(
             known_only_method, known_scores, target_recall, std_multiplier, score_method
@@ -67,7 +67,7 @@ def calculate_threshold_linear_single_head(
             )
         else:
             # Fallback: 配置期望有未知类，但实际数据没有，回退到 KnownOnly
-            print("警告: test_only_unknown=False 但 Val 中无未知样本，回退到 KnownOnly 方法")
+            print("警告: val_include_novel=False 但 Val 中无未知样本，回退到 KnownOnly 方法")
             threshold = _apply_known_only_threshold(
                 known_only_method, known_scores, target_recall, std_multiplier, score_method
             )
@@ -78,7 +78,7 @@ def calculate_threshold_linear_single_head(
 def calculate_threshold_gated_dual_head(
         model, val_features, val_super_labels, val_sub_labels,
         super_map_inv, sub_map_inv, device,
-        test_only_unknown: bool,
+        val_include_novel: bool,
         known_only_method: KnownOnlyThreshold,
         full_val_method: FullValThreshold,
         target_recall, std_multiplier,
@@ -86,7 +86,7 @@ def calculate_threshold_gated_dual_head(
 ):
     """
     在验证集上为 GatedDualHead 计算 OSR 阈值
-    根据 test_only_unknown 选择阈值方法
+    根据 val_include_novel 选择阈值方法
 
     Args:
         model: GatedDualHead 模型
@@ -96,7 +96,7 @@ def calculate_threshold_gated_dual_head(
         super_map_inv: {local_id: global_id} - 超类映射
         sub_map_inv: {local_id: global_id} - 子类映射
         device: str - 'cuda' or 'cpu'
-        test_only_unknown: 是否仅 test 含未知类（决定使用哪种阈值方法）
+        val_include_novel: val 是否包含 novel class（决定使用哪种阈值方法）
         known_only_method: KnownOnlyThreshold Enum - 无未知类时使用的方法
         full_val_method: FullValThreshold Enum - 有未知类时使用的方法
         target_recall: float - 目标召回率 (如 0.95)，用于 Quantile 方法
@@ -128,8 +128,8 @@ def calculate_threshold_gated_dual_head(
     has_unknown_super = unknown_super.sum() > 0
     has_unknown_sub = unknown_sub.sum() > 0
 
-    # 根据 test_only_unknown 决定使用哪种方法，并添加 fallback 逻辑
-    if test_only_unknown:
+    # 根据 val_include_novel 决定使用哪种方法，并添加 fallback 逻辑
+    if not val_include_novel:
         # Val 不含未知类，使用 KnownOnly 方法
         thresh_super = _apply_known_only_threshold(
             known_only_method, known_super_scores, target_recall, std_multiplier, score_method
@@ -145,7 +145,7 @@ def calculate_threshold_gated_dual_head(
                 full_val_method, known_super_scores, unknown_super_scores, score_method
             )
         else:
-            print("警告: test_only_unknown=False 但 Val 中无未知超类，回退到 KnownOnly 方法")
+            print("警告: val_include_novel=False 但 Val 中无未知超类，回退到 KnownOnly 方法")
             thresh_super = _apply_known_only_threshold(
                 known_only_method, known_super_scores, target_recall, std_multiplier, score_method
             )
@@ -156,7 +156,7 @@ def calculate_threshold_gated_dual_head(
                 full_val_method, known_sub_scores, unknown_sub_scores, score_method
             )
         else:
-            print("警告: test_only_unknown=False 但 Val 中无未知子类，回退到 KnownOnly 方法")
+            print("警告: val_include_novel=False 但 Val 中无未知子类，回退到 KnownOnly 方法")
             thresh_sub = _apply_known_only_threshold(
                 known_only_method, known_sub_scores, target_recall, std_multiplier, score_method
             )

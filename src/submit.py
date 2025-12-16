@@ -37,6 +37,7 @@ CONFIG = {
     
     # 数据划分
     "val_include_novel": config.experiment.val_include_novel,
+    "force_super_novel": config.experiment.force_super_novel,
     "novel_ratio": config.split.novel_subclass_ratio,
     "train_ratio": config.split.train_ratio,
     "val_test_ratio": config.split.val_test_ratio,
@@ -93,8 +94,8 @@ def calibrate_threshold_single_seed(cfg: dict, seed: int):
         val_include_novel=cfg["val_include_novel"],
         novel_sub_index=cfg["novel_sub_idx"],
         novel_super_index=cfg["novel_super_idx"],
-        verbose=False,
-        force_super_novel=True  # 仅在 submit 时强制开启 Super Novel
+        force_super_novel=cfg["force_super_novel"],
+        verbose=False
     )
     
     # 2. 在 train 上训练模型 (不包含 val/test)
@@ -127,14 +128,11 @@ def calibrate_threshold_single_seed(cfg: dict, seed: int):
     threshold_super_labels = torch.cat([data.val_super_labels, data.test_super_labels], dim=0)
     threshold_sub_labels = torch.cat([data.val_sub_labels, data.test_sub_labels], dim=0)
     
-    # val+test 合并后始终包含未知类（来自 test），所以使用 full_val 方法
-    use_known_only = False
-    
     if cfg["enable_feature_gating"]:
         thresh_super, thresh_sub = calculate_threshold_gated_dual_head(
             model, threshold_features, threshold_super_labels, threshold_sub_labels,
             super_map_inv, sub_map_inv, device,
-            use_known_only,
+            cfg["val_include_novel"],
             cfg["known_only_threshold"], cfg["full_val_threshold"],
             cfg["target_recall"], cfg["std_multiplier"],
             cfg["validation_score_temperature"], cfg["validation_score_method"]
@@ -142,14 +140,14 @@ def calibrate_threshold_single_seed(cfg: dict, seed: int):
     else:
         thresh_super = calculate_threshold_linear_single_head(
             super_model, threshold_features, threshold_super_labels, super_map_inv, device,
-            use_known_only,
+            cfg["val_include_novel"],
             cfg["known_only_threshold"], cfg["full_val_threshold"],
             cfg["target_recall"], cfg["std_multiplier"],
             cfg["validation_score_temperature"], cfg["validation_score_method"]
         )
         thresh_sub = calculate_threshold_linear_single_head(
             sub_model, threshold_features, threshold_sub_labels, sub_map_inv, device,
-            use_known_only,
+            cfg["val_include_novel"],
             cfg["known_only_threshold"], cfg["full_val_threshold"],
             cfg["target_recall"], cfg["std_multiplier"],
             cfg["validation_score_temperature"], cfg["validation_score_method"]

@@ -35,7 +35,7 @@ CONFIG = {
     "validation_score_temperature": config.experiment.validation_score_temperature,
     "prediction_score_temperature": config.experiment.prediction_score_temperature,
     # 数据划分参数
-    "test_only_unknown": config.experiment.val_include_novel,
+    "val_include_novel": config.experiment.val_include_novel,
     "novel_ratio": config.split.novel_subclass_ratio,
     "train_ratio": config.split.train_ratio,
     "val_test_ratio": config.split.val_test_ratio,
@@ -82,7 +82,7 @@ def run_single_trial(cfg: dict, seed: int, verbose: bool):
         novel_subclass_ratio=cfg["novel_ratio"],
         train_ratio=cfg["train_ratio"],
         val_test_ratio=cfg["val_test_ratio"],
-        val_include_novel=cfg["test_only_unknown"],
+        val_include_novel=cfg["val_include_novel"],
         novel_sub_index=cfg["novel_sub_idx"],
         novel_super_index=cfg["novel_super_idx"],
         verbose=verbose
@@ -131,11 +131,11 @@ def run_single_trial(cfg: dict, seed: int, verbose: bool):
         super_to_sub = None
     
     if cfg["enable_feature_gating"]:
-        # 计算阈值（根据 test_only_unknown 选择方法）
+        # 计算阈值
         thresh_super, thresh_sub = calculate_threshold_gated_dual_head(
             model, val_features, val_super_labels, val_sub_labels,
             super_map_inv, sub_map_inv, device,
-            cfg["test_only_unknown"],
+            cfg["val_include_novel"],
             cfg["known_only_threshold"], cfg["full_val_threshold"],
             cfg["target_recall"], cfg["std_multiplier"],
             cfg["validation_score_temperature"], cfg["validation_score_method"]
@@ -148,17 +148,17 @@ def run_single_trial(cfg: dict, seed: int, verbose: bool):
             super_to_sub, cfg["prediction_score_temperature"], cfg["prediction_score_method"]
         )
     else:
-        # 计算阈值（根据 test_only_unknown 选择方法）
+        # 计算阈值
         thresh_super = calculate_threshold_linear_single_head(
             super_model, val_features, val_super_labels, super_map_inv, device,
-            cfg["test_only_unknown"],
+            cfg["val_include_novel"],
             cfg["known_only_threshold"], cfg["full_val_threshold"],
             cfg["target_recall"], cfg["std_multiplier"],
             cfg["validation_score_temperature"], cfg["validation_score_method"]
         )
         thresh_sub = calculate_threshold_linear_single_head(
             sub_model, val_features, val_sub_labels, sub_map_inv, device,
-            cfg["test_only_unknown"],
+            cfg["val_include_novel"],
             cfg["known_only_threshold"], cfg["full_val_threshold"],
             cfg["target_recall"], cfg["std_multiplier"],
             cfg["validation_score_temperature"], cfg["validation_score_method"]
@@ -184,8 +184,7 @@ def run_single_trial(cfg: dict, seed: int, verbose: bool):
     # 对于 AUROC，我们需要二分类标签：1=已知类, 0=未知类
     super_binary_labels = (test_super_labels.numpy() != cfg["novel_super_idx"]).astype(int)
     sub_binary_labels = (test_sub_labels.numpy() != cfg["novel_sub_idx"]).astype(int)
-    
-    # 计算 AUROC（得分越高，越像已知类）
+
     # 需要检查是否存在两个类别，否则 AUROC 无定义
     if len(np.unique(super_binary_labels)) > 1:
         super_auroc = roc_auc_score(super_binary_labels, super_scores)
@@ -269,7 +268,7 @@ def print_global_config(cfg: dict, seeds: list[int]):
     """打印全局配置"""
     mode = "SE Feature Gating" if cfg["enable_feature_gating"] else "Independent Training"
     masking = "Enabled" if cfg["enable_hierarchical_masking"] else "Disabled"
-    split_mode = "Test Only" if cfg["test_only_unknown"] else "Val + Test"
+    split_mode = "Val + Test" if cfg["val_include_novel"] else "Test Only"
     
     print("=" * 60)
     print("Global Configuration")
@@ -291,11 +290,11 @@ def print_global_config(cfg: dict, seeds: list[int]):
     print(f"  Train Ratio: {cfg['train_ratio']*100:.0f}%")
     
     print("\n[Threshold]")
-    if cfg["test_only_unknown"]:
-        print(f"  Method: {cfg['known_only_threshold'].value} (val has no unknown)")
-    else:
+    if cfg["val_include_novel"]:
         print(f"  Method: {cfg['full_val_threshold'].value} (val has unknown)")
-    
+    else:
+        print(f"  Method: {cfg['known_only_threshold'].value} (val has no unknown)")
+
     print("\n[OOD Score]")
     print(f"  Validation: {cfg['validation_score_method'].value} (T={cfg['validation_score_temperature']})")
     print(f"  Prediction: {cfg['prediction_score_method'].value} (T={cfg['prediction_score_temperature']})")
