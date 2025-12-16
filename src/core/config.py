@@ -76,7 +76,8 @@ class ExperimentConfig:
     seed: int = 42  # evaluate 时不使用，评估流程中只有 extract features 用到
 
     # 数据划分模式
-    val_include_novel: bool = False  # True: val 不含未知类; False: val含未知类
+    val_include_novel: bool = True  # True: val 不含未知类; False: val含未知类
+    force_super_novel: bool = True   # 是否在 Val 中强制引入 Super Novel
 
     # 训练参数
     batch_size: int = 64
