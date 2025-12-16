@@ -382,9 +382,9 @@ super seen, sub overall, sub seen, sub unseen, sub auroc
 
 根据在professor测试集上的测试，MaxSigmoid 会对 super seen 的判定特别自信，在 validation 中加入 novel superclass 可以缓解，但问题依然存在；而 MSP 则基本没有该问题。
 
-## 标准验证流程
+## 标准 Calibration 流程
 
-以上是快速验证，为了得到最好的方法。以下对最好的方法进行准确评估。
+以上是快速验证，为了得到最好的方法。以下对最好的 CE + MSP方法，使用标准校准流程进行准确评估。
 
 流程如下：
 
