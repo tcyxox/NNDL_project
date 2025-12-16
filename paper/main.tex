@@ -262,7 +262,7 @@ This method theoretically yields the optimal separation for the observed validat
 
         % Masking Flow (symmetric)
         \draw[lineDashed] (super_pred.south) |- (mask.east);
-        \draw[lineDashed] (mask.south) |- (sub_thresh.north);
+        \draw[lineDashed] (mask.south) -- (sub_thresh.north);
 
         % --- Loss Flow (symmetric) ---
 
@@ -302,12 +302,12 @@ The MSP score is defined as the maximum class probability:
 This reveals that high-temperature ODIN measures the \textbf{Relative Sharpness} of the logit distribution.
 
 \paragraph{Magnitude Information:}
-A known issue with MSP and ODIN is their reliance on the Softmax function. Softmax forces output probabilities to sum to 1, losing the magnitude information of the underlying logits. Logit-based scoring methods in the next part resolve this problem.
+A known issue with MSP and ODIN is their reliance on the Softmax function, which loses the magnitude information of the logits. Logit-based scoring methods resolve this problem.
 
 \subsubsection{Post-hoc Scoring with Sigmoid and BCE Loss}
 
 \paragraph{Consistency between Threshold Scoring Method and Training Objective:}
-While the MSP framework maintains consistency between its scoring method and the Cross-Entropy training objective (as both rely on normalized probabilities and discard magnitude), Logit-based OOD detection methods introduce a \textbf{theoretical inconsistency} by utilizing magnitude information that the standard Softmax-Cross-Entropy objective suppresses. To resolve this and explicitly preserve magnitude information for effective outlier detection, we replace the Softmax normalization with \textbf{class-wise Sigmoid activations} and adopt a \textbf{Binary Cross-Entropy (BCE)} loss. This formulation effectively treats the multi-class classification problem as a collection of independent \textbf{one-vs-rest (OvR)} binary tasks, ensuring that the training objective aligns with the magnitude-sensitive scoring functions~\cite{shu2017docdeepopenclassification}.
+While the MSP framework maintains consistency between its scoring method and the Cross-Entropy training objective (as both rely on softmax), Logit-based OOD detection methods introduce a \textbf{theoretical inconsistency} with Cross-Entropy. To resolve this, we replace the Softmax normalization with \textbf{class-wise Sigmoid activations} and adopt \textbf{Binary Cross-Entropy (BCE)} loss. This treats the multi-class classification problem as a collection of independent \textbf{one-vs-rest (OvR)} binary tasks~\cite{shu2017docdeepopenclassification}.
 
 \paragraph{Threshold Scoring Methods}
 \begin{itemize}
@@ -405,7 +405,7 @@ Since real novel samples are inaccessible during training, we generate pseudo-ou
 Table \ref{tab:ablation} presents the ablation study starting from a Linear Dual Head baseline. The parametric \textbf{Z-Score} method significantly outperforms Quantile, implying Gaussian-like score distributions. \textbf{Temperature Scaling} further refines separation, while the \textbf{Gated Dual Head} achieves the best performance, validating that SE-Attention successfully enforces hierarchical constraints.
 
 \begin{table}[h]
-  \caption{Ablation study on model architecture and threshold strategies. (Metric: Subclass Performance)}
+  \caption{Ablation study on model architecture and threshold strategies.}
   \label{tab:ablation}
   \centering
   \resizebox{\columnwidth}{!}{
@@ -435,7 +435,7 @@ The results indicate distinct trade-offs. \textbf{MaxSigmoid} achieves high over
   \resizebox{\columnwidth}{!}{
   \begin{tabular}{lccccc}
     \toprule
-    \bf Method (Loss + Score) & \bf Temp ($T$) & \bf Overall Acc. & \bf Seen Acc. & \bf Unseen Acc. & \bf AUROC \\
+    \bf Method (Loss + Score) & \bf Temperature & \bf Overall Acc. & \bf Seen Acc. & \bf Unseen Acc. & \bf AUROC \\
     \midrule
     \textbf{CE + MSP} & 1.5 & 73.83\% ± 3.88\% & \textbf{88.03\% ± 1.30\%} & 59.79\% ± 8.48\% & \textbf{0.8821 ± 0.0234} \\
     \textbf{BCE + MaxSigmoid} & 0.2 & \textbf{75.30\% ± 3.70\%} & 87.29\% ± 0.84\% & \textbf{63.30\% ± 8.03\%} & 0.8721 ± 0.0365 \\
@@ -447,9 +447,11 @@ The results indicate distinct trade-offs. \textbf{MaxSigmoid} achieves high over
 
 \subsection{Impact of Calibration Strategy}
 
-In the \textit{Strict} setting, thresholds are derived solely from known data (Z-Score). In the \textit{Guided} setting, the validation set includes unknown samples, allowing for the \textit{EER} method.
+In this section, we focus exclusively on the CE + MSP method to investigate the impact of different calibration strategies. We also apply fine-tuned hyper-parameters and train based on a larger base model (ViT-L/14) to achieve optimal result among post-hoc score-based methods for OSR.
 
-We employ a nested calibration protocol for rigorous evaluation: (1) an outer loop splits the full training set into train and test sets with novel subclasses reserved for test; (2) an inner loop further partitions the train set into sub-train and validation sets for threshold calibration; (3) thresholds are averaged across inner iterations, and the final model is retrained on the full train set before testing. This approach mirrors the real submission pipeline while avoiding data leakage.
+We employ a nested calibration protocol for rigorous evaluation. The train set is further partitioned into sub-train and validation sets across multiple random seeds, and the calibrated thresholds are averaged to reduce variance. The final model is then retrained on the full train set using the averaged thresholds before testing.
+
+In the \textit{Strict} setting, thresholds are derived solely from known data (Z-Score). In the \textit{Guided} setting, the validation set includes unknown samples, allowing for the \textit{EER} method.
 
 As shown in Table~\ref{tab:val_strategy}, the Guided strategy with EER thresholding achieves superior performance, demonstrating that the distribution of validation outliers generalizes well to the test set.
 
@@ -460,11 +462,11 @@ As shown in Table~\ref{tab:val_strategy}, the Guided strategy with EER threshold
   \resizebox{\columnwidth}{!}{
   \begin{tabular}{lccccc}
     \toprule
-    \bf Calibration Strategy & \bf Threshold Method & \bf Overall Acc. & \bf Seen Acc. & \bf Unseen Acc. & \bf AUROC \\
+    \bf Calibration & \bf Threshold & \bf Overall Acc. & \bf Seen Acc. & \bf Unseen Acc. & \bf AUROC \\
     \midrule
-    Strict (Known Only) & Z-Score & 73.83\% ± 3.88\% & 88.03\% ± 1.30\% & 59.79\% ± 8.48\% & 0.8821 ± 0.0234 \\
-    Guided (Quick Eval) & EER & 79.57\% ± 1.55\% & 72.68\% ± 2.61\% & 84.90\% ± 4.12\% & 0.8663 ± 0.0119 \\
-    Guided + Nested Calibration & EER & \textbf{83.02\% ± 3.69\%} & \textbf{84.84\% ± 2.84\%} & \textbf{80.74\% ± 8.65\%} & \textbf{0.9117 ± 0.0318} \\
+    Strict & Z-Score & 71.98\% ± 3.23\% & 90.21\% ± 0.66\% & 50.34\% ± 6.97\% & 0.8799 ± 0.0276 \\
+    Guided & EER & 79.05\% ± 3.59\% & 81.52\% ± 2.53\% & 76.00\% ± 7.42\% & 0.8799 ± 0.0276 \\
+    Guided (L/14) & EER & \textbf{83.02\% ± 3.69\%} & \textbf{84.84\% ± 2.84\%} & \textbf{80.74\% ± 8.65\%} & \textbf{0.9117 ± 0.0318} \\
     \bottomrule
   \end{tabular}
   }

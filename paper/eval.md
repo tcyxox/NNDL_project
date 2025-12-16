@@ -59,7 +59,8 @@ class ExperimentConfig:
     epochs: int = 50
 
     # 数据划分模式
-    val_include_novel: bool = True  # True: val 不含未知类; False: val含未知类
+    val_include_novel: bool = False  # Val 中是否含未知类
+    force_super_novel: bool = False  # 是否在 Val 中强制引入 Super Novel
 
     # 模型选择
     enable_hierarchical_masking: bool = False  # 推理时 Hierarchical Masking 开关
@@ -97,7 +98,8 @@ class ExperimentConfig:
     epochs: int = 50
 
     # 数据划分模式
-    val_include_novel: bool = True  # True: val 不含未知类; False: val含未知类
+    val_include_novel: bool = False  # Val 中是否含未知类
+    force_super_novel: bool = False  # 是否在 Val 中强制引入 Super Novel
 
     # 模型选择
     enable_hierarchical_masking: bool = False  # 推理时 Hierarchical Masking 开关
@@ -137,7 +139,8 @@ class ExperimentConfig:
     epochs: int = 50
 
     # 数据划分模式
-    val_include_novel: bool = True  # True: val 不含未知类; False: val含未知类
+    val_include_novel: bool = False  # Val 中是否含未知类
+    force_super_novel: bool = False  # 是否在 Val 中强制引入 Super Novel
 
     # 模型选择
     enable_hierarchical_masking: bool = False  # 推理时 Hierarchical Masking 开关
@@ -177,7 +180,8 @@ class ExperimentConfig:
     epochs: int = 50
 
     # 数据划分模式
-    val_include_novel: bool = True  # True: val 不含未知类; False: val含未知类
+    val_include_novel: bool = False  # Val 中是否含未知类
+    force_super_novel: bool = False  # 是否在 Val 中强制引入 Super Novel
 
     # 模型选择
     enable_hierarchical_masking: bool = True  # 推理时 Hierarchical Masking 开关
@@ -217,7 +221,8 @@ class ExperimentConfig:
     epochs: int = 75
 
     # 数据划分模式
-    val_include_novel: bool = True  # True: val 不含未知类; False: val含未知类
+    val_include_novel: bool = False  # Val 中是否含未知类
+    force_super_novel: bool = False  # 是否在 Val 中强制引入 Super Novel
 
     # 模型选择
     enable_hierarchical_masking: bool = True  # 推理时 Hierarchical Masking 开关
@@ -252,11 +257,12 @@ class ExperimentConfig:
 
 ## 具体方法和参数探索
 
-此后若未特别说明，全部使用 Linear Dual Head + Hierarchical Masking + Z-Score
+此后若未特别说明，全部使用 Linear Dual Head + Hierarchical Masking + Z-Score，即以下配置：
 
 ```py
     # 数据划分模式
-    val_include_novel: bool = True  # True: val 不含未知类; False: val含未知类
+    val_include_novel: bool = False  # Val 中是否含未知类
+    force_super_novel: bool = False  # 是否在 Val 中强制引入 Super Novel
 
     # 训练参数
     batch_size: int = 64
@@ -366,7 +372,8 @@ super seen, sub overall, sub seen, sub unseen, sub auroc
 
 ```py
     # 数据划分模式
-    val_include_novel: bool = False  # True: val 不含未知类; False: val含未知类
+    val_include_novel: bool = True  # Val 中是否含未知类
+    force_super_novel: bool = False  # 是否在 Val 中强制引入 Super Novel
 ```
 
 - CE + MSP (T=1.5):
@@ -401,9 +408,25 @@ super seen, sub overall, sub seen, sub unseen, sub auroc
 
 1-5按照seed=[]进行外轮循环，得到最终报告。
 
+## Super Novel 引入 Val 测试
+
+```py
+    # 数据划分模式
+    val_include_novel: bool = True  # Val 中是否含未知类
+    force_super_novel: bool = False  # 是否在 Val 中强制引入 Super Novel
+```
+
 经过测试，如果force_super_novel为true，会导致sub novel占比过大，使得阈值设定出现问题，sub unseen准确率急剧下降。因此force_super_novel为false。
 
-- CE + MSP (T1.5):
+## Calibration 流程对比（用新流程跑，所以不会复现前面的结果）
+
+使用 CE + MSP (T1.5) + ViT-B/32 + epochs=100
+
+- val_include_novel=False
+  98.84% ± 0.63%, 71.98% ± 3.23%, 90.21% ± 0.66%, 50.34% ± 6.97%, 0.8799 ± 0.0276
+- val_include_novel=True
+  98.98% ± 0.81%, 79.05% ± 3.59%, 81.52% ± 2.53%, 76.00% ± 7.42%, 0.8799 ± 0.0276
+- ViT-L/14, epochs=75, val_include_novel=True
   97.07% ± 3.05%, 83.02% ± 3.69%, 84.84% ± 2.84%, 80.74% ± 8.65%, 0.9117 ± 0.0318
 
 ## 最终结论
