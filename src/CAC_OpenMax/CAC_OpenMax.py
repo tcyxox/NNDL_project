@@ -6,7 +6,7 @@ import scipy.spatial.distance as spd
 
 
 class CAC_OpenMax:
-    def __init__(self, num_classes, cac_projector=None, weibul_tail_size=3, alpha=3, distance_type='euclidean'):
+    def __init__(self, num_classes, weibul_tail_size=3, alpha=3, distance_type='euclidean'):
         """
         初始化 OpenMax
         :param num_classes: 已知类别的数量 (N)
