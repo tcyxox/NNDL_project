@@ -5,9 +5,9 @@ import torch
 from sklearn.metrics import accuracy_score, roc_auc_score
 
 from core.config import config, TrainingLoss, OODScoreMethod, KnownOnlyThreshold, FullValThreshold
-from core.data_split import split_features
+from core.dataset import split_features
 from core.prediction import predict_with_linear_single_head, predict_with_gated_dual_head
-from core.validation import calculate_threshold_linear_single_head, calculate_threshold_gated_dual_head
+from core.calibration import calculate_threshold_linear_single_head, calculate_threshold_gated_dual_head
 from core.training import run_training
 from core.utils import set_seed
 

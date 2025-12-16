@@ -1,7 +1,7 @@
 """
 OOD 得分计算函数
 
-用于计算样本的 OOD 得分，被 validation.py 和 prediction.py 共同使用
+用于计算样本的 OOD 得分，被 calibration.py 和 prediction.py 共同使用
 """
 import torch
 import torch.nn.functional as F
