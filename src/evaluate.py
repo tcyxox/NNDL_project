@@ -28,9 +28,10 @@ from core.dataset import (
     split_full_train_to_train_test,
     split_train_to_subtrain_val
 )
-from core.prediction import predict_with_linear_single_head, predict_with_gated_dual_head
-from core.calibration import calculate_threshold_linear_single_head, calculate_threshold_gated_dual_head
+from core.prediction import predict_with_linear_single_head, predict_with_gated_dual_head, predict_with_openmax
+from core.calibration import calculate_threshold_linear_single_head, calculate_threshold_gated_dual_head, calibrate_openmax_threshold_eer, _find_openmax_eer_threshold
 from core.training import run_training
+from core.openmax import OpenMax
 from core.utils import set_seed
 
 # ===================== 配置 =====================
@@ -75,6 +76,10 @@ CONFIG = {
     "val_sub_novel_ratio": config.split.val_sub_novel_ratio,
     "val_include_novel": config.experiment.val_include_novel,
     "force_super_novel": config.experiment.force_super_novel,
+    
+    # OpenMax 配置
+    "enable_openmax": config.experiment.enable_openmax,
+    "openmax_config": config.openmax,
     
     # 其他
     "verbose": config.experiment.verbose,
@@ -170,7 +175,65 @@ def calibrate_threshold_inner_loop(cfg: dict, train_dataset, seeds: list[int]):
         sub_map_inv = {v: int(k) for k, v in sub_map.items()}
         
         # 3. Calculate threshold on Val
-        if cfg["enable_feature_gating"]:
+        if cfg["enable_openmax"]:
+            # OpenMax 分支：拟合 Weibull + EER 阈值
+            if cfg["enable_feature_gating"]:
+                # 拟合 OpenMax for super
+                openmax_super = OpenMax(
+                    num_classes=len(super_map),
+                    weibull_tail_size=cfg["openmax_config"].weibull_tail_size,
+                    alpha=cfg["openmax_config"].alpha,
+                    distance_type=cfg["openmax_config"].distance_type
+                )
+                with torch.no_grad():
+                    super_logits, _ = model(subtrain_set.features.to(device))
+                super_labels_local = torch.tensor([super_map[l.item()] for l in subtrain_set.super_labels])
+                openmax_super.fit(super_logits, super_labels_local)
+                
+                # 拟合 OpenMax for sub
+                openmax_sub = OpenMax(
+                    num_classes=len(sub_map),
+                    weibull_tail_size=cfg["openmax_config"].weibull_tail_size,
+                    alpha=cfg["openmax_config"].alpha,
+                    distance_type=cfg["openmax_config"].distance_type
+                )
+                with torch.no_grad():
+                    _, sub_logits = model(subtrain_set.features.to(device))
+                sub_labels_local = torch.tensor([sub_map[l.item()] for l in subtrain_set.sub_labels])
+                openmax_sub.fit(sub_logits, sub_labels_local)
+                
+                # EER 阈值校准
+                known_super_set = set(super_map_inv.values())
+                known_sub_set = set(sub_map_inv.values())
+                
+                # 获取 super logits 并计算阈值
+                with torch.no_grad():
+                    val_super_logits, val_sub_logits = model(val_set.features.to(device))
+                
+                super_probs = openmax_super.predict(val_super_logits)
+                super_unknown_probs = super_probs[:, 0]
+                known_super_mask = np.array([l in known_super_set for l in val_set.super_labels.numpy()])
+                if known_super_mask.sum() > 0 and (~known_super_mask).sum() > 0:
+                    thresh_super = _find_openmax_eer_threshold(
+                        super_unknown_probs[known_super_mask],
+                        super_unknown_probs[~known_super_mask]
+                    )
+                else:
+                    thresh_super = 0.5
+                
+                sub_probs = openmax_sub.predict(val_sub_logits)
+                sub_unknown_probs = sub_probs[:, 0]
+                known_sub_mask = np.array([l in known_sub_set for l in val_set.sub_labels.numpy()])
+                if known_sub_mask.sum() > 0 and (~known_sub_mask).sum() > 0:
+                    thresh_sub = _find_openmax_eer_threshold(
+                        sub_unknown_probs[known_sub_mask],
+                        sub_unknown_probs[~known_sub_mask]
+                    )
+                else:
+                    thresh_sub = 0.5
+            else:
+                raise NotImplementedError("OpenMax 目前仅支持 enable_feature_gating=True 模式")
+        elif cfg["enable_feature_gating"]:
             thresh_super, thresh_sub = calculate_threshold_gated_dual_head(
                 model, val_set.features, val_set.super_labels, val_set.sub_labels,
                 super_map_inv, sub_map_inv, device,
@@ -200,6 +263,7 @@ def calibrate_threshold_inner_loop(cfg: dict, train_dataset, seeds: list[int]):
     
     # Return average threshold
     return np.mean(all_thresh_super), np.mean(all_thresh_sub)
+
 
 
 def run_single_outer_trial(cfg: dict, outer_seed: int, inner_seeds: list[int]):
@@ -282,7 +346,44 @@ def run_single_outer_trial(cfg: dict, outer_seed: int, inner_seeds: list[int]):
     test_super_labels = test_dataset.super_labels
     test_sub_labels = test_dataset.sub_labels
     
-    if cfg["enable_feature_gating"]:
+    if cfg["enable_openmax"]:
+        # OpenMax 分支：需要先拟合 Weibull
+        if cfg["enable_feature_gating"]:
+            # 拟合 OpenMax for super (使用全部训练数据)
+            openmax_super = OpenMax(
+                num_classes=len(super_map),
+                weibull_tail_size=cfg["openmax_config"].weibull_tail_size,
+                alpha=cfg["openmax_config"].alpha,
+                distance_type=cfg["openmax_config"].distance_type
+            )
+            with torch.no_grad():
+                train_super_logits, _ = model(train_dataset.features.to(device))
+            train_super_labels_local = torch.tensor([super_map[l.item()] for l in train_dataset.super_labels])
+            openmax_super.fit(train_super_logits, train_super_labels_local)
+            
+            # 拟合 OpenMax for sub
+            openmax_sub = OpenMax(
+                num_classes=len(sub_map),
+                weibull_tail_size=cfg["openmax_config"].weibull_tail_size,
+                alpha=cfg["openmax_config"].alpha,
+                distance_type=cfg["openmax_config"].distance_type
+            )
+            with torch.no_grad():
+                _, train_sub_logits = model(train_dataset.features.to(device))
+            train_sub_labels_local = torch.tensor([sub_map[l.item()] for l in train_dataset.sub_labels])
+            openmax_sub.fit(train_sub_logits, train_sub_labels_local)
+            
+            # OpenMax 推理
+            super_preds, sub_preds, super_scores, sub_scores = predict_with_openmax(
+                test_features, model, openmax_super, openmax_sub,
+                super_map_inv, sub_map_inv,
+                avg_thresh_super, avg_thresh_sub,
+                cfg["novel_super_idx"], cfg["novel_sub_idx"], device,
+                super_to_sub
+            )
+        else:
+            raise NotImplementedError("OpenMax 目前仅支持 enable_feature_gating=True 模式")
+    elif cfg["enable_feature_gating"]:
         super_preds, sub_preds, super_scores, sub_scores = predict_with_gated_dual_head(
             test_features, model, super_map_inv, sub_map_inv,
             avg_thresh_super, avg_thresh_sub, cfg["novel_super_idx"], cfg["novel_sub_idx"], device,
@@ -308,13 +409,21 @@ def run_single_outer_trial(cfg: dict, outer_seed: int, inner_seeds: list[int]):
     super_binary_labels = (test_super_labels.numpy() != cfg["novel_super_idx"]).astype(int)
     sub_binary_labels = (test_sub_labels.numpy() != cfg["novel_sub_idx"]).astype(int)
 
+    # OpenMax 返回的是 unknown 概率而不是 known 概率，需要取反
+    if cfg["enable_openmax"]:
+        super_scores_for_auroc = [1 - s for s in super_scores]  # 越高越 known
+        sub_scores_for_auroc = [1 - s for s in sub_scores]
+    else:
+        super_scores_for_auroc = super_scores
+        sub_scores_for_auroc = sub_scores
+
     if len(np.unique(super_binary_labels)) > 1:
-        super_auroc = roc_auc_score(super_binary_labels, super_scores)
+        super_auroc = roc_auc_score(super_binary_labels, super_scores_for_auroc)
     else:
         super_auroc = float('nan')
     
     if len(np.unique(sub_binary_labels)) > 1:
-        sub_auroc = roc_auc_score(sub_binary_labels, sub_scores)
+        sub_auroc = roc_auc_score(sub_binary_labels, sub_scores_for_auroc)
     else:
         sub_auroc = float('nan')
     
@@ -323,6 +432,7 @@ def run_single_outer_trial(cfg: dict, outer_seed: int, inner_seeds: list[int]):
         "sub_overall": sub_all, "sub_seen": sub_seen, "sub_unseen": sub_unseen,
         "super_auroc": super_auroc, "sub_auroc": sub_auroc
     }
+
 
 
 def run_evaluation(cfg: dict, outer_seeds: list[int], inner_seeds: list[int]) -> dict:
@@ -408,20 +518,26 @@ def print_global_config(cfg: dict, outer_seeds: list[int], inner_seeds: list[int
     print(f"  Force Super Novel: {cfg['force_super_novel']}")
     
     print("\n[Threshold]")
-    if cfg["val_include_novel"]:
+    if cfg["enable_openmax"]:
+        print(f"  Method: OpenMax + EER")
+    elif cfg["val_include_novel"]:
         print(f"  Method: {cfg['full_val_threshold'].value} (val has unknown)")
     else:
         print(f"  Method: {cfg['known_only_threshold'].value} (val has no unknown)")
 
     print("\n[OOD Score]")
-    print(f"  Validation: {cfg['validation_score_method'].value} (T={cfg['validation_score_temperature']})")
-    print(f"  Prediction: {cfg['prediction_score_method'].value} (T={cfg['prediction_score_temperature']})")
+    if cfg["enable_openmax"]:
+        print(f"  Method: OpenMax (Weibull tail={cfg['openmax_config'].weibull_tail_size}, alpha={cfg['openmax_config'].alpha})")
+    else:
+        print(f"  Validation: {cfg['validation_score_method'].value} (T={cfg['validation_score_temperature']})")
+        print(f"  Prediction: {cfg['prediction_score_method'].value} (T={cfg['prediction_score_temperature']})")
     
     print("\n[Evaluation]")
     print(f"  Outer Seeds: {outer_seeds}")
     print(f"  Inner Seeds (for randomization): {inner_seeds}")
     print(f"  Total Outer Trials: {len(outer_seeds)}")
     print(f"  Inner Trials per Outer: Iterate all superclasses (3)")
+
 
 
 if __name__ == "__main__":

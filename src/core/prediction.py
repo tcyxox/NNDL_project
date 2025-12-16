@@ -226,3 +226,93 @@ def predict_with_gated_dual_head(
 
     return super_preds, sub_preds, super_scores, sub_scores
 
+
+def predict_with_openmax(
+        features, model, openmax_super, openmax_sub,
+        super_map, sub_map,
+        thresh_super, thresh_sub,
+        novel_super_idx, novel_sub_idx, device,
+        super_to_sub=None
+):
+    """
+    使用 OpenMax + EER 阈值进行预测
+    
+    Args:
+        features: 测试特征
+        model: GatedDualHead 模型
+        openmax_super: 超类 OpenMax 对象
+        openmax_sub: 子类 OpenMax 对象
+        super_map: 超类 local_to_global 映射
+        sub_map: 子类 local_to_global 映射
+        thresh_super: 超类 unknown 概率阈值
+        thresh_sub: 子类 unknown 概率阈值
+        novel_super_idx: 超类 novel 标签
+        novel_sub_idx: 子类 novel 标签
+        device: 设备
+        super_to_sub: 超类到子类的映射（用于 Hierarchical Masking）
+        
+    Returns:
+        super_preds, sub_preds, super_unknown_probs, sub_unknown_probs
+    """
+    import numpy as np
+    
+    super_preds, sub_preds = [], []
+    super_unknown_probs, sub_unknown_probs = [], []
+    
+    use_masking = (super_to_sub is not None)
+    num_sub_classes = len(sub_map)
+    sub_global_to_local = {v: int(k) for k, v in sub_map.items()} if use_masking else None
+
+    model.eval()
+    with torch.no_grad():
+        for i in range(len(features)):
+            feature = features[i].unsqueeze(0)
+            super_logits, sub_logits = model(feature)
+            
+            # === 超类预测 ===
+            super_probs = openmax_super.predict(super_logits)  # [1, num_super + 1]
+            super_unknown_prob = super_probs[0, 0]
+            super_unknown_probs.append(super_unknown_prob)
+            
+            if super_unknown_prob > thresh_super:
+                final_super = novel_super_idx
+            else:
+                # 取 argmax (跳过第 0 列 unknown)
+                super_known_probs = super_probs[0, 1:]
+                super_idx = np.argmax(super_known_probs)
+                final_super = super_map[super_idx]
+            
+            # === 子类预测 ===
+            sub_probs = openmax_sub.predict(sub_logits)  # [1, num_sub + 1]
+            sub_unknown_prob = sub_probs[0, 0]
+            sub_unknown_probs.append(sub_unknown_prob)
+            
+            if sub_unknown_prob > thresh_sub:
+                final_sub = novel_sub_idx
+            else:
+                # 取 argmax (跳过第 0 列 unknown)
+                sub_known_probs = sub_probs[0, 1:]
+                
+                # 应用 Hierarchical Masking
+                if use_masking and final_super != novel_super_idx and final_super in super_to_sub:
+                    valid_subs = super_to_sub[final_super]
+                    mask = np.full(num_sub_classes, float('-inf'))
+                    for sub_id in valid_subs:
+                        if sub_id in sub_global_to_local:
+                            local_id = sub_global_to_local[sub_id]
+                            mask[local_id] = 0
+                    sub_known_probs = sub_known_probs + mask
+                
+                sub_idx = np.argmax(sub_known_probs)
+                final_sub = sub_map[sub_idx]
+            
+            # Hard Constraint: 超类 novel → 子类也 novel
+            if final_super == novel_super_idx:
+                final_sub = novel_sub_idx
+            
+            super_preds.append(final_super)
+            sub_preds.append(final_sub)
+
+    return super_preds, sub_preds, super_unknown_probs, sub_unknown_probs
+
+

@@ -21,12 +21,15 @@ from core.dataset import load_full_dataset, split_train_to_subtrain_val
 from core.training import run_training
 from core.prediction import (
     predict_with_gated_dual_head,
-    predict_with_linear_single_head
+    predict_with_linear_single_head,
+    predict_with_openmax
 )
 from core.calibration import (
     calculate_threshold_gated_dual_head,
-    calculate_threshold_linear_single_head
+    calculate_threshold_linear_single_head,
+    _find_openmax_eer_threshold
 )
+from core.openmax import OpenMax
 from core.utils import set_seed
 
 # ===================== 配置 =====================
@@ -67,6 +70,10 @@ CONFIG = {
     # OSR 标签
     "novel_super_idx": config.osr.novel_super_index,
     "novel_sub_idx": config.osr.novel_sub_index,
+    
+    # OpenMax 配置
+    "enable_openmax": config.experiment.enable_openmax,
+    "openmax_config": config.openmax,
     
     # 其他
     "verbose": config.experiment.verbose,
@@ -144,7 +151,64 @@ def calibrate_thresholds(cfg: dict, seeds: list[int]):
         sub_map_inv = {v: int(k) for k, v in sub_map.items()}
         
         # 3. Calculate threshold on Val
-        if cfg["enable_feature_gating"]:
+        if cfg["enable_openmax"]:
+            # OpenMax 分支：拟合 Weibull + EER 阈值
+            if cfg["enable_feature_gating"]:
+                # 拟合 OpenMax for super
+                openmax_super = OpenMax(
+                    num_classes=len(super_map),
+                    weibull_tail_size=cfg["openmax_config"].weibull_tail_size,
+                    alpha=cfg["openmax_config"].alpha,
+                    distance_type=cfg["openmax_config"].distance_type
+                )
+                with torch.no_grad():
+                    super_logits, _ = model(train_set.features.to(device))
+                super_labels_local = torch.tensor([super_map[l.item()] for l in train_set.super_labels])
+                openmax_super.fit(super_logits, super_labels_local)
+                
+                # 拟合 OpenMax for sub
+                openmax_sub = OpenMax(
+                    num_classes=len(sub_map),
+                    weibull_tail_size=cfg["openmax_config"].weibull_tail_size,
+                    alpha=cfg["openmax_config"].alpha,
+                    distance_type=cfg["openmax_config"].distance_type
+                )
+                with torch.no_grad():
+                    _, sub_logits = model(train_set.features.to(device))
+                sub_labels_local = torch.tensor([sub_map[l.item()] for l in train_set.sub_labels])
+                openmax_sub.fit(sub_logits, sub_labels_local)
+                
+                # EER 阈值校准
+                known_super_set = set(super_map_inv.values())
+                known_sub_set = set(sub_map_inv.values())
+                
+                with torch.no_grad():
+                    val_super_logits, val_sub_logits = model(val_set.features.to(device))
+                
+                super_probs = openmax_super.predict(val_super_logits)
+                super_unknown_probs = super_probs[:, 0]
+                known_super_mask = np.array([l in known_super_set for l in val_set.super_labels.numpy()])
+                if known_super_mask.sum() > 0 and (~known_super_mask).sum() > 0:
+                    thresh_super = _find_openmax_eer_threshold(
+                        super_unknown_probs[known_super_mask],
+                        super_unknown_probs[~known_super_mask]
+                    )
+                else:
+                    thresh_super = 0.5
+                
+                sub_probs = openmax_sub.predict(val_sub_logits)
+                sub_unknown_probs = sub_probs[:, 0]
+                known_sub_mask = np.array([l in known_sub_set for l in val_set.sub_labels.numpy()])
+                if known_sub_mask.sum() > 0 and (~known_sub_mask).sum() > 0:
+                    thresh_sub = _find_openmax_eer_threshold(
+                        sub_unknown_probs[known_sub_mask],
+                        sub_unknown_probs[~known_sub_mask]
+                    )
+                else:
+                    thresh_sub = 0.5
+            else:
+                raise NotImplementedError("OpenMax 目前仅支持 enable_feature_gating=True 模式")
+        elif cfg["enable_feature_gating"]:
             thresh_super, thresh_sub = calculate_threshold_gated_dual_head(
                 model, val_set.features, val_set.super_labels, val_set.sub_labels,
                 super_map_inv, sub_map_inv, device,
@@ -174,6 +238,7 @@ def calibrate_thresholds(cfg: dict, seeds: list[int]):
         print(f"    Super: {thresh_super:.4f}, Sub: {thresh_sub:.4f}")
     
     return np.mean(all_thresh_super), np.mean(all_thresh_sub), np.std(all_thresh_super), np.std(all_thresh_sub)
+
 
 
 if __name__ == "__main__":
@@ -243,13 +308,54 @@ if __name__ == "__main__":
     if not CONFIG["enable_hierarchical_masking"]:
         super_to_sub = None
 
+    # === OpenMax 拟合 (如果启用) ===
+    if CONFIG["enable_openmax"]:
+        print("\n" + "=" * 50)
+        print("Phase 2.5: Fitting OpenMax on Training Set")
+        print("=" * 50)
+        
+        if CONFIG["enable_feature_gating"]:
+            # 拟合 OpenMax for super
+            openmax_super = OpenMax(
+                num_classes=len(super_map),
+                weibull_tail_size=CONFIG["openmax_config"].weibull_tail_size,
+                alpha=CONFIG["openmax_config"].alpha,
+                distance_type=CONFIG["openmax_config"].distance_type
+            )
+            with torch.no_grad():
+                train_super_logits, _ = model(train_features.to(device))
+            train_super_labels_local = torch.tensor([super_map[l.item()] for l in train_super_labels])
+            openmax_super.fit(train_super_logits, train_super_labels_local)
+            print(f"  > OpenMax Super fitted: {len(super_map)} classes")
+            
+            # 拟合 OpenMax for sub
+            openmax_sub = OpenMax(
+                num_classes=len(sub_map),
+                weibull_tail_size=CONFIG["openmax_config"].weibull_tail_size,
+                alpha=CONFIG["openmax_config"].alpha,
+                distance_type=CONFIG["openmax_config"].distance_type
+            )
+            with torch.no_grad():
+                _, train_sub_logits = model(train_features.to(device))
+            train_sub_labels_local = torch.tensor([sub_map[l.item()] for l in train_sub_labels])
+            openmax_sub.fit(train_sub_logits, train_sub_labels_local)
+            print(f"  > OpenMax Sub fitted: {len(sub_map)} classes")
+
     # === Phase 2.5: 在全量训练集上评估模型 (Sanity Check) ===
     print("\n" + "=" * 50)
-    print("Phase 2.5: Evaluate Final Model on Training Set (Sanity Check)")
+    print("Phase 2.6: Evaluate Final Model on Training Set (Sanity Check)")
     print("=" * 50)
     
     # 预测训练集
-    if CONFIG["enable_feature_gating"]:
+    if CONFIG["enable_openmax"]:
+        train_super_preds, train_sub_preds, _, _ = predict_with_openmax(
+            train_features.to(device), model, openmax_super, openmax_sub,
+            super_map_inv, sub_map_inv,
+            avg_thresh_super, avg_thresh_sub,
+            CONFIG["novel_super_idx"], CONFIG["novel_sub_idx"], device,
+            super_to_sub
+        )
+    elif CONFIG["enable_feature_gating"]:
         train_super_preds, train_sub_preds, _, _ = predict_with_gated_dual_head(
             train_features.to(device), model, super_map_inv, sub_map_inv,
             avg_thresh_super, avg_thresh_sub,
@@ -288,9 +394,20 @@ if __name__ == "__main__":
     test_image_names = torch.load(os.path.join(CONFIG["feature_dir"], "test_image_names.pt"))
     print(f"  > 真实测试样本数: {len(test_features)}")
     print(f"  > 使用阈值: Super={avg_thresh_super:.4f}, Sub={avg_thresh_sub:.4f}")
-    print(f"  > 预测方法: {CONFIG['prediction_score_method'].value} (T={CONFIG['prediction_score_temperature']})")
+    if CONFIG["enable_openmax"]:
+        print(f"  > 预测方法: OpenMax (Weibull tail={CONFIG['openmax_config'].weibull_tail_size}, alpha={CONFIG['openmax_config'].alpha})")
+    else:
+        print(f"  > 预测方法: {CONFIG['prediction_score_method'].value} (T={CONFIG['prediction_score_temperature']})")
     
-    if CONFIG["enable_feature_gating"]:
+    if CONFIG["enable_openmax"]:
+        super_preds, sub_preds, _, _ = predict_with_openmax(
+            test_features, model, openmax_super, openmax_sub,
+            super_map_inv, sub_map_inv,
+            avg_thresh_super, avg_thresh_sub,
+            CONFIG["novel_super_idx"], CONFIG["novel_sub_idx"], device,
+            super_to_sub
+        )
+    elif CONFIG["enable_feature_gating"]:
         super_preds, sub_preds, _, _ = predict_with_gated_dual_head(
             test_features, model, super_map_inv, sub_map_inv,
             avg_thresh_super, avg_thresh_sub,
@@ -305,6 +422,7 @@ if __name__ == "__main__":
             CONFIG["novel_super_idx"], CONFIG["novel_sub_idx"], device,
             super_to_sub, CONFIG["prediction_score_temperature"], CONFIG["prediction_score_method"]
         )
+
     
     # === 生成提交文件 ===
     print("\n--- Generating Submission File ---")

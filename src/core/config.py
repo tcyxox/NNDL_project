@@ -35,6 +35,14 @@ class FullValThreshold(Enum):
 
 # ================= 配置类 =================
 @dataclass
+class OpenMaxConfig:
+    """OpenMax 配置"""
+    weibull_tail_size: int = 5     # Weibull 尾部大小 (队友最优: 5)
+    alpha: int = 3                  # Top-K 修正类别数 (队友最优: 3)
+    distance_type: str = 'euclidean'  # 距离度量方式
+
+
+@dataclass
 class PathsConfig:
     data_raw: str = os.path.join(PROJECT_ROOT, "data/raw")
     data_processed: str = os.path.join(PROJECT_ROOT, "data/processed")
@@ -102,6 +110,10 @@ class ExperimentConfig:
     validation_score_temperature: float = 1.5
     prediction_score_temperature: float = 1.5
 
+    # OpenMax 配置
+    enable_openmax: bool = True  # 是否启用 OpenMax (替代 MSP+阈值)
+
+
 @dataclass
 class Config:
     paths: PathsConfig = field(default_factory=PathsConfig)
@@ -109,6 +121,7 @@ class Config:
     osr: OSRConfig = field(default_factory=OSRConfig)
     model: ModelConfig = field(default_factory=ModelConfig)
     experiment: ExperimentConfig = field(default_factory=ExperimentConfig)
+    openmax: OpenMaxConfig = field(default_factory=OpenMaxConfig)
 
 
 config = Config()

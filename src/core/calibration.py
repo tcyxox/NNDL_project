@@ -4,10 +4,12 @@
 在验证集上计算 OSR 阈值，用于推理时判断未知类
 自动根据验证集是否包含未知类样本选择阈值方法
 """
+import numpy as np
 import torch
 
 from .config import OODScoreMethod, KnownOnlyThreshold, FullValThreshold
 from .scoring import compute_ood_score, get_default_threshold
+
 
 
 def calculate_threshold_linear_single_head(
@@ -241,3 +243,89 @@ def find_distribution_intersection(known_scores: torch.Tensor, unknown_scores: t
             best_threshold = t_val
     
     return best_threshold
+
+
+def calibrate_openmax_threshold_eer(
+        openmax, model, val_features, val_labels, known_label_set, device
+):
+    """
+    使用 EER 方法校准 OpenMax 的 unknown 概率阈值
+    
+    Args:
+        openmax: 已拟合的 OpenMax 对象
+        model: 分类器模型
+        val_features: 验证集特征
+        val_labels: 验证集标签 (global id)
+        known_label_set: 已知类标签集合 (global ids)
+        device: 设备
+        
+    Returns:
+        threshold: 用于判断 unknown 的概率阈值
+    """
+    model.eval()
+    
+    # 1. 获取验证集的 logits
+    with torch.no_grad():
+        logits = model(val_features.to(device))
+        if isinstance(logits, tuple):
+            logits = logits[0]  # GatedDualHead 返回 (super_logits, sub_logits)
+    
+    # 2. 获取 OpenMax 概率
+    openmax_probs = openmax.predict(logits)  # [N, num_classes + 1]
+    
+    # 3. 提取 unknown 概率 (第 0 列)
+    unknown_probs = openmax_probs[:, 0]  # [N]
+    
+    # 4. 划分 known/unknown 样本
+    if isinstance(val_labels, torch.Tensor):
+        val_labels_np = val_labels.numpy()
+    else:
+        val_labels_np = val_labels
+    
+    known_mask = np.array([l in known_label_set for l in val_labels_np])
+    unknown_mask = ~known_mask
+    
+    known_unknown_probs = unknown_probs[known_mask]      # 已知类的 unknown 概率（应该低）
+    unknown_unknown_probs = unknown_probs[unknown_mask]  # 未知类的 unknown 概率（应该高）
+    
+    # 5. 处理边界情况
+    if len(known_unknown_probs) == 0 or len(unknown_unknown_probs) == 0:
+        print("警告: 验证集中已知或未知样本为空，使用默认阈值 0.5")
+        return 0.5
+    
+    # 6. 用 EER 找最优阈值
+    threshold = _find_openmax_eer_threshold(known_unknown_probs, unknown_unknown_probs)
+    
+    return threshold
+
+
+def _find_openmax_eer_threshold(known_scores, unknown_scores):
+    """
+    找 OpenMax EER 阈值
+    
+    注意：这里 known_scores 应该较低（已知类不太可能被判为 unknown）
+         unknown_scores 应该较高（未知类更可能被判为 unknown）
+         
+    EER 是找使得 FRR = FAR 的点：
+    - FRR (False Rejection Rate): 已知类被错误判为 unknown 的比例
+    - FAR (False Acceptance Rate): 未知类被错误判为 known 的比例
+    """
+    all_scores = np.concatenate([known_scores, unknown_scores])
+    candidates = np.sort(all_scores)
+    
+    best_threshold = 0.5
+    min_diff = float('inf')
+    
+    for t in candidates:
+        # 已知类中高于阈值的比例 (False Rejection Rate)
+        frr = (known_scores > t).mean()
+        # 未知类中低于阈值的比例 (False Acceptance Rate)  
+        far = (unknown_scores < t).mean()
+        
+        diff = abs(frr - far)
+        if diff < min_diff:
+            min_diff = diff
+            best_threshold = t
+    
+    return best_threshold
+
