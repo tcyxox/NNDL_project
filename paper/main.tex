@@ -87,10 +87,10 @@ Given input features $\mathbf{x} \in \mathbb{R}^{d}$ from CLIP, we define:
 \end{align}
 where $W_1 \in \mathbb{R}^{(d/r) \times d}$, $W_2 \in \mathbb{R}^{d \times (d/r)}$, $r=4$ is the reduction ratio, and $\odot$ denotes element-wise multiplication.
 
-% \textit{Subclass Head (with attended features):}
-% \begin{equation}
-%     \mathbf{z}^{\text{sub}} = W^{\text{sub}} \tilde{\mathbf{x}} + \mathbf{b}^{\text{sub}}
-% \end{equation}
+\textit{Subclass Head (with attended features):}
+\begin{equation}
+    \mathbf{z}^{\text{sub}} = W^{\text{sub}} \tilde{\mathbf{x}} + \mathbf{b}^{\text{sub}}
+\end{equation}
 
 \paragraph{Inference with Hierarchical Masking:}
 During inference, we apply hierarchical masking to enforce consistency between superclass and subclass predictions.
@@ -311,8 +311,8 @@ While the MSP framework maintains consistency between its scoring method and the
 
 \paragraph{Threshold Scoring Methods}
 \begin{itemize}
-    \item Maximum Sigmoid (MaxSigmoid) Score~\cite{shu2017docdeepopenclassification}: Use the maximum value of the sigmoid distribution as the confidence score. Logit $\to$ Sigmoid $\to$ Threshold Gate.
-    \item Energy-based Out-of-distribution Detection~\cite{liu2021energybasedoutofdistributiondetection}: Uses the free energy derived from the logits as the scoring function. Lower energy indicates known data, while higher energy indicates novel data. Logit $\to$ Energy $\to$ Threshold Gate.
+    \item Maximum Sigmoid (MaxSigmoid) Score~\cite{shu2017docdeepopenclassification}: Use the maximum value of the sigmoid distribution as the confidence score.
+    \item Energy-based Out-of-distribution Detection~\cite{liu2021energybasedoutofdistributiondetection}: Uses the negative free energy derived from the logits as the scoring function.
 \end{itemize}
 
 \paragraph{Maximum Sigmoid (MaxSigmoid) Score (with Temperature Scaling):}
@@ -341,7 +341,7 @@ This shows that low-temperature Energy reduces to the negative \textbf{MaxLogit}
 %\end{itemize}
 
 \subsection{Adapted CAC Method}
-Besides above post-hoc methods, we postulate that distinguishing known from unknown samples requires more than applying post-hoc measures. To further address the challenge of distinguishing unknown classes in OSR, we utilize the Class Anchor Clustering (CAC) framework~\cite{miller2021class}, a distance-based discriminative method rooted in metric learning.
+Although post-hoc methods can address OSR without retraining the model, we postulate that distinguishing known from unknown samples requires more than applying post-hoc measures. To further address the OSR problem, we utilize the \textbf{Class Anchor Clustering (CAC)} framework~\cite{miller2021class}, a distance-based discriminative method rooted in metric learning.
 
 In contrast, CAC explicitly regularizes the network to enforce strict intra-class compactness and maximize inter-class separability. Our adoption of CAC is further motivated by the semantic properties of the CLIP encoder. While CLIP’s contrastive pre-training naturally induces implicit clustering via cosine similarity, we employ CAC to rigorously map these semantic representations to a structured logit space where class centers are manually anchored to ensure maximal separation. By aligning the dense semantic clusters from CLIP with fixed, distinct anchors, we establish a robust feature space.
 
@@ -354,7 +354,7 @@ In contrast, CAC explicitly regularizes the network to enforce strict intra-clas
 \end{equation}
 
 
-To further enhance the discriminative power of the logit space, we also integrate a SE-attention mechanism in this part. By enabling the model to adaptively emphasize salient information within the CLIP image representations, this approach effectively increases inter-class dispersion and facilitates the formation of compact, well-defined class clusters.
+To further enhance the discriminative power of the logit space, we also integrate the SE-attention mechanism in this part. By enabling the model to adaptively emphasize salient information within the CLIP image representations, this approach effectively enhance the performance in some setting.
 
 \subsubsection{CAC-Negative}
 
@@ -368,7 +368,7 @@ In this project, we introduce two methodological improvements to the CAC paradig
     \end{gathered}
 \end{equation}
 
-Here $\mathbf{x'}$ denotes the pseudo-samples synthesized via two distinct strategies: 1) self-mixing of rotated images, and 2) background extraction, obtained by removing the foreground object.
+Where $\mathbf{x'}$ denotes the pseudo-samples synthesized via two distinct strategies: 1) self-mixing of rotated images, and 2) background extraction, obtained by removing the foreground object.
 
 
 \subsubsection{CAC-OpenMax}
@@ -468,11 +468,9 @@ As expected, access to unknown samples during validation significantly boosts pe
 \end{table}
 
 \subsection{Impact of Synthesized Pseudo samples on CAC}
-Table \ref{tab: CAC VS. CAC-Negative} presents a comparative analysis between the origin CAC with SE-Attention and our proposed CAC-Negative. The empirical results demonstrate that CAC-Negative consistently outperforms CAC in terms of AUROC and overall accuracy and unseen accuracy, validating the efficacy of incorporating synthesized negative samples for Open Set Recognition.
+Table \ref{tab: CAC VS. CAC-Negative} presents a comparative analysis between the origin CAC with SE-Attention and our proposed CAC-Negative. The empirical results demonstrate that CAC-Negative consistently outperforms CAC in terms of AUROC, overall accuracy and unseen accuracy, validating the efficacy of incorporating synthesized negative samples for Open Set Recognition.
 
-\textbf{Synergy between SE-Attention and Negative Sampling:} We observe a distinct interaction regarding the SE-Attention mechanism. While SE-Attention offers negligible gains for the original CAC, it yields significant performance improvements when integrated into CAC-Negative. This suggests that the attention mechanism relies on a sufficiently populated feature space to function effectively.
-
-The differential impact of SE-Attention can be explained by the topological characteristics of the embedding space. The original CAC results in a relatively sparse logit space, where SE-Attention struggles to capture meaningful dependencies. In contrast, the introduction of pseudo-negative samples effectively densifies the manifold. This densification enables the SE-Attention mechanism to learn more robust feature recalibrations, allowing it to effectively scatter pseudo-samples and refine the decision boundary.
+\textbf{Synergy between SE-Attention and Negative Sampling:} While SE-Attention yields negligible gains for the sparse baseline CAC, it significantly improves CAC-Negative. This disparity stems from the topological characteristics of the embedding space: the introduction of pseudo-negative samples densifies the manifold, thereby enabling SE-Attention to capture meaningful dependencies and refine the decision boundary, which is otherwise ineffective in the sparse logit space of the original CAC.
 
 \textbf{Inefficacy of Explicit Intra-class Clustering ($\lambda$):} Regarding the hyperparameter $\lambda$ (the weight for the loss of anchor clustering term), our experiments indicate that non-zero values deteriorate the performance of the original CAC and provide no substantial benefit to CAC-Negative. Consequently, we set $\lambda=0$. We attribute this to the relatively limited number of known categories (70 classes); simply maximizing inter-class separation appears sufficient for classification, rendering strict intra-class clustering constraints less critical.
 
@@ -505,9 +503,9 @@ The differential impact of SE-Attention can be explained by the topological char
 
 Table \ref{tab: CAC-post hoc} presents a comparative analysis of varying post-hoc inference mechanisms applied to the CAC framework, specifically benchmarking the threshold-based baseline against Z-Score and OpenMax.
 
-\textbf{Performance of OpenMax:} Empirical results demonstrate that OpenMax yields the most superior performance, achieving an AUROC of 0.9281. Crucially, this method significantly boosts Unseen Accuracy (from 71.24% to 88.46%) while incurring only a marginal degradation in Seen Accuracy ($\approx 1\%$), indicating a robust trade-off between closed-set classification and open-set rejection.
+\textbf{Performance of OpenMax:} Empirical results demonstrate that OpenMax yields the most superior performance, achieving an AUROC of 0.9281. Crucially, this method significantly boosts Unseen Accuracy (from 71.24\% to 88.46\%) while incurring only a marginal degradation in Seen Accuracy ($\approx 1\%$), indicating a robust trade-off between closed-set classification and open-set rejection.
 
-\textbf{Inefficacy of Z-Score:} Conversely, the Z-Score method proves suboptimal for the CAC embedding space, underperforming even the simple threshold baseline. Our experiments reveal that the model is highly sensitive to the parameter $std\_m$. Increasing this threshold effectively expands the acceptance region to encompass the entire logit space, causing the Unseen Accuracy to collapse to zero. This phenomenon corroborates our previous findings: the CAC framework induces highly compact class clusters, rendering standard deviation-based outlier detection overly sensitive and less effective than tail-based estimation.
+\textbf{Inefficacy of Z-Score:} Conversely, Z-Score proves suboptimal, failing to outperform even the simple baseline. The method exhibits extreme sensitivity to $std\_m$, where slight increases cause Unseen Accuracy to collapse to zero. This confirms that the highly compact clusters induced by CAC render standard deviation-based metrics overly sensitive and ineffective compared to tail-based estimation.
 
 \begin{table}[h]
   \caption{Post hoc methods on \textit{\textbf{CAC}}}
