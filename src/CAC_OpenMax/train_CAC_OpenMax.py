@@ -142,6 +142,7 @@ def train_cac_openmax_classifier(
                   f"Val Loss: {avg_val_loss:.4f} | "
                   f"Val Seen Acc: {val_acc:.2f}% | "
                   f"Val AUROC: {val_auroc:.4f}")
+
         if metric == "ACC":
             # 记录验证准确率最高的模型状态
             if val_acc > best_val_metric:
@@ -152,6 +153,9 @@ def train_cac_openmax_classifier(
             if val_auroc > best_val_metric:
                 best_val_metric = val_auroc
                 best_model_state = copy.deepcopy(model.state_dict())
+        else:
+            # 记录最后一个模型状态
+            best_model_state = copy.deepcopy(model.state_dict())
 
     print(f"训练结束。最佳验证集 {metric} : {best_val_metric:.2f}")
 
