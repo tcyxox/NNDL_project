@@ -1,23 +1,26 @@
-import torch
 import numpy as np
+import torch
 import torch.nn as nn
 import libmr
+import scipy.spatial.distance as spd
+
 
 class CAC_OpenMax:
     def __init__(self, num_classes, weibul_tail_size=3, alpha=3, distance_type='euclidean'):
         """
         初始化 OpenMax
-            :param num_classes: 已知类别的数量 (N)
-            :param weibul_tail_size: 用于拟合 Weibull 分布的尾部大小
-            :param alpha: 修正 Top-K 个类别的得分
-            :param distance_type: 距离度量方式 ('euclidean', 'cosine', 'euclidean_cosine')
+        :param num_classes: 已知类别的数量 (N)
+        :param weibul_tail_size: 用于拟合 Weibull 分布的尾部大小
+        :param alpha: 修正 Top-K 个类别的得分
+        :param distance_type: 距离度量方式 ('euclidean', 'cosine', 'euclidean_cosine')
         """
         self.num_classes = num_classes
         self.tail_size = weibul_tail_size
         self.alpha = alpha
         self.distance_type = distance_type
 
-        # 存储每个类别的 Mean Activation Vector (MAV)
+        # 存储每个类别的 anchor 作为 MAV
+        # self.mavs = cac_projector.anchors.cpu().numpy()
         self.mavs = None
         # 存储每个类别的 Weibull 模型
         self.weibull_models = {}
@@ -35,7 +38,6 @@ class CAC_OpenMax:
         self.mavs = np.zeros((self.num_classes, activation_vectors.shape[1]))
 
         # print("开始 OpenMax 校准 (Fit)...")
-
         for c in range(self.num_classes):
             # 1. 获取该类别下预测**正确**的样本（先过滤出 predict == label 的数据）
             class_idxs = (labels == c)
@@ -134,6 +136,7 @@ class CAC_OpenMax:
     def _softmax(self, x):
         e_x = np.exp(x - np.max(x))
         return e_x / e_x.sum()
+
 
 class CAC_OpenMax_System(nn.Module):
     def __init__(self, CAC_model, openmax_model, device):

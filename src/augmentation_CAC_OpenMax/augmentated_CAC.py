@@ -8,7 +8,7 @@ class CACProjector(nn.Module):
     CAC (Class Anchor Clustering) 投影头
     用于将 CLIP 特征映射到符合 CAC 几何约束的 Logit 空间。
     """
-    def __init__(self, input_dim, num_classes, alpha=10.0, se_reduction=-1, anchor_mode=None):
+    def __init__(self, input_dim, num_classes, alpha=10.0, se_reduction=-1, anchor_mode="axis_aligned"):
         super(CACProjector, self).__init__()
         self.num_classes = num_classes
         self.alpha = alpha
@@ -16,7 +16,6 @@ class CACProjector(nn.Module):
 
         # --- SE Attention Module ---
         if self.se_reduction > 0:
-            # CLIP 特征已经是 Global Token，所以跳过 Pooling，直接做 Channel Attention
             self.se_block = nn.Sequential(
                 nn.Linear(input_dim, input_dim // self.se_reduction, bias=False),
                 nn.ReLU(inplace=True),
@@ -30,9 +29,8 @@ class CACProjector(nn.Module):
 
         # --- 初始化锚点 (Anchors) ---
         if anchor_mode == 'axis_aligned':
-            # 原始论文实现: 锚点在正坐标轴上 [num_classes, num_classes]
+            # 锚点在正坐标轴上 [num_classes, num_classes]
             anchors = torch.eye(num_classes) * alpha
-
         elif anchor_mode == 'uniform_hypersphere':
             # 锚点均匀分布在整个超球面空间
             # 1. 生成随机正态分布向量 (高维空间中高斯分布近似均匀分布)
@@ -40,7 +38,6 @@ class CACProjector(nn.Module):
             # 2. 正交化: 确保锚点之间尽可能垂直，最大化区分度。
             q, r = torch.linalg.qr(rand_anchors)
             anchors = q.t()  # 使行向量是锚点
-
             # 3. 归一化并缩放到 alpha
             anchors = F.normalize(anchors, p=2, dim=1) * alpha
         elif anchor_mode == 'negative_shattered':
@@ -58,15 +55,7 @@ class CACProjector(nn.Module):
             # 加权原始特征 (Scale)
             x = x * attention_weights
 
-        # ====================================================================================
-        # x = F.normalize(x, p=2, dim=1)
-        # ====================================================================================
-
         logits = self.classify(x)
-
-        # # ====================================================================================
-        # logits = F.normalize(logits, p=2, dim=1) * self.alpha
-        # # ====================================================================================
 
         # 计算距离矩阵 (Euclidean Distance)
         logits_expand = logits.unsqueeze(1) # [B, N] -> [B, 1, N]
@@ -80,29 +69,58 @@ class CACProjector(nn.Module):
 
 class CACLoss(nn.Module):
     """
-    CAC 损失函数: L_CAC = L_T + lambda * L_A
+        CAC Loss 升级版: 支持 Open Set 样本 (OpenMix)
     """
-    def __init__(self, lambda_w=0.1):
+    def __init__(self, lambda_w=0.1, lambda_open=0.1):
+        """
+        lambda_w: Anchor loss 的权重
+        lambda_open: 未知样本损失的权重
+        """
         super(CACLoss, self).__init__()
         self.lambda_w = lambda_w
+        self.lambda_open = lambda_open
 
-    def forward(self, distances, targets):
+    def forward(self, logits, distances, targets):
         """
-        distances: [Batch, Num_Classes]
-        targets: [Batch] (类别索引)
+        logits: [Batch, Num_Classes] -> 需要用到 logits本身来计算到原点的距离
+        distances: [Batch, Num_Classes] -> CACProjector 输出的距离矩阵
+        targets: [Batch] -> 标签
         """
-        # --- Anchor Loss (L_A) ---
-        # 目标：最小化样本与其真实类别锚点之间的距离
-        true_class_distances = distances.gather(1, targets.unsqueeze(1)).squeeze(1)  # 选 target 对应的那个距离值
-        l_anchor = torch.mean(true_class_distances)
 
-        # --- Tuplet Loss (L_T) ---
-        # 目标：最大化样本与其他错误锚点的距离
-        # 论文技巧：对负距离求 CrossEntropy 等价于 Softmin 概率逻辑
-        l_tuplet = F.cross_entropy(-distances, targets)
+        # 1. 区分已知类和未知类样本
+        # 创建掩码
+        known_mask = targets != -1
+        unknown_mask = ~known_mask
 
-        # --- 总损失 ---
-        return l_tuplet + self.lambda_w * l_anchor
+        # ================== 处理已知类 (Known) ==================
+        loss_known = torch.tensor(0.0, device=logits.device)
+        if known_mask.sum() > 0:
+            known_dist = distances[known_mask]
+            known_targets = targets[known_mask]
+
+            # L_Anchor: 拉近到正确锚点
+            true_class_distances = known_dist.gather(1, known_targets.unsqueeze(1)).squeeze(1)
+            l_anchor = torch.mean(true_class_distances)
+
+            # L_Tuplet: 远离错误锚点 (Softmax/CrossEntropy)
+            l_tuplet = F.cross_entropy(-known_dist, known_targets)
+
+            loss_known = l_tuplet + self.lambda_w * l_anchor
+
+        # ================== 处理未知类 (Open/Generated) ==================
+        # 策略：最小化到原点的距离 (即最小化 logits 的模长)
+        loss_open = torch.tensor(0.0, device=logits.device)
+        if unknown_mask.sum() > 0:
+            unknown_logits = logits[unknown_mask]
+
+            # 计算 Logits 的 L2 范数 (即到原点的距离)
+            # 目标是让 output 趋向于 0 向量
+            loss_open = torch.mean(torch.norm(unknown_logits, p=2, dim=1))
+            # 或者是用平方和 (MSE to 0):
+            # loss_open = torch.mean(unknown_logits ** 2)
+
+        # ================== 总损失 ==================
+        return loss_known + self.lambda_open * loss_open
 
 
 if __name__ == "__main__":

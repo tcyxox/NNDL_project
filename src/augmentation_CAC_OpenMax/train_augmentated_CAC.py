@@ -1,5 +1,4 @@
 import torch
-import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import TensorDataset, DataLoader
 import torch.nn.functional as F
@@ -8,45 +7,42 @@ import numpy as np
 import copy
 import os
 
-from src.CAC.CAC import CACProjector, CACLoss
-from src.OpenMax.OpenMax import OpenMax
-from src.CAC_OpenMax.CAC_OpenMax import CAC_OpenMax_System
+from src.augmentation_CAC_OpenMax.augmentated_CAC import CACProjector, CACLoss
 from src.core.config import *
 from src.core.training import create_label_mapping
 from src.core.utils import set_seed
 
 
 CONFIG = {
-    "feature_dir": config.paths.split_features,
-    # "output_dir": os.path.join(config.paths.dev, "CAC_OpenMax"),
+    "feature_dir": os.path.join(config.paths.split_features, "augmentation_features"),
+    # "output_dir": os.path.join(config.paths.dev, "augmentation_CAC"),
     "output_dir": None,
     "feature_dim": config.model.feature_dim,
     "learning_rate": 0.01,
     "batch_size": config.experiment.batch_size,
-    "epochs": 100,
-    "device": "cuda" if torch.cuda.is_available() else "cpu",
-    # CAC
-    "alpha_CAC": 10.0,
+    "epochs": 300,
+    "alpha": 10.0,
     "lambda_w": 0.1,
     "anchor_mode": "axis_aligned",
-    # OpenMax
-    "weibull_tail_size": 3,
-    "alpha_openmax": 3,
-    "distance_type": "euclidean",
+    "device": "cuda" if torch.cuda.is_available() else "cpu",
 }
 
-def train_cac_openmax_classifier(
+if CONFIG["output_dir"] is not None:
+    os.makedirs(CONFIG["output_dir"], exist_ok=True)
+
+
+def train_augmentated_cac_classifier(
         train_features, train_labels,
         val_features, val_labels,
         label_map, num_classes, feature_dim,
-        batch_size, learning_rate, epochs, device, model_name="CAC-OpenMax", seed=114,
-        anchor_mode="axis_aligned", alpha_CAC=10.0, lambda_w=0.1, se_reduction=-1,
-        weibull_tail_size=3, alpha_openmax=3, distance_type='euclidean',
+        batch_size, learning_rate, epochs, device,
+        seed=114, model_name="Augmentated_CAC",
+        anchor_mode="axis_aligned", alpha=10.0, lambda_w=0.1, lambda_open=0.1, se_reduction=-1,
         output_dir=None, metric="AUROC"
 ):
     set_seed(seed)
 
-    model = CACProjector(feature_dim, num_classes, alpha=alpha_CAC, se_reduction=se_reduction, anchor_mode=anchor_mode)
+    model = CACProjector(feature_dim, num_classes, alpha=alpha, se_reduction=se_reduction, anchor_mode=anchor_mode)
     model.to(device)
 
     # 训练集映射
@@ -59,11 +55,12 @@ def train_cac_openmax_classifier(
     val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
 
     # 损失与优化
-    criterion = CACLoss(lambda_w=lambda_w).to(device)
+    criterion = CACLoss(lambda_w=lambda_w, lambda_open=lambda_open).to(device)
     optimizer = optim.SGD(model.parameters(), lr=learning_rate, momentum=0.9)
-    # scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=[int(epochs * 0.6), int(epochs * 0.8)], gamma=0.1)  # 学习率调整策略
+    # 学习率调整策略
+    # scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=[int(epochs * 0.6), int(epochs * 0.8)], gamma=0.1)
 
-    print(f"\n开始训练 {model_name} - CAC: {anchor_mode}, alpha: {alpha_CAC}, lambda_w: {lambda_w}, se_reduction: {se_reduction}...")
+    print(f"\n开始训练 {model_name} - {anchor_mode} - alpha: {alpha} - lambda_w: {lambda_w} - se_reduction: {se_reduction}...")
 
     best_val_metric = 0.0
     best_model_state = None
@@ -77,8 +74,9 @@ def train_cac_openmax_classifier(
             inputs, targets = inputs.to(device), targets.to(device)
             optimizer.zero_grad()
 
-            _, distances = model(inputs)
-            loss = criterion(distances, targets)
+            # 修改：现在需要传入logits用于生成样本的loss计算
+            logits, distances = model(inputs)
+            loss = criterion(logits, distances, targets)
 
             loss.backward()
             optimizer.step()
@@ -89,7 +87,7 @@ def train_cac_openmax_classifier(
         # =============== 验证阶段 ===============
         model.eval()
         val_loss = 0.0
-        correct_seen = 0
+        correct = 0
         total_seen = 0
 
         # 存储 AUROC 计算所需的数据
@@ -100,7 +98,7 @@ def train_cac_openmax_classifier(
             for inputs, targets in val_loader:
                 inputs, targets = inputs.to(device), targets.to(device)
 
-                _, distances = model(inputs)
+                logits, distances = model(inputs)
 
                 mask = targets != -1
 
@@ -115,21 +113,22 @@ def train_cac_openmax_classifier(
 
                 # ====== 对已知类计算 Loss 和 Accuracy ======
                 if mask.sum() > 0:
-                    # 筛选已知类
+                    # 筛选出已知类
                     known_targets = targets[mask]
                     known_distances = distances[mask]
 
-                    loss = criterion(known_distances, known_targets)
+                    # 修改：现在需要传入logits用于生成样本的loss计算
+                    loss = criterion(logits, known_distances, known_targets)
                     val_loss += loss.item()
 
                     # 寻找距离最近的锚点
                     _, predicted = torch.min(known_distances, 1)
                     total_seen += known_targets.size(0)
-                    correct_seen += (predicted == known_targets).sum().item()
+                    correct += (predicted == known_targets).sum().item()
 
         avg_train_loss = train_loss / len(train_loader)
         avg_val_loss = val_loss / len(val_loader) if len(val_loader) > 0 else 0
-        val_acc = 100 * correct_seen / total_seen if total_seen > 0 else 0.0
+        val_acc = 100 * correct / total_seen if total_seen > 0 else 0.0
 
         val_auroc = 0.5
         if len(np.unique(all_binary_labels)) == 2:
@@ -142,76 +141,32 @@ def train_cac_openmax_classifier(
                   f"Val Loss: {avg_val_loss:.4f} | "
                   f"Val Seen Acc: {val_acc:.2f}% | "
                   f"Val AUROC: {val_auroc:.4f}")
-
         if metric == "ACC":
             # 记录验证准确率最高的模型状态
             if val_acc > best_val_metric:
                 best_val_metric = val_acc
                 best_model_state = copy.deepcopy(model.state_dict())
+                # torch.save(best_model_state, os.path.join(output_dir, f"{model_name}_best.pth"))
         elif metric == "AUROC":
-            # 记录 AUROC 最高的模型状态
+            # 记录AUROC最高的模型状态
             if val_auroc > best_val_metric:
                 best_val_metric = val_auroc
                 best_model_state = copy.deepcopy(model.state_dict())
-        else:
-            # 记录最后一个模型状态
-            best_model_state = copy.deepcopy(model.state_dict())
+                # torch.save(best_model_state, os.path.join(output_dir, f"{model_name}_best.pth"))
 
-    print(f"训练结束。最佳验证集 {metric} : {best_val_metric:.2f}")
+    print(f"训练结束。最佳验证集 {metric} : {best_val_metric:.2f}%")
 
-    # 加载最佳权重
+    # 加载最佳权重并返回
     if best_model_state is not None:
         model.load_state_dict(best_model_state)
-    # 保存分类器模型
+
     if output_dir:
-        os.makedirs(CONFIG["output_dir"], exist_ok=True)
-        save_path = os.path.join(output_dir, f"best_{model_name}_seed_{seed}_alpha_{alpha_CAC}_{anchor_mode}.pth")
-        torch.save(model.state_dict(), save_path)
-        print(f"已经保存权重至：{save_path}")
+        torch.save(model.state_dict(),
+                   os.path.join(output_dir, f"best_cac_model_seed_{seed}_alpha_{alpha}_{anchor_mode}.pth"))
 
-    # ===================== 校准 OpenMax (Fit) =====================
-    print("校准 OpenMax...")
-    model.eval()
-    all_logits = []
-    all_gt = []
+        print(f"已经保存权重：{os.path.join(output_dir, f"best_cac_model_seed_{seed}_alpha_{alpha}_{anchor_mode}.pth")}")
 
-    with torch.no_grad():
-        for batch_X, batch_y in train_loader:
-            batch_X = batch_X.to(device)
-            logits, _ = model(batch_X)
-            all_logits.append(logits.cpu())
-            all_gt.append(batch_y.cpu())
-
-    all_logits = torch.cat(all_logits)
-    all_gt = torch.cat(all_gt)
-
-    # OpenMax 只使用预测正确的样本进行校准
-    preds = torch.argmax(all_logits, dim=1)
-    correct_mask = preds == all_gt
-
-    correct_logits = all_logits[correct_mask]
-    correct_labels = all_gt[correct_mask]
-
-    # print(len(correct_labels))
-    # print(len(all_gt))
-    # exit()
-
-    print(f"  - 使用 {len(correct_labels) / len(all_gt) * 100:.4f} % 正确已知类样本进行 Weibull 拟合")
-
-    # 初始化并拟合 OpenMax
-    openmax = OpenMax(
-        num_classes=num_classes,
-        weibul_tail_size=weibull_tail_size,
-        alpha=alpha_openmax,
-        distance_type=distance_type
-    )
-
-    openmax.fit(correct_logits, correct_labels)
-    system = CAC_OpenMax_System(model, openmax, device)
-
-    # 保存OpenMax结果
-
-    return system
+    return model
 
 
 if __name__ == "__main__":
@@ -231,21 +186,21 @@ if __name__ == "__main__":
     sub_map[87] = -1
 
     # ================= 训练  =================
-    best_model = train_cac_openmax_classifier(
+    best_model = train_augmentated_cac_classifier(
         train_features=train_features,
         train_labels=train_sub_labels,
         val_features=val_features,
         val_labels=val_sub_labels,
         label_map=sub_map,
         num_classes=num_sub,
-        model_name="CAC_Subclass_Model",
+        model_name="Augmentated_CAC",
         feature_dim=CONFIG["feature_dim"],
         batch_size=CONFIG["batch_size"],
         learning_rate=CONFIG["learning_rate"],
         epochs=CONFIG["epochs"],
         device=CONFIG["device"],
         output_dir=None,
-        alpha_CAC=CONFIG["alpha_CAC"],
+        alpha=CONFIG["alpha"],
         lambda_w=CONFIG["lambda_w"],
         seed=42
     )
