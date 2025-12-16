@@ -459,3 +459,102 @@ super seen, sub overall, sub seen, sub unseen, sub auroc
     validation_score_temperature: float = 1.5
     prediction_score_temperature: float = 1.5
 ```
+
+## 额外：使用 OpenMax + ViT-B/32
+
+```py
+@dataclass
+class OpenMaxConfig:
+    """OpenMax 配置"""
+    weibull_tail_size: int = 5     # Weibull 尾部大小 (队友最优: 5)
+    alpha: int = 3                  # Top-K 修正类别数 (队友最优: 3)
+    distance_type: str = 'euclidean'  # 距离度量方式
+
+
+@dataclass
+class PathsConfig:
+    data_raw: str = os.path.join(PROJECT_ROOT, "data/raw")
+    data_processed: str = os.path.join(PROJECT_ROOT, "data/processed")
+    features: str = os.path.join(PROJECT_ROOT, "data/processed/features")
+    split_features: str = os.path.join(PROJECT_ROOT, "data/processed/split_features")
+    split_images: str = os.path.join(PROJECT_ROOT, "data/processed/split_images")
+    outputs: str = os.path.join(PROJECT_ROOT, "outputs")
+    dev: str = os.path.join(PROJECT_ROOT, "outputs/dev")
+    submit: str = os.path.join(PROJECT_ROOT, "outputs/submit")
+
+
+@dataclass
+class SplitConfig:
+    # Outer Loop: Full -> Train (Pure Known) + Test (Mix)
+    test_ratio: float = 0.2
+    test_sub_novel_ratio: float = 0.1
+
+    # Inner Loop: Train -> SubTrain (Pure Known) + Val (Mix)
+    val_ratio: float = 0.2
+    val_sub_novel_ratio: float = 0.1
+
+
+@dataclass
+class OSRConfig:
+    novel_super_index: int = 3
+    novel_sub_index: int = 87
+
+
+@dataclass
+class ModelConfig:
+    # clip_model_id: str = "openai/clip-vit-base-patch32"
+    # clip_model_id: str = "openai/clip-vit-large-patch14"  # 升级到 ViT-L/14
+    clip_model_id: str = "laion/CLIP-ViT-H-14-laion2B-s32B-b79K"  # 升级到 ViT-H/14
+    # feature_dim: int = 512
+    # feature_dim: int = 768  # ViT-L/14 输出 768 维特征
+    feature_dim: int = 1024  # ViT-H/14 输出 1024 维特征
+
+
+@dataclass
+class ExperimentConfig:
+    verbose: bool = True  # 是否打印详细信息
+    seed: int = 42  # evaluate 时不使用，评估流程中只有 extract features 用到
+
+    # 数据划分模式
+    val_include_novel: bool = True  # Val 中是否含未知类
+    force_super_novel: bool = False  # 是否在 Val 中强制引入 Super Novel
+
+    # 训练参数
+    batch_size: int = 64
+    learning_rate: float = 1e-3
+    epochs: int = 75
+
+    # 模型选择
+    enable_hierarchical_masking: bool = True  # 推理时 Hierarchical Masking 开关
+    enable_feature_gating: bool = True  # 训练时 SE Feature Gating 开关
+
+    # 阈值设定（自动根据验证集是否有未知类选择方法）
+    known_only_threshold: KnownOnlyThreshold = KnownOnlyThreshold.ZScore  # 无未知类时
+    full_val_threshold: FullValThreshold = FullValThreshold.EER  # 有未知类时
+    target_recall: float = 0.95  # Quantile 方法: target recall，95%
+    std_multiplier: float = 1.645  # ZScore 方法: 标准差乘数，1.645
+
+    # 方法选择
+    training_loss: TrainingLoss = TrainingLoss.CE
+    validation_score_method: OODScoreMethod = OODScoreMethod.MSP
+    prediction_score_method: OODScoreMethod = OODScoreMethod.MSP
+    validation_score_temperature: float = 1.5
+    prediction_score_temperature: float = 1.5
+
+    # OpenMax 配置
+    enable_openmax: bool = True  # 是否启用 OpenMax (替代 MSP+阈值)
+```
+
+Our Test:
+  [Superclass] Overall     : 99.36% ± 0.34%
+  [Superclass] Seen        : 99.36% ± 0.34%
+  [Superclass] Unseen      : 0.00% ± 0.00%
+  [Subclass] Overall       : 89.23% ± 2.74%
+  [Subclass] Seen          : 89.18% ± 1.41%
+  [Subclass] Unseen        : 89.36% ± 4.62%
+  [Superclass] AUROC       : nan ± nan
+  [Subclass] AUROC         : 0.9387 ± 0.0213
+
+Real Test:
+Super Acc. | Seen Super Acc. | Unseen Super Acc. | Sub Acc. | Seen Sub Acc. | Unseen Sub Acc.
+95.33% | 98.84% | 86.42% | 91.91% | 87.63% | 93.06%
